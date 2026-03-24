@@ -1,3 +1,13 @@
+## [1.4.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.1...v1.4.2) (2026-03-24)
+
+### Bug Fixes
+
+* lint ([9832a8e](https://github.com/verisoft-ai/appium-desktop-driver/commit/9832a8eaf025e96f619d4c1b342c3c0909dfb5fa))
+
+### Miscellaneous Chores
+
+* **website:** create website with mcp and driver demos ([5e8e910](https://github.com/verisoft-ai/appium-desktop-driver/commit/5e8e910fc1e69de8a81ec18898b7f0dd28135af6))
+
 ## [1.4.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.0...v1.4.1) (2026-03-23)
 
 ### Bug Fixes

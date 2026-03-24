@@ -20,7 +20,7 @@ It’s designed to handle real-world scenarios where traditional drivers fall sh
 
 Beside of standard Appium requirements Appium Desktop Driver adds the following prerequisites:
 
-- Appium Windows Driver only supports Windows 10 and later as the host.
+- Appium Desktop Driver only supports Windows 10 and later as the host.
 
 > **Note**
 >
@@ -105,13 +105,13 @@ def test_app_source_could_be_retrieved(driver):
 
 ## Power Shell commands execution
 
-Just like in Appium Windows Driver (version 1.15.0 and above) there is a possibility to
+Just like in Appium Desktop Driver (version 1.15.0 and above) there is a possibility to
 run custom Power Shell scriptsfrom your client code. This feature is potentially insecure
 and thus needs to beexplicitly enabled when executing the server by providing `power_shell`
 key to the listof enabled insecure features. Refer to [Appium Security document](https://github.com/appium/appium/blob/master/docs/en/writing-running-appium/security.md) for more details.
 It is possible to ether execute a single Power Shell command or a whole script
 and get its stdout in response. If the script execution returns non-zero exit code then an exception
-is going to be thrown. The exception message will contain the actual stderr. Unlike, Appium Windows Driver,
+is going to be thrown. The exception message will contain the actual stderr. Unlike, Appium Desktop Driver,
 there is no difference if you paste the script with `command` or `script` argument. For ease of use, you can pass the script as a string when executing a PowerShell command directly via the driver. Note: This shorthand does not work when using the prerun or postrun capabilities, which require full object syntax.
 Here's an example code of how to control the Notepad process:
 
@@ -150,7 +150,7 @@ else:
 
 ## Element Location
 
-Appium Windows Driver supports the same location strategies [the WinAppDriver supports](https://github.com/microsoft/WinAppDriver/blob/master/Docs/AuthoringTestScripts.md#supported-locators-to-find-ui-elements), but also includes Windows UIAutomation conditoons:
+Appium Desktop Driver supports the same location strategies [the WinAppDriver supports](https://github.com/microsoft/WinAppDriver/blob/master/Docs/AuthoringTestScripts.md#supported-locators-to-find-ui-elements), but also includes Windows UIAutomation conditoons:
 
 Name | Description | Example
 --- | --- | ---
@@ -158,7 +158,7 @@ accessibility id | This strategy is AutomationId attribute in inspect.exe | AppN
 class name | This strategy is ClassName attribute in inspect.exe | TextBlock
 id | This strategy is RuntimeId (decimal) attribute in inspect.exe | 42.333896.3.1
 name | This strategy is Name attribute in inspect.exe | Calculator
-tag name | This strategy is LocalizedControlType (upper camel case) attribute in inspect.exe since Appium Windows Driver 2.1.1 | Text
+tag name | This strategy is LocalizedControlType (upper camel case) attribute in inspect.exe since Appium Desktop Driver 2.1.1 | Text
 xpath | This strategy allows to create custom XPath queries on any attribute exposed by inspect.exe. Only XPath 1.0 is supported | (//Button)[2]
 windows uiautomation | This strategy allows to create custom Windows UIAutomation conditions on any attribute exposed by inspect.exe. Both C# and PowerShell syntax is supported | new PropertyCondition(AutomationElement.HelpTextProperty, "Info")
 
@@ -173,7 +173,7 @@ Beside of standard W3C APIs the driver provides the below custom command extensi
 > (if such is needed) as the thrid argument and so on. For example:
 > `driver.executeScript("windows: setValue", element, "valueToSet")` or
 > `driver.executeScript("windows: invoke", element)`. Commands that are created
-> as fallbacks to Appium Windows Driver should work as is. Open an issue if some
+> as fallbacks to Appium Desktop Driver should work as is. Open an issue if some
 > command that you need is missing or is not behaving as it should.
 
 ```java

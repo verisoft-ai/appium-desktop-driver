@@ -16,4 +16,14 @@ export default defineConfig(
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    files: ['docs/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
 );

@@ -1,22 +1,24 @@
 /* ============================================================
    Language tabs
    ============================================================ */
-document.querySelectorAll('.lang-tabs').forEach(tabBar => {
+document.querySelectorAll('.lang-tabs').forEach((tabBar) => {
   const tabs = tabBar.querySelectorAll('.lang-tab');
   const codeBlock = tabBar.nextElementSibling; // .tabbed-code
 
-  tabs.forEach(tab => {
+  tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const lang = tab.dataset.lang;
 
       // Update active tab
-      tabs.forEach(t => delete t.dataset.active);
+      tabs.forEach((t) => delete t.dataset.active);
       tab.dataset.active = '';
 
       // Show matching pre
-      codeBlock.querySelectorAll('pre').forEach(pre => {
+      codeBlock.querySelectorAll('pre').forEach((pre) => {
         delete pre.dataset.active;
-        if (pre.dataset.lang === lang) pre.dataset.active = '';
+        if (pre.dataset.lang === lang) {
+          pre.dataset.active = '';
+        }
       });
     });
   });
@@ -44,9 +46,10 @@ function flashCopied(btn) {
 
 function addCopyButton(wrap) {
   const btn = makeCopyBtn();
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     const code = wrap.querySelector('pre[data-active], pre') || wrap;
-    navigator.clipboard.writeText(code.innerText.trim()).then(() => flashCopied(btn));
+    await navigator.clipboard.writeText(code.innerText.trim());
+    flashCopied(btn);
   });
   wrap.appendChild(btn);
 }
@@ -58,8 +61,9 @@ const heroInstall = document.querySelector('.hero-install');
 if (heroInstall) {
   const btn = makeCopyBtn();
   btn.classList.add('hero-install-copy');
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(heroInstall.querySelector('code').innerText.trim()).then(() => flashCopied(btn));
+  btn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(heroInstall.querySelector('code').innerText.trim());
+    flashCopied(btn);
   });
   heroInstall.appendChild(btn);
 }

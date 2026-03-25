@@ -1,0 +1,57 @@
+name: Release Lite
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'   # fires when main release pushes vX.Y.Z tag
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release-lite:
+    runs-on: ubuntu-latest
+    environment: Release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main          # check out main (has the bumped package.json)
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Patch package.json for lite package
+        run: |
+          npm pkg set name="appium-desktop-driver-lite"
+          npm pkg delete dependencies.ffmpeg-static
+
+      - name: Remove dev/peer deps and ffmpeg-static from node_modules
+        run: |
+          rm -rf package-lock.json node_modules
+          npm prune --omit=dev --omit=peer --no-package-lock
+          rm -rf node_modules/ffmpeg-static
+
+      - name: Create shrinkwrap
+        run: npm shrinkwrap --omit=dev --omit=peer
+
+      - name: Install dev dependencies for release tooling
+        run: npm install --only=dev --no-package-lock
+
+      - name: Publish lite package
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

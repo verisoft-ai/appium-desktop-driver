@@ -148,6 +148,17 @@ nav {
   background: var(--accent-dim);
 }
 
+.hero-fork-notice {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+  opacity: 0.75;
+}
+.hero-fork-notice a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
 #hero h1 {
   font-size: clamp(2.4rem, 5vw, 3.8rem);
   font-weight: 800;

@@ -1,9 +1,11 @@
 name: Release Lite
 
 on:
-  push:
-    tags:
-      - 'v[0-9]*'   # fires when main release pushes vX.Y.Z tag
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   release-lite:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: Release
     steps:

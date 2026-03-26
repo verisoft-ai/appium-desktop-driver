@@ -14,6 +14,7 @@ npm run mcp:start      # Launch MCP server
 ```
 
 Run a single test file:
+
 ```bash
 npx vitest run test/path/to/file.test.ts
 ```
@@ -37,9 +38,10 @@ Element searches go through `lib/powershell/` which builds PowerShell scripts us
 
 Low-level mouse and keyboard events use native Windows API bindings in `lib/winapi/user32.ts` via the `koffi` FFI library. Higher-level action sequences (W3C Actions) are handled in `lib/commands/actions.ts` which translates WebDriver action chains into `user32` calls with optional easing/delay curves.
 
-### Commands
+### Driver Commands
 
 All driver commands live in `lib/commands/` and are mixed into the driver class via `lib/commands/index.ts`. Key files:
+
 - `actions.ts` — mouse, keyboard, wheel via W3C ActionSequence
 - `element.ts` — element finding and attribute retrieval
 - `app.ts` — app launch/close/window management

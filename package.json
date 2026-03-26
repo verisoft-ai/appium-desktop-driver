@@ -21,8 +21,15 @@
     "lint": "eslint .",
     "test": "npx vitest run",
     "test:e2e": "npx vitest run --config vitest.e2e.config.ts",
-    "mcp:start": "node build/lib/mcp/index.js"
+    "mcp:start": "node build/lib/mcp/index.js",
+    "pack:dist": "node scripts/pack-dist.js"
   },
+  "files": [
+    "build",
+    "LICENSE",
+    "node_modules",
+    "README.md"
+  ],
   "author": "VeriSoft",
   "license": "Apache-2.0",
   "repository": {
@@ -51,7 +58,7 @@
     "platformNames": [
       "Windows"
     ],
-    "mainClass": "NovaWindowsDriver"
+    "mainClass": "AppiumDesktopDriver"
   },
   "devDependencies": {
     "@appium/eslint-config-appium-ts": "^2.0.3",

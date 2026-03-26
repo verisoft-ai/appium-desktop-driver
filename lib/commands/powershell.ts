@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
 
@@ -11,7 +11,7 @@ const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootEle
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
 
-export async function startPowerShellSession(this: NovaWindowsDriver): Promise<void> {
+export async function startPowerShellSession(this: AppiumDesktopDriver): Promise<void> {
     const spawnEnv = this.caps.appEnvironment
         ? { ...process.env, ...(this.caps.appEnvironment as Record<string, string>) }
         : process.env;
@@ -99,7 +99,7 @@ export async function startPowerShellSession(this: NovaWindowsDriver): Promise<v
     }
 }
 
-export async function sendIsolatedPowerShellCommand(this: NovaWindowsDriver, command: string): Promise<string> {
+export async function sendIsolatedPowerShellCommand(this: AppiumDesktopDriver, command: string): Promise<string> {
     const magicNumber = 0xF2EE;
 
     const spawnEnv = this.caps.appEnvironment
@@ -170,7 +170,7 @@ export async function sendIsolatedPowerShellCommand(this: NovaWindowsDriver, com
     }
 }
 
-export async function sendPowerShellCommand(this: NovaWindowsDriver, command: string): Promise<string> {
+export async function sendPowerShellCommand(this: AppiumDesktopDriver, command: string): Promise<string> {
     const magicNumber = 0xF2EE;
 
     if (!this.powerShell) {
@@ -209,7 +209,7 @@ export async function sendPowerShellCommand(this: NovaWindowsDriver, command: st
     return result;
 }
 
-export async function terminatePowerShellSession(this: NovaWindowsDriver): Promise<void> {
+export async function terminatePowerShellSession(this: AppiumDesktopDriver): Promise<void> {
     if (!this.powerShell) {
         return;
     }

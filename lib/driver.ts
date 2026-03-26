@@ -4,7 +4,7 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { ScreenRecorder } from './commands/screen-recorder';
 import commands from './commands';
 import {
-    NovaWindowsDriverConstraints,
+    AppiumDesktopDriverConstraints,
     UI_AUTOMATION_DRIVER_CONSTRAINTS
 } from './constraints';
 import {
@@ -35,8 +35,8 @@ import type {
     W3CDriverCaps
 } from '@appium/types';
 
-type W3CNovaWindowsDriverCaps = W3CDriverCaps<NovaWindowsDriverConstraints>;
-type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<NovaWindowsDriverConstraints>;
+type W3CAppiumDesktopDriverCaps = W3CDriverCaps<AppiumDesktopDriverConstraints>;
+type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<AppiumDesktopDriverConstraints>;
 
 type KeyboardState = {
     pressed: Set<string>,
@@ -56,7 +56,7 @@ const LOCATION_STRATEGIES = Object.freeze([
     '-windows uiautomation',
 ] as const);
 
-export class NovaWindowsDriver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
+export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstraints, StringRecord> {
     isPowerShellSessionStarted: boolean = false;
     powerShell?: ChildProcessWithoutNullStreams;
     powerShellStdOut: string = '';
@@ -152,9 +152,9 @@ export class NovaWindowsDriver extends BaseDriver<NovaWindowsDriverConstraints, 
     }
 
     override async createSession(
-        jwpCaps: W3CNovaWindowsDriverCaps,
-        reqCaps?: W3CNovaWindowsDriverCaps,
-        w3cCaps?: W3CNovaWindowsDriverCaps,
+        jwpCaps: W3CAppiumDesktopDriverCaps,
+        reqCaps?: W3CAppiumDesktopDriverCaps,
+        w3cCaps?: W3CAppiumDesktopDriverCaps,
         driverData?: DriverData[]
     ): Promise<DefaultWindowsCreateSessionResult> {
         if (!system.isWindows()) {

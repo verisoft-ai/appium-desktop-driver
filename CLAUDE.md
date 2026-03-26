@@ -27,7 +27,7 @@ This is an **Appium driver** for Windows desktop UI automation. It exposes two i
 
 ### Core driver flow
 
-`lib/driver.ts` — `NovaWindowsDriver` extends `BaseDriver`. On `createSession()`, it starts a persistent PowerShell process that remains open for the session lifetime. All UI Automation operations are executed by sending PowerShell commands through this process and reading stdout.
+`lib/driver.ts` — `AppiumDesktopDriver` extends `BaseDriver`. On `createSession()`, it starts a persistent PowerShell process that remains open for the session lifetime. All UI Automation operations are executed by sending PowerShell commands through this process and reading stdout.
 
 ### Element finding
 

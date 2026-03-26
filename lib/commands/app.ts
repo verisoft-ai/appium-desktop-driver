@@ -1,6 +1,6 @@
 import { normalize } from 'node:path';
 import { Element, Rect } from '@appium/types';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import {
     AutomationElement,
     FoundAutomationElement,
@@ -60,11 +60,11 @@ const GET_SCREENSHOT_COMMAND = pwsh /* ps1 */ `
 
 const SLEEP_INTERVAL_MS = 500;
 
-export async function getPageSource(this: NovaWindowsDriver): Promise<string> {
+export async function getPageSource(this: AppiumDesktopDriver): Promise<string> {
     return await this.sendPowerShellCommand(GET_PAGE_SOURCE_COMMAND.format(AutomationElement.automationRoot));
 }
 
-export async function getScreenshot(this: NovaWindowsDriver): Promise<string> {
+export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> {
     const automationRootId = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
 
     if (this.caps.app && this.caps.app.toLowerCase() !== 'root') {
@@ -80,17 +80,17 @@ export async function getScreenshot(this: NovaWindowsDriver): Promise<string> {
     return await this.sendPowerShellCommand(GET_SCREENSHOT_COMMAND);
 }
 
-export async function getWindowRect(this: NovaWindowsDriver): Promise<Rect> {
+export async function getWindowRect(this: AppiumDesktopDriver): Promise<Rect> {
     const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
     return JSON.parse(result.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString()));
 }
 
-export async function getWindowHandle(this: NovaWindowsDriver): Promise<string> {
+export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string> {
     const nativeWindowHandle = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetPropertyCommand(Property.NATIVE_WINDOW_HANDLE));
     return `0x${Number(nativeWindowHandle).toString(16).padStart(8, '0')}`;
 }
 
-export async function getWindowHandles(this: NovaWindowsDriver): Promise<string[]> {
+export async function getWindowHandles(this: AppiumDesktopDriver): Promise<string[]> {
     if (this.appProcessIds.length > 0 && !this.caps.returnAllWindowHandles) {
         const handles = getWindowAllHandlesForProcessIds(this.appProcessIds);
         return handles.map((h) => `0x${h.toString(16).padStart(8, '0')}`);
@@ -108,7 +108,7 @@ export async function getWindowHandles(this: NovaWindowsDriver): Promise<string[
     return nativeWindowHandles;
 }
 
-export async function setWindow(this: NovaWindowsDriver, nameOrHandle: string): Promise<void> {
+export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string): Promise<void> {
     const handle = Number(nameOrHandle);
     const maxRetries = this.caps['ms:windowSwitchRetries'] ?? 20;
     const sleepInterval = this.caps['ms:windowSwitchInterval'] ?? SLEEP_INTERVAL_MS;
@@ -142,7 +142,7 @@ export async function setWindow(this: NovaWindowsDriver, nameOrHandle: string): 
     throw new errors.NoSuchWindowError(`No window was found with name or handle '${nameOrHandle}'.`);
 }
 
-export async function closeApp(this: NovaWindowsDriver): Promise<void> {
+export async function closeApp(this: AppiumDesktopDriver): Promise<void> {
     const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
     const elementId = result.split('\n').map((id) => id.trim()).filter(Boolean)[0];
     if (!elementId) {
@@ -152,16 +152,16 @@ export async function closeApp(this: NovaWindowsDriver): Promise<void> {
     await this.sendPowerShellCommand(/* ps1 */ `$rootElement = $null`);
 }
 
-export async function launchApp(this: NovaWindowsDriver): Promise<void> {
+export async function launchApp(this: AppiumDesktopDriver): Promise<void> {
     if (!this.caps.app || ['root', 'none'].includes(this.caps.app.toLowerCase())) {
         throw new errors.InvalidArgumentError('No app capability is set for this session.');
     }
     await this.changeRootElement(this.caps.app);
 }
 
-export async function changeRootElement(this: NovaWindowsDriver, path: string): Promise<void>
-export async function changeRootElement(this: NovaWindowsDriver, nativeWindowHandle: number): Promise<void>
-export async function changeRootElement(this: NovaWindowsDriver, pathOrNativeWindowHandle: string | number): Promise<void> {
+export async function changeRootElement(this: AppiumDesktopDriver, path: string): Promise<void>
+export async function changeRootElement(this: AppiumDesktopDriver, nativeWindowHandle: number): Promise<void>
+export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeWindowHandle: string | number): Promise<void> {
     if (typeof pathOrNativeWindowHandle === 'number') {
         const nativeWindowHandle = pathOrNativeWindowHandle;
         const condition = new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(nativeWindowHandle));
@@ -214,7 +214,7 @@ export async function changeRootElement(this: NovaWindowsDriver, pathOrNativeWin
     }
 }
 
-export async function back(this: NovaWindowsDriver): Promise<void> {
+export async function back(this: AppiumDesktopDriver): Promise<void> {
     const elementId = (await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand())).trim();
     if (!elementId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');
@@ -225,7 +225,7 @@ export async function back(this: NovaWindowsDriver): Promise<void> {
     keyUp(Key.ALT);
 }
 
-export async function forward(this: NovaWindowsDriver): Promise<void> {
+export async function forward(this: AppiumDesktopDriver): Promise<void> {
     const elementId = (await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand())).trim();
     if (!elementId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');
@@ -236,7 +236,7 @@ export async function forward(this: NovaWindowsDriver): Promise<void> {
     keyUp(Key.ALT);
 }
 
-export async function title(this: NovaWindowsDriver): Promise<string> {
+export async function title(this: AppiumDesktopDriver): Promise<string> {
     const elementId = (await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand())).trim();
     if (!elementId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');
@@ -247,7 +247,7 @@ export async function title(this: NovaWindowsDriver): Promise<string> {
 }
 
 export async function setWindowRect(
-    this: NovaWindowsDriver,
+    this: AppiumDesktopDriver,
     x: number | null,
     y: number | null,
     width: number | null,
@@ -277,7 +277,7 @@ export async function setWindowRect(
 }
 
 
-export async function attachToApplicationWindow(this: NovaWindowsDriver, processIds: number[]): Promise<void> {
+export async function attachToApplicationWindow(this: AppiumDesktopDriver, processIds: number[]): Promise<void> {
     const trackedPids = new Set<number>(processIds);
     this.log.debug(`Attaching to application window. Process IDs: [${[...trackedPids].join(', ')}]`);
     const timeout = (this.caps['ms:waitForAppLaunch'] ?? 0) * 1000 || SLEEP_INTERVAL_MS * 20;

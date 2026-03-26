@@ -1,5 +1,5 @@
 import { Element, Rect } from '@appium/types';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import {
     AndCondition,
     AutomationElement,
@@ -19,32 +19,32 @@ import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
 
-export async function getProperty(this: NovaWindowsDriver, propertyName: string, elementId: string): Promise<string> {
+export async function getProperty(this: AppiumDesktopDriver, propertyName: string, elementId: string): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(propertyName));
 }
 
-export async function getAttribute(this: NovaWindowsDriver, propertyName: string, elementId: string) {
+export async function getAttribute(this: AppiumDesktopDriver, propertyName: string, elementId: string) {
     this.log.warn('Warning: Use getProperty instead of getAttribute for retrieving element properties.');
     return await this.getProperty(propertyName, elementId);
 }
 
-export async function active(this: NovaWindowsDriver): Promise<Element> {
+export async function active(this: AppiumDesktopDriver): Promise<Element> {
     return { [W3C_ELEMENT_KEY]: await this.sendPowerShellCommand(AutomationElement.focusedElement.buildCommand()) };
 }
 
-export async function getName(this: NovaWindowsDriver, elementId: string): Promise<string> {
+export async function getName(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetTagNameCommand());
 }
 
-export async function getText(this: NovaWindowsDriver, elementId: string): Promise<string> {
+export async function getText(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetTextCommand());
 }
 
-export async function clear(this: NovaWindowsDriver, elementId: string): Promise<void> {
+export async function clear(this: AppiumDesktopDriver, elementId: string): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetValueCommand(''));
 }
 
-export async function setValue(this: NovaWindowsDriver, value: string | string[], elementId: string): Promise<void> {
+export async function setValue(this: AppiumDesktopDriver, value: string | string[], elementId: string): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetFocusCommand());
     const metaKeyStates = {
         shift: false,
@@ -163,7 +163,7 @@ export async function setValue(this: NovaWindowsDriver, value: string | string[]
     await sendKeysAndResetArray();
 }
 
-export async function getElementRect(this: NovaWindowsDriver, elementId: string): Promise<Rect> {
+export async function getElementRect(this: AppiumDesktopDriver, elementId: string): Promise<Rect> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
     const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
     const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
@@ -175,13 +175,13 @@ export async function getElementRect(this: NovaWindowsDriver, elementId: string)
     return rect;
 }
 
-export async function elementDisplayed(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
+export async function elementDisplayed(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_OFFSCREEN));
     return result.toLowerCase() === 'true' ? false : true;
 }
 
 // TODO: find better way to handle whether to use select or toggle
-export async function elementSelected(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
+export async function elementSelected(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     try {
         const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildIsSelectedCommand());
         return result === 'True';
@@ -191,12 +191,12 @@ export async function elementSelected(this: NovaWindowsDriver, elementId: string
     }
 }
 
-export async function elementEnabled(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
+export async function elementEnabled(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_ENABLED));
     return result.toLowerCase() === 'true' ? true : false;
 }
 
-export async function click(this: NovaWindowsDriver, elementId: string): Promise<void> {
+export async function click(this: AppiumDesktopDriver, elementId: string): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
     const element = new FoundAutomationElement(elementId);
 
@@ -255,7 +255,7 @@ const GET_ELEMENT_SCREENSHOT_COMMAND = pwsh$ /* ps1 */ `
     [Convert]::ToBase64String($stream.ToArray())
 `;
 
-export async function getElementScreenshot(this: NovaWindowsDriver, elementId: string): Promise<string> {
+export async function getElementScreenshot(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     const rootId = (await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand())).trim();
     if (!rootId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');

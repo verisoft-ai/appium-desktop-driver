@@ -1,6 +1,6 @@
 import { normalize } from 'node:path';
 import { errors } from '@appium/base-driver';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import { PSString, pwsh, pwsh$ } from '../powershell';
 import { MODIFY_FS_FEATURE } from '../constants';
 import { isUwpAppId, sleep } from '../util';
@@ -11,7 +11,7 @@ const TERMINATE_TIMEOUT_MS = 10_000;
 const GET_SYSTEM_TIME_COMMAND = pwsh$ /* ps1 */ `(Get-Date).ToString(${0})`;
 const ISO_8061_FORMAT = 'yyyy-MM-ddTHH:mm:sszzz';
 
-export async function getDeviceTime(this: NovaWindowsDriver, _sessionId?: string, format?: string): Promise<string> {
+export async function getDeviceTime(this: AppiumDesktopDriver, _sessionId?: string, format?: string): Promise<string> {
     const fmt = format ? new PSString(format).toString() : `'${ISO_8061_FORMAT}'`;
     return await this.sendPowerShellCommand(GET_SYSTEM_TIME_COMMAND.format(fmt));
 }
@@ -25,7 +25,7 @@ const PUSH_FILE_COMMAND = pwsh$ /* ps1 */ `
     [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String(${1}))
 `;
 
-export async function pushFile(this: NovaWindowsDriver, path: string, data: string): Promise<void> {
+export async function pushFile(this: AppiumDesktopDriver, path: string, data: string): Promise<void> {
     this.assertFeatureEnabled(MODIFY_FS_FEATURE);
     if (!path) {throw new errors.InvalidArgumentError("'path' must be provided.");}
     if (!data) {throw new errors.InvalidArgumentError("'data' must be provided.");}
@@ -36,7 +36,7 @@ export async function pushFile(this: NovaWindowsDriver, path: string, data: stri
 
 const PULL_FILE_COMMAND = pwsh$ /* ps1 */ `[Convert]::ToBase64String([IO.File]::ReadAllBytes(${0}))`;
 
-export async function pullFile(this: NovaWindowsDriver, path: string): Promise<string> {
+export async function pullFile(this: AppiumDesktopDriver, path: string): Promise<string> {
     this.assertFeatureEnabled(MODIFY_FS_FEATURE);
     if (!path) {throw new errors.InvalidArgumentError("'path' must be provided.");}
     return await this.sendPowerShellCommand(PULL_FILE_COMMAND.format(new PSString(path).toString()));
@@ -53,7 +53,7 @@ const PULL_FOLDER_COMMAND = pwsh$ /* ps1 */ `
     }
 `;
 
-export async function pullFolder(this: NovaWindowsDriver, path: string): Promise<string> {
+export async function pullFolder(this: AppiumDesktopDriver, path: string): Promise<string> {
     this.assertFeatureEnabled(MODIFY_FS_FEATURE);
     if (!path) {throw new errors.InvalidArgumentError("'path' must be provided.");}
     return await this.sendPowerShellCommand(PULL_FOLDER_COMMAND.format(new PSString(path).toString()));
@@ -83,7 +83,7 @@ const HIDE_KEYBOARD_COMMAND = pwsh /* ps1 */ `
 `;
 
 export async function hideKeyboard(
-    this: NovaWindowsDriver,
+    this: AppiumDesktopDriver,
     _strategy?: string,
     _key?: string,
     _keyCode?: string,
@@ -110,7 +110,7 @@ const IS_KEYBOARD_SHOWN_COMMAND = pwsh /* ps1 */ `
     }
 `;
 
-export async function isKeyboardShown(this: NovaWindowsDriver): Promise<boolean> {
+export async function isKeyboardShown(this: AppiumDesktopDriver): Promise<boolean> {
     const result = await this.sendPowerShellCommand(IS_KEYBOARD_SHOWN_COMMAND);
     return result.trim().toLowerCase() === 'true';
 }
@@ -118,7 +118,7 @@ export async function isKeyboardShown(this: NovaWindowsDriver): Promise<boolean>
 // ─── App management ──────────────────────────────────────────────────────────
 
 export async function activateApp(
-    this: NovaWindowsDriver,
+    this: AppiumDesktopDriver,
     appId: string,
     _options?: Record<string, unknown>
 ): Promise<void> {
@@ -157,7 +157,7 @@ export async function activateApp(
 }
 
 export async function terminateApp(
-    this: NovaWindowsDriver,
+    this: AppiumDesktopDriver,
     appId: string,
     _options?: Record<string, unknown>
 ): Promise<boolean> {
@@ -236,7 +236,7 @@ export async function terminateApp(
     return killed;
 }
 
-export async function isAppInstalled(this: NovaWindowsDriver, appId: string): Promise<boolean> {
+export async function isAppInstalled(this: AppiumDesktopDriver, appId: string): Promise<boolean> {
     if (!appId) {throw new errors.InvalidArgumentError("'appId' or 'bundleId' must be provided.");}
 
     const isUwp = isUwpAppId(appId);

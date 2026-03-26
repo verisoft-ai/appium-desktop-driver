@@ -11,13 +11,13 @@ import {
 } from '@appium/types';
 
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
 import { sleep } from '../util';
 import { AutomationElement, FoundAutomationElement } from '../powershell';
 import { Key } from '../enums';
 
-export async function performActions(this: NovaWindowsDriver, actionSequences: ActionSequence[]): Promise<void> {
+export async function performActions(this: AppiumDesktopDriver, actionSequences: ActionSequence[]): Promise<void> {
     for (const actionSequence of actionSequences) {
         switch (actionSequence.type) {
             case 'key':
@@ -38,14 +38,14 @@ export async function performActions(this: NovaWindowsDriver, actionSequences: A
     }
 };
 
-export async function handleKeyActionSequence(this: NovaWindowsDriver, actionSequence: KeyActionSequence): Promise<void> {
+export async function handleKeyActionSequence(this: AppiumDesktopDriver, actionSequence: KeyActionSequence): Promise<void> {
     const actions = actionSequence.actions;
     for (const action of actions) {
         await this.handleKeyAction(action);
     }
 }
 
-export async function handlePointerActionSequence(this: NovaWindowsDriver, actionSequence: PointerActionSequence): Promise<void> {
+export async function handlePointerActionSequence(this: AppiumDesktopDriver, actionSequence: PointerActionSequence): Promise<void> {
     switch (actionSequence.parameters?.pointerType) {
         case 'touch':
         case 'pen':
@@ -56,7 +56,7 @@ export async function handlePointerActionSequence(this: NovaWindowsDriver, actio
     }
 }
 
-export async function handleMousePointerActionSequence(this: NovaWindowsDriver, actionSequence: PointerActionSequence): Promise<void> {
+export async function handleMousePointerActionSequence(this: AppiumDesktopDriver, actionSequence: PointerActionSequence): Promise<void> {
     const actions = actionSequence.actions;
     for (const action of actions) {
         switch (action.type) {
@@ -80,7 +80,7 @@ export async function handleMousePointerActionSequence(this: NovaWindowsDriver, 
     }
 }
 
-export async function handleWheelActionSequence(this: NovaWindowsDriver, actionSequence: WheelActionSequence): Promise<void> {
+export async function handleWheelActionSequence(this: AppiumDesktopDriver, actionSequence: WheelActionSequence): Promise<void> {
     const actions = actionSequence.actions;
     for (const action of actions) {
         switch (action.type) {
@@ -99,7 +99,7 @@ export async function handleWheelActionSequence(this: NovaWindowsDriver, actionS
     }
 }
 
-export async function handleNullActionSequence(this: NovaWindowsDriver, actionSequence: NullActionSequence): Promise<void> {
+export async function handleNullActionSequence(this: AppiumDesktopDriver, actionSequence: NullActionSequence): Promise<void> {
     const actions = actionSequence.actions;
     for (const action of actions) {
         if (action.duration) {
@@ -108,7 +108,7 @@ export async function handleNullActionSequence(this: NovaWindowsDriver, actionSe
     }
 }
 
-export async function handleMouseMoveAction(this: NovaWindowsDriver, action: PointerMoveAction | ScrollAction): Promise<void> {
+export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: PointerMoveAction | ScrollAction): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
     switch (action.origin) {
         case 'pointer':
@@ -139,7 +139,7 @@ export async function handleMouseMoveAction(this: NovaWindowsDriver, action: Poi
     }
 }
 
-export async function handleKeyAction(this: NovaWindowsDriver, action: KeyAction): Promise<void> {
+export async function handleKeyAction(this: AppiumDesktopDriver, action: KeyAction): Promise<void> {
     if (action.type === 'pause') {
         if (action.duration) {
             await sleep(action.duration);
@@ -228,7 +228,7 @@ export async function handleKeyAction(this: NovaWindowsDriver, action: KeyAction
     }
 }
 
-export async function releaseActions(this: NovaWindowsDriver): Promise<void> {
+export async function releaseActions(this: AppiumDesktopDriver): Promise<void> {
     if (this.keyboardState.shift) {
         keyUp(Key.SHIFT);
         keyUp(Key.R_SHIFT);

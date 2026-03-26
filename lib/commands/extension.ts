@@ -3,7 +3,7 @@ import { Element, Rect } from '@appium/types';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { MODIFY_FS_FEATURE, POWER_SHELL_FEATURE } from '../constants';
-import { NovaWindowsDriver } from '../driver';
+import { AppiumDesktopDriver } from '../driver';
 import { ClickType, Enum, Key } from '../enums';
 import {
     AutomationElement,
@@ -108,7 +108,7 @@ type KeyAction = {
     down?: boolean,
 }
 
-export async function execute(this: NovaWindowsDriver, script: string, args: any[]) {
+export async function execute(this: AppiumDesktopDriver, script: string, args: any[]) {
     if (script.startsWith(PLATFORM_COMMAND_PREFIX)) {
         script = script.replace(PLATFORM_COMMAND_PREFIX, '').trim();
         this.log.info(`Executing command '${PLATFORM_COMMAND_PREFIX} ${script}'...`);
@@ -141,7 +141,7 @@ type CacheRequest = {
 const TREE_SCOPE_REGEX = new PropertyRegexMatcher('System.Windows.Automation.TreeScope', ...Object.values(TreeScope)).toRegex('i');
 const AUTOMATION_ELEMENT_MODE_REGEX = new PropertyRegexMatcher('System.Windows.Automation.AutomationElementMode', ...Object.values(AutomationElementMode)).toRegex('i');
 
-export async function pushCacheRequest(this: NovaWindowsDriver, cacheRequest: CacheRequest): Promise<void> {
+export async function pushCacheRequest(this: AppiumDesktopDriver, cacheRequest: CacheRequest): Promise<void> {
     if (Object.keys(cacheRequest).every((key) => cacheRequest[key] === undefined)) {
         throw new errors.InvalidArgumentError('At least one property of the cache request must be set.');
     }
@@ -177,28 +177,28 @@ export async function pushCacheRequest(this: NovaWindowsDriver, cacheRequest: Ca
     }
 }
 
-export async function patternInvoke(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternInvoke(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildInvokeCommand());
 }
 
-export async function patternExpand(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternExpand(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildExpandCommand());
 }
 
-export async function patternCollapse(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternCollapse(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildCollapseCommand());
 }
 
-export async function patternScrollIntoView(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternScrollIntoView(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildScrollIntoViewCommand());
 }
 
-export async function patternIsMultiple(this: NovaWindowsDriver, element: Element): Promise<boolean> {
+export async function patternIsMultiple(this: AppiumDesktopDriver, element: Element): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildIsMultipleSelectCommand());
     return result.toLowerCase() === 'true' ? true : false;
 }
 
-export async function patternGetSelectedItem(this: NovaWindowsDriver, element: Element): Promise<Element> {
+export async function patternGetSelectedItem(this: AppiumDesktopDriver, element: Element): Promise<Element> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetSelectionCommand());
     const elId = result.split('\n').filter(Boolean)[0];
 
@@ -209,28 +209,28 @@ export async function patternGetSelectedItem(this: NovaWindowsDriver, element: E
     return { [W3C_ELEMENT_KEY]: elId };
 }
 
-export async function patternGetAllSelectedItems(this: NovaWindowsDriver, element: Element): Promise<Element[]> {
+export async function patternGetAllSelectedItems(this: AppiumDesktopDriver, element: Element): Promise<Element[]> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetSelectionCommand());
     return result.split('\n').filter(Boolean).map((elId) => ({ [W3C_ELEMENT_KEY]: elId }));
 }
 
-export async function patternAddToSelection(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternAddToSelection(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildAddToSelectionCommand());
 }
 
-export async function patternRemoveFromSelection(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternRemoveFromSelection(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildRemoveFromSelectionCommand());
 }
 
-export async function patternSelect(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternSelect(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSelectCommand());
 }
 
-export async function patternToggle(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternToggle(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildToggleCommand());
 }
 
-export async function patternSetValue(this: NovaWindowsDriver, element: Element, value: string): Promise<void> {
+export async function patternSetValue(this: AppiumDesktopDriver, element: Element, value: string): Promise<void> {
     try {
         await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSetValueCommand(value));
     } catch {
@@ -238,39 +238,39 @@ export async function patternSetValue(this: NovaWindowsDriver, element: Element,
     }
 }
 
-export async function patternGetValue(this: NovaWindowsDriver, element: Element): Promise<string> {
+export async function patternGetValue(this: AppiumDesktopDriver, element: Element): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetValueCommand());
 }
 
-export async function patternMaximize(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternMaximize(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildMaximizeCommand());
 }
 
-export async function patternMinimize(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternMinimize(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildMinimizeCommand());
 }
 
-export async function patternRestore(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternRestore(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildRestoreCommand());
 }
 
-export async function patternClose(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function patternClose(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildCloseCommand());
 }
 
-export async function windowsCloseApp(this: NovaWindowsDriver): Promise<void> {
+export async function windowsCloseApp(this: AppiumDesktopDriver): Promise<void> {
     return await this.closeApp();
 }
 
-export async function windowsLaunchApp(this: NovaWindowsDriver): Promise<void> {
+export async function windowsLaunchApp(this: AppiumDesktopDriver): Promise<void> {
     return await this.launchApp();
 }
 
-export async function focusElement(this: NovaWindowsDriver, element: Element): Promise<void> {
+export async function focusElement(this: AppiumDesktopDriver, element: Element): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSetFocusCommand());
 }
 
-export async function getClipboardBase64(this: NovaWindowsDriver, contentType?: ContentType | { contentType?: ContentType }): Promise<string> {
+export async function getClipboardBase64(this: AppiumDesktopDriver, contentType?: ContentType | { contentType?: ContentType }): Promise<string> {
     if (!contentType || (contentType && typeof contentType === 'object')) {
         contentType = contentType?.contentType ?? ContentType.PLAINTEXT;
     }
@@ -285,7 +285,7 @@ export async function getClipboardBase64(this: NovaWindowsDriver, contentType?: 
     }
 }
 
-export async function setClipboardFromBase64(this: NovaWindowsDriver, args: { contentType?: ContentType, b64Content: string }): Promise<string> {
+export async function setClipboardFromBase64(this: AppiumDesktopDriver, args: { contentType?: ContentType, b64Content: string }): Promise<string> {
     if (!args || typeof args !== 'object' || !args.b64Content) {
         throw new errors.InvalidArgumentError(`'b64Content' must be provided.`);
     }
@@ -302,7 +302,7 @@ export async function setClipboardFromBase64(this: NovaWindowsDriver, args: { co
     }
 }
 
-export async function executePowerShellScript(this: NovaWindowsDriver, script: string | { script: string, command: undefined } | { script: undefined, command: string }): Promise<string> {
+export async function executePowerShellScript(this: AppiumDesktopDriver, script: string | { script: string, command: undefined } | { script: undefined, command: string }): Promise<string> {
     if (script && typeof script === 'object') {
         if (script.script) {
             script = script.script;
@@ -321,7 +321,7 @@ export async function executePowerShellScript(this: NovaWindowsDriver, script: s
     }
 }
 
-export async function executeKeys(this: NovaWindowsDriver, keyActions: { actions: KeyAction | KeyAction[], forceUnicode: boolean }) {
+export async function executeKeys(this: AppiumDesktopDriver, keyActions: { actions: KeyAction | KeyAction[], forceUnicode: boolean }) {
     if (!Array.isArray(keyActions.actions)) {
         keyActions.actions = [keyActions.actions];
     }
@@ -380,7 +380,7 @@ export async function executeKeys(this: NovaWindowsDriver, keyActions: { actions
     }
 }
 
-export async function executeClick(this: NovaWindowsDriver, clickArgs: {
+export async function executeClick(this: AppiumDesktopDriver, clickArgs: {
     elementId?: string,
     x?: number,
     y?: number,
@@ -480,7 +480,7 @@ export async function executeClick(this: NovaWindowsDriver, clickArgs: {
     }
 }
 
-export async function executeHover(this: NovaWindowsDriver, hoverArgs: {
+export async function executeHover(this: AppiumDesktopDriver, hoverArgs: {
     startElementId?: string,
     startX?: number,
     startY?: number,
@@ -583,7 +583,7 @@ export async function executeHover(this: NovaWindowsDriver, hoverArgs: {
     }
 }
 
-export async function executeScroll(this: NovaWindowsDriver, scrollArgs: {
+export async function executeScroll(this: AppiumDesktopDriver, scrollArgs: {
     elementId?: string,
     x?: number,
     y?: number,
@@ -657,7 +657,7 @@ export async function executeScroll(this: NovaWindowsDriver, scrollArgs: {
     }
 }
 
-export async function startRecordingScreen(this: NovaWindowsDriver, args?: {
+export async function startRecordingScreen(this: AppiumDesktopDriver, args?: {
     outputPath?: string,
     timeLimit?: number,
     videoFps?: number,
@@ -720,7 +720,7 @@ export async function startRecordingScreen(this: NovaWindowsDriver, args?: {
     }
 }
 
-export async function stopRecordingScreen(this: NovaWindowsDriver, args?: UploadOptions): Promise<string> {
+export async function stopRecordingScreen(this: AppiumDesktopDriver, args?: UploadOptions): Promise<string> {
     if (!this._screenRecorder) {
         this.log.debug('No screen recording has been started. Doing nothing');
         return '';
@@ -737,7 +737,7 @@ export async function stopRecordingScreen(this: NovaWindowsDriver, args?: Upload
     return await uploadRecordedMedia(videoPath, remotePath, uploadOpts);
 }
 
-export async function deleteFile(this: NovaWindowsDriver, args: { path: string }): Promise<void> {
+export async function deleteFile(this: AppiumDesktopDriver, args: { path: string }): Promise<void> {
     this.assertFeatureEnabled(MODIFY_FS_FEATURE);
     if (!args || typeof args !== 'object' || !args.path) {
         throw new errors.InvalidArgumentError("'path' must be provided.");
@@ -748,7 +748,7 @@ export async function deleteFile(this: NovaWindowsDriver, args: { path: string }
     await this.sendPowerShellCommand(`Remove-Item ${pathParam} -Force -ErrorAction Stop`);
 }
 
-export async function deleteFolder(this: NovaWindowsDriver, args: { path: string, recursive?: boolean }): Promise<void> {
+export async function deleteFolder(this: AppiumDesktopDriver, args: { path: string, recursive?: boolean }): Promise<void> {
     this.assertFeatureEnabled(MODIFY_FS_FEATURE);
     if (!args || typeof args !== 'object' || !args.path) {
         throw new errors.InvalidArgumentError("'path' must be provided.");
@@ -761,7 +761,7 @@ export async function deleteFolder(this: NovaWindowsDriver, args: { path: string
     await this.sendPowerShellCommand(`Remove-Item ${pathParam} -Force${recurseFlag} -ErrorAction Stop`);
 }
 
-export async function executeClickAndDrag(this: NovaWindowsDriver, dragArgs: {
+export async function executeClickAndDrag(this: AppiumDesktopDriver, dragArgs: {
     startElementId?: string,
     startX?: number,
     startY?: number,
@@ -881,11 +881,11 @@ export async function executeClickAndDrag(this: NovaWindowsDriver, dragArgs: {
     }
 }
 
-export async function windowsGetDeviceTime(this: NovaWindowsDriver, args?: { format?: string }): Promise<string> {
+export async function windowsGetDeviceTime(this: AppiumDesktopDriver, args?: { format?: string }): Promise<string> {
     return this.getDeviceTime(undefined, args?.format);
 }
 
-export async function getWindowElement(this: NovaWindowsDriver): Promise<Element> {
+export async function getWindowElement(this: AppiumDesktopDriver): Promise<Element> {
     const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
     const elementId = result.split('\n').map((id) => id.trim()).filter(Boolean)[0];
     if (!elementId) {
@@ -909,7 +909,7 @@ const GET_MONITORS_COMMAND = pwsh /* ps1 */ `
     ConvertTo-Json -InputObject $monitors -Compress
 `;
 
-export async function windowsGetMonitors(this: NovaWindowsDriver): Promise<object[]> {
+export async function windowsGetMonitors(this: AppiumDesktopDriver): Promise<object[]> {
     const result = await this.sendPowerShellCommand(GET_MONITORS_COMMAND);
     return JSON.parse(result.trim());
 }

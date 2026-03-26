@@ -58,4 +58,4 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
-export type NovaWindowsDriverConstraints = typeof UI_AUTOMATION_DRIVER_CONSTRAINTS;
+export type AppiumDesktopDriverConstraints = typeof UI_AUTOMATION_DRIVER_CONSTRAINTS;

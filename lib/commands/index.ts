@@ -22,7 +22,7 @@ type Commands = {
 };
 
 declare module '../driver' {
-    interface NovaWindowsDriver extends Commands {}
+    interface AppiumDesktopDriver extends Commands {}
 }
 
 export default commands;

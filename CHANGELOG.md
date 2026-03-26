@@ -1,3 +1,13 @@
+## [1.4.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.2...v1.4.3) (2026-03-26)
+
+### Miscellaneous Chores
+
+* update website hero and footer attribution [skip ci] ([3a67147](https://github.com/verisoft-ai/appium-desktop-driver/commit/3a67147f89bc5f5400092ee7bc4083c55708dc4a))
+
+### Code Refactoring
+
+* rename driver class from NovaWindowsDriver to AppiumDesktopDriver ([8a1eb39](https://github.com/verisoft-ai/appium-desktop-driver/commit/8a1eb393f48c7ee2d9fc5a17d7f262fa7e8ae596))
+
 ## [1.4.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.1...v1.4.2) (2026-03-24)
 
 ### Bug Fixes

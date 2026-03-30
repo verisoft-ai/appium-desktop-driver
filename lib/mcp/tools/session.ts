@@ -20,7 +20,7 @@ export function registerSessionTools(server: McpServer, session: AppiumSession):
                 appWorkingDir: z.string().optional().describe('Working directory for the app process'),
                 waitForAppLaunch: z.number().int().min(0).optional().describe('Milliseconds to wait after app launch before interacting'),
                 shouldCloseApp: z.boolean().optional().default(true).describe('Whether to close the app when delete_session is called'),
-                implicitTimeout: z.number().int().min(0).optional().default(1500).describe('Implicit element wait timeout in milliseconds'),
+                implicitTimeout: z.number().int().min(0).optional().default(100).describe('Implicit element wait timeout in milliseconds'),
                 delayAfterClick: z.number().int().min(0).optional().describe('Milliseconds to wait after each click'),
                 delayBeforeClick: z.number().int().min(0).optional().describe('Milliseconds to wait before each click'),
                 smoothPointerMove: z.string().optional().describe('Easing function name for smooth pointer movement'),

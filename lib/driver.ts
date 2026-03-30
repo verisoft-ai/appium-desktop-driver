@@ -242,6 +242,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
             await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
         }
 
+        await this.releaseActions();
         await this.terminatePowerShellSession();
         await super.deleteSession(sessionId);
     }

@@ -129,4 +129,63 @@ describe('W3C Actions API', () => {
             ).resolves.not.toThrow();
         });
     });
+
+    describe('tick-based ordering across multiple input sources', () => {
+        let notepad: Browser;
+
+        beforeAll(async () => {
+            notepad = await createNotepadSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(notepad);
+        });
+
+        beforeEach(async () => {
+            await clearNotepad(notepad);
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.click();
+        });
+
+        it('Shift+Click selects text: Shift (key) is held across the pointer click tick', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.setValue('hello');
+            await notepad.keys(['\uE011']); // Home
+
+            // key:     [down(Shift), pause,  up(Shift)]
+            // pointer: [move,        down,   up       ]
+            //                        ^-- tick 1: Shift still held when mouse goes down
+            await notepad.actions([
+                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
+            ]);
+
+            // Shift held during click selects "hello"; typing X replaces it
+            await notepad.keys(['X']);
+            expect((await textArea.getText()).trim()).toBe('X');
+        });
+
+        it('key + pointer + wheel: all three source types respect tick order', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.setValue('hello');
+            await notepad.keys(['\uE011']); // Home
+            const loc = await textArea.getLocation();
+            const size = await textArea.getSize();
+            const cx = Math.round(loc.x + size.width / 2);
+            const cy = Math.round(loc.y + size.height / 2);
+
+            // key:     [down(Shift), pause,  up(Shift)]
+            // pointer: [move,        down,   up       ]
+            // wheel:   [pause,       scroll, pause    ]
+            //                        ^-- tick 1: all three fire while Shift is held
+            await notepad.actions([
+                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('pointer').move({ origin: textArea }).down().up(),
+                notepad.action('wheel').pause(0).scroll({ x: cx, y: cy, deltaX: 0, deltaY: 0 }).pause(0),
+            ]);
+
+            await notepad.keys(['X']);
+            expect((await textArea.getText()).trim()).toBe('X');
+        });
+    });
 });

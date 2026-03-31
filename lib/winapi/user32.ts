@@ -721,9 +721,7 @@ function assertSuccessSendInputReturnCode(returnCode: number) {
     }
 }
 
-// TODO: Remove eslint-disable-next-line when used
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getResolutionScalingFactor(): number {
+export function getResolutionScalingFactor(): number {
     const dpi = GetDpiForSystem();
     const scalingFactor = dpi / 96;
 

@@ -21,6 +21,7 @@ import { $, sleep } from '../util';
 import { DEFAULT_EXT, ScreenRecorder, UploadOptions, uploadRecordedMedia } from './screen-recorder';
 import { KeyEventFlags, VirtualKey } from '../winapi/types';
 import {
+    getResolutionScalingFactor,
     keyDown,
     keyUp,
     mouseDown,
@@ -68,6 +69,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     getDeviceTime: 'windowsGetDeviceTime',
     getWindowElement: 'getWindowElement',
     getMonitors: 'windowsGetMonitors',
+    getDpiScale: 'executeGetDpiScale',
 } as const);
 
 const ContentType = Object.freeze({
@@ -912,4 +914,8 @@ const GET_MONITORS_COMMAND = pwsh /* ps1 */ `
 export async function windowsGetMonitors(this: AppiumDesktopDriver): Promise<object[]> {
     const result = await this.sendPowerShellCommand(GET_MONITORS_COMMAND);
     return JSON.parse(result.trim());
+}
+
+export function executeGetDpiScale(): number {
+    return getResolutionScalingFactor();
 }

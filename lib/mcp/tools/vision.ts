@@ -26,27 +26,31 @@ function getPngDimensions(base64: string): { width: number; height: number } {
 async function getCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
     try {
         const rect = await driver.getWindowRect();
+        const dpiScale = (await driver.executeScript('windows: getDpiScale', [])) as number;
         // Root/desktop session: getWindowRect returns Infinity (replaced with 2147483647 by the driver)
         const isRoot = rect.width > 10000;
 
         if (isRoot) {
             const monitors = await driver.executeScript('windows: getMonitors', []) as any[];
-            const primary = monitors.find((m: any) => m.isPrimary) ?? monitors[0];
+            const primary = monitors.find((m: any) => m.primary) ?? monitors[0];
             if (!primary) { return undefined; }
-            const actualW = primary.bounds.right - primary.bounds.left;
-            const actualH = primary.bounds.bottom - primary.bounds.top;
+            const actualW = primary.bounds.width;
+            const actualH = primary.bounds.height;
             return { offsetX: 0, offsetY: 0, scaleX: actualW / ssW, scaleY: actualH / ssH, screenshotW: ssW, screenshotH: ssH };
         }
 
-        // App session: window rect gives both position offset and actual size
-        return {
-            offsetX: rect.x,
-            offsetY: rect.y,
-            scaleX: rect.width / ssW,
-            scaleY: rect.height / ssH,
-            screenshotW: ssW,
-            screenshotH: ssH,
-        };
+        // App session: detect whether getWindowRect() returned logical coordinates.
+        // At 150% DPI: logical rect.width × 1.5 ≈ physical ssW → isLogical = true.
+        // At 100% DPI: rect.width ≈ ssW, dpiScale = 1.0 → isLogical = false.
+        const isLogical = dpiScale > 1.01 &&
+            Math.abs(rect.width * dpiScale - ssW) / ssW < 0.15;
+
+        const offsetX = isLogical ? Math.round(rect.x * dpiScale) : rect.x;
+        const offsetY = isLogical ? Math.round(rect.y * dpiScale) : rect.y;
+        const scaleX = ssW / (isLogical ? rect.width * dpiScale : rect.width);
+        const scaleY = ssH / (isLogical ? rect.height * dpiScale : rect.height);
+
+        return { offsetX, offsetY, scaleX, scaleY, screenshotW: ssW, screenshotH: ssH };
     } catch {
         return undefined;
     }

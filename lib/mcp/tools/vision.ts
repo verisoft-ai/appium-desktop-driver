@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Browser } from 'webdriverio';
 import type { AppiumSession } from '../session.js';
 import { formatError } from '../errors.js';
+import { getPngDimensions } from '../../util';
 
 const responseFormatSchema = z.enum(['coordinates', 'text']).default('coordinates');
 
@@ -13,14 +14,6 @@ interface CoordMapping {
     scaleY: number;
     screenshotW: number;
     screenshotH: number;
-}
-
-function getPngDimensions(base64: string): { width: number; height: number } {
-    const buf = Buffer.from(base64, 'base64');
-    // PNG: 8-byte signature + 4-byte chunk length + 4-byte "IHDR" + 4-byte width + 4-byte height
-    const width = buf.readUInt32BE(16);
-    const height = buf.readUInt32BE(20);
-    return { width, height };
 }
 
 async function getCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {

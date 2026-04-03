@@ -70,6 +70,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     getWindowElement: 'getWindowElement',
     getMonitors: 'windowsGetMonitors',
     getDpiScale: 'executeGetDpiScale',
+    findByVision: 'executeFindByVision',
 } as const);
 
 const ContentType = Object.freeze({

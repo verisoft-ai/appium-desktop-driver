@@ -43,6 +43,7 @@
     "appium": "^3.0.0-rc.2"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@appium/base-driver": "^10.1.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "bezier-easing": "^2.1.0",

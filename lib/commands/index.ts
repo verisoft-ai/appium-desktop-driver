@@ -5,6 +5,7 @@ import * as extension from './extension';
 import * as device from './device';
 import * as system from './system';
 import * as app from './app';
+import * as vision from './vision';
 
 const commands = {
     ...actions,
@@ -14,6 +15,7 @@ const commands = {
     ...system,
     ...device,
     ...app,
+    ...vision,
     // add the rest of the commands here
 };
 

@@ -17,7 +17,7 @@ vi.mock('../../lib/winapi/user32', () => ({
     getResolutionScalingFactor: vi.fn().mockReturnValue(1.0),
 }));
 
-vi.mock('../../lib/util/png', () => ({
+vi.mock('../../lib/util', () => ({
     getPngDimensions: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
 }));
 

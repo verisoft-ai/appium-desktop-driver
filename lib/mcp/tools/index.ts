@@ -9,6 +9,7 @@ import { registerAdvancedTools } from './advanced.js';
 import { registerPatternTools } from './patterns.js';
 import { registerAppTools } from './app.js';
 import { registerClipboardTools } from './clipboard.js';
+import { registerVisionTools } from './vision.js';
 
 export function registerAllTools(server: McpServer, session: AppiumSession): void {
     registerSessionTools(server, session);
@@ -20,4 +21,5 @@ export function registerAllTools(server: McpServer, session: AppiumSession): voi
     registerPatternTools(server, session);
     registerAppTools(server, session);
     registerClipboardTools(server, session);
+    registerVisionTools(server, session);
 }

@@ -67,7 +67,7 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
             try {
                 const apiKey = process.env.ANTHROPIC_API_KEY;
                 if (!apiKey) {
-                    throw new Error('ANTHROPIC_API_KEY environment variable is required for analyze_screen');
+                    throw new Error('ANTHROPIC_API_KEY environment variable is required for find_by_vision');
                 }
 
                 const driver = session.getDriver();

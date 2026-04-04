@@ -240,7 +240,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', { prompt: 'find something' }) as any;
 
             expect(result.isError).toBe(true);
-            expect(result.content[0].text).toContain('ANTHROPIC_API_KEY');
+            expect(result.content[0].text).toContain('find_by_vision');
         });
 
         it('returns isError when takeScreenshot fails', async () => {

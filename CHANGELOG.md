@@ -1,3 +1,22 @@
+## [1.5.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.3...v1.5.0) (2026-04-04)
+
+### Features
+
+* add new command 'windows: findByVision' ([26c69aa](https://github.com/verisoft-ai/appium-desktop-driver/commit/26c69aaeed15ff94f9f469b1594bd640772fcf51))
+* **mcp:** add analyze_screen tool via agent loop ([0bcbf09](https://github.com/verisoft-ai/appium-desktop-driver/commit/0bcbf0952fbe267e1c2cdc4176dbb722e51cb591))
+
+### Bug Fixes
+
+* account display scaling for precise pixel calculation in analyze_screenshot tool. ([611f345](https://github.com/verisoft-ai/appium-desktop-driver/commit/611f345c957de5361af0c06f0857352ab27ad5ed))
+* coordinate mapping with offset calculation ([c68bb4e](https://github.com/verisoft-ai/appium-desktop-driver/commit/c68bb4e7c34b4d39b3472da5ec5f6b566f15cf57))
+* correct stale error message in find_by_vision MCP tool ([c82e107](https://github.com/verisoft-ai/appium-desktop-driver/commit/c82e107f7e1b40297e84d34ca2f62ff7b117f669))
+* fix mock path vision test ([39b9386](https://github.com/verisoft-ai/appium-desktop-driver/commit/39b9386c80ddcc7ab595317ace4b1f1b9384f519))
+* ignore import/no-unresolved for @modelcontextprotocol/sdk subpaths ([688c68c](https://github.com/verisoft-ai/appium-desktop-driver/commit/688c68cdc6d7eb4bf3225dc29d01950b14f94e1d))
+
+### Code Refactoring
+
+* **vision:** unify find_by_vision MCP tool and findByVision command ([276d86f](https://github.com/verisoft-ai/appium-desktop-driver/commit/276d86f68be5e501f4510617442968abcac4db87))
+
 ## [1.4.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.2...v1.4.3) (2026-03-26)
 
 ### Miscellaneous Chores

@@ -122,7 +122,7 @@ describe('executeFindByVision', () => {
 
         await expect(
             executeFindByVision.call(driver as any, { prompt: 'nonexistent element' })
-        ).rejects.toThrow('element not found');
+        ).rejects.toThrow('Element not found');
     });
 
     it('throws when LLM returns non-JSON text', async () => {
@@ -133,7 +133,7 @@ describe('executeFindByVision', () => {
 
         await expect(
             executeFindByVision.call(driver as any, { prompt: 'something' })
-        ).rejects.toThrow('unexpected LLM response');
+        ).rejects.toThrow('Unexpected LLM response');
     });
 
     it('extracts JSON from LLM response that has surrounding text', async () => {

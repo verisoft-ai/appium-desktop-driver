@@ -4,105 +4,96 @@ import type { Browser } from 'webdriverio';
 import type { AppiumSession } from '../session.js';
 import { formatError } from '../errors.js';
 import { getPngDimensions } from '../../util';
+import {
+    CoordMapping,
+    applyCoordMapping,
+    buildVisionPrompt,
+    callVisionLLM,
+    computeCoordMapping,
+    parseVisionCoords,
+} from '../../vision-utils';
 
-const responseFormatSchema = z.enum(['coordinates', 'text']).default('coordinates');
+const DEFAULT_MODEL = 'claude-opus-4-6';
 
-interface CoordMapping {
-    offsetX: number;
-    offsetY: number;
-    scaleX: number;
-    scaleY: number;
-    screenshotW: number;
-    screenshotH: number;
-}
-
-async function getCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
+async function buildCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
     try {
         const rect = await driver.getWindowRect();
-        const dpiScale = (await driver.executeScript('windows: getDpiScale', [])) as number;
-        // Root/desktop session: getWindowRect returns Infinity (replaced with 2147483647 by the driver)
         const isRoot = rect.width > 10000;
 
         if (isRoot) {
             const monitors = await driver.executeScript('windows: getMonitors', []) as any[];
             const primary = monitors.find((m: any) => m.primary) ?? monitors[0];
             if (!primary) { return undefined; }
-            const actualW = primary.bounds.width;
-            const actualH = primary.bounds.height;
-            return { offsetX: 0, offsetY: 0, scaleX: actualW / ssW, scaleY: actualH / ssH, screenshotW: ssW, screenshotH: ssH };
+            return computeCoordMapping(
+                true,
+                rect.x, rect.y, rect.width, rect.height,
+                1, ssW, ssH,
+                primary.bounds.width, primary.bounds.height,
+            );
         }
 
-        // App session: detect whether getWindowRect() returned logical coordinates.
-        // At 150% DPI: logical rect.width × 1.5 ≈ physical ssW → isLogical = true.
-        // At 100% DPI: rect.width ≈ ssW, dpiScale = 1.0 → isLogical = false.
-        const isLogical = dpiScale > 1.01 &&
-            Math.abs(rect.width * dpiScale - ssW) / ssW < 0.15;
-
-        const offsetX = isLogical ? Math.round(rect.x * dpiScale) : rect.x;
-        const offsetY = isLogical ? Math.round(rect.y * dpiScale) : rect.y;
-        const scaleX = ssW / (isLogical ? rect.width * dpiScale : rect.width);
-        const scaleY = ssH / (isLogical ? rect.height * dpiScale : rect.height);
-
-        return { offsetX, offsetY, scaleX, scaleY, screenshotW: ssW, screenshotH: ssH };
+        const dpiScale = (await driver.executeScript('windows: getDpiScale', [])) as number;
+        return computeCoordMapping(
+            false,
+            rect.x, rect.y, rect.width, rect.height,
+            dpiScale, ssW, ssH,
+        );
     } catch {
         return undefined;
     }
 }
 
-function buildInstruction(
-    prompt: string,
-    responseFormat: 'coordinates' | 'text',
-    mapping?: CoordMapping
-): string {
-    const base = `Answer the following about this screenshot: "${prompt}"`;
-
-    if (responseFormat === 'coordinates') {
-        let coordInstruction = `${base}\nRespond ONLY with JSON: { "x": <number>, "y": <number>, "label": "<string>" }`;
-        if (mapping) {
-            const { offsetX, offsetY, scaleX, scaleY, screenshotW, screenshotH } = mapping;
-            coordInstruction +=
-                `\n\nIMPORTANT — coordinate conversion required:` +
-                `\nThe screenshot is ${screenshotW}×${screenshotH} pixels but represents a larger screen area due to DPI scaling.` +
-                `\nConvert your visual pixel estimate to actual screen coordinates before returning:` +
-                `\n  actual_x = ${offsetX} + Math.round(visual_x × ${scaleX.toFixed(4)})` +
-                `\n  actual_y = ${offsetY} + Math.round(visual_y × ${scaleY.toFixed(4)})` +
-                `\nReturn the already-converted actual screen coordinates in the JSON.`;
-        }
-        return coordInstruction;
-    }
-
-    return `${base}\nRespond with plain text.`;
-}
-
 export function registerVisionTools(server: McpServer, session: AppiumSession): void {
     server.registerTool(
-        'analyze_screen',
+        'find_by_vision',
         {
             description:
-                'Take a screenshot of the current screen and return it together with an instruction for the calling agent to analyze. ' +
-                'The agent sees the image and the prompt in its context and replies with the answer. ' +
-                'No additional API key is required — the calling agent performs the visual analysis.',
+                'Take a screenshot and analyze it with a vision model, returning the result directly. ' +
+                'For "coordinates" format, locates a UI element and returns {x,y,label} with actual screen ' +
+                'coordinates (DPI-corrected) ready to pass to click tools. ' +
+                'For "text" format, answers a general question about the screen in plain text. ' +
+                'Requires ANTHROPIC_API_KEY environment variable.',
             inputSchema: {
                 prompt: z.string().min(1).describe('Question or instruction about the screenshot'),
-                responseFormat: responseFormatSchema.describe(
-                    '"coordinates" (default) returns JSON {x,y,label} with converted screen coordinates. ' +
-                    'Use "text" only when the element cannot be found or the question is generic about the session.'
+                responseFormat: z.enum(['coordinates', 'text']).default('coordinates').describe(
+                    '"coordinates" (default) locates an element and returns JSON {x,y,label} with converted screen coordinates. ' +
+                    '"text" answers a general question about the screen in plain text.'
                 ),
+                model: z.string().optional().describe(`Vision model to use (default: ${DEFAULT_MODEL})`),
             },
             annotations: { readOnlyHint: true },
         },
-        async ({ prompt, responseFormat }) => {
+        async ({ prompt, responseFormat, model }) => {
             try {
+                const apiKey = process.env.ANTHROPIC_API_KEY;
+                if (!apiKey) {
+                    throw new Error('ANTHROPIC_API_KEY environment variable is required for analyze_screen');
+                }
+
                 const driver = session.getDriver();
                 const base64 = await driver.takeScreenshot() as string;
                 const { width: ssW, height: ssH } = getPngDimensions(base64);
-                const mapping = await getCoordMapping(driver, ssW, ssH);
-                const instruction = buildInstruction(prompt, responseFormat, mapping);
+                const visionModel = model ?? DEFAULT_MODEL;
+
+                if (responseFormat === 'text') {
+                    const textPrompt = `Answer the following about this screenshot: "${prompt}"\nRespond with plain text.`;
+                    const text = await callVisionLLM(base64, textPrompt, visionModel, apiKey, 1024);
+                    return { content: [{ type: 'text' as const, text }] };
+                }
+
+                // coordinates: call vision LLM → parse image-pixel coords → apply mapping server-side
+                const raw = await callVisionLLM(base64, buildVisionPrompt(prompt, ssW, ssH), visionModel, apiKey);
+                const parsed = parseVisionCoords(raw, prompt);
+                const mapping = await buildCoordMapping(driver, ssW, ssH);
+                const coords = mapping
+                    ? applyCoordMapping(mapping, parsed.x, parsed.y)
+                    : { x: parsed.x, y: parsed.y };
+
                 return {
-                    content: [
-                        { type: 'image' as const, data: base64, mimeType: 'image/png' as const },
-                        { type: 'text' as const, text: instruction },
-                    ],
+                    content: [{
+                        type: 'text' as const,
+                        text: JSON.stringify({ ...coords, label: parsed.label }),
+                    }],
                 };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };

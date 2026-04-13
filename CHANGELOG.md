@@ -1,3 +1,13 @@
+## [1.5.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.5.0...v1.5.1) (2026-04-13)
+
+### Bug Fixes
+
+* **actions:** Action execution according to W3C definition. ([8c9019d](https://github.com/verisoft-ai/appium-desktop-driver/commit/8c9019dc39841ec7f61d8770042db72355975d5f))
+* fix json element rect unexpected end error ([8d1498f](https://github.com/verisoft-ai/appium-desktop-driver/commit/8d1498f3dc667e017e3f8ed4d409ec60e3fea72a))
+* fix release actions tracking pressed mouse buttons ([0309ab0](https://github.com/verisoft-ai/appium-desktop-driver/commit/0309ab0a06c33591bb1d36b23e2dcbdf688d1772))
+* **mouse move:** fix silent fail calculating mouse move after scroll into view. ([9e755eb](https://github.com/verisoft-ai/appium-desktop-driver/commit/9e755eb8c5d1ee475d85a8630bab6b583b2a5a8d))
+* **release key:** fix handle null key action not iterating over pressed keys ([db18fd8](https://github.com/verisoft-ai/appium-desktop-driver/commit/db18fd8b8884883dc241b2ce5ef104cde2bccf11))
+
 ## [1.5.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.4.3...v1.5.0) (2026-04-04)
 
 ### Features

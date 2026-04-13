@@ -187,5 +187,48 @@ describe('W3C Actions API', () => {
             await notepad.keys(['X']);
             expect((await textArea.getText()).trim()).toBe('X');
         });
+
+        it('wheel scroll actually moves the viewport: click after scroll lands on a different line', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+
+            // Build enough content to make Notepad vertically scrollable
+            const text = Array.from({ length: 40 }, (_, i) =>
+                `Line_${String(i + 1).padStart(2, '0')}`
+            ).join('\n');
+            await textArea.setValue(text);
+
+            const loc = await textArea.getLocation();
+            const size = await textArea.getSize();
+            const cx = Math.round(loc.x + size.width / 2);
+            const cy = Math.round(loc.y + size.height / 2);
+
+            // Start with the viewport at the top so lines 1–N are visible
+            await notepad.keys(['Control', '\uE011']); // Ctrl+Home
+
+            // Scroll down by a large amount (W3C: positive deltaY = toward bottom)
+            await notepad.action('wheel')
+                .scroll({ x: cx, y: cy, deltaX: 0, deltaY: 3000 })
+                .perform();
+
+            // Click near the top edge of the text area. After scrolling down the
+            // viewport, this position should now show a line well past Line_01.
+            await notepad.action('pointer')
+                .move({ x: cx, y: loc.y + 8 })
+                .down()
+                .up()
+                .perform();
+
+            await notepad.keys(['\uE011']); // Home — go to start of the clicked line
+            await notepad.keys(['M', 'A', 'R', 'K', 'E', 'R']);
+
+            const result = await textArea.getText();
+            const markerPos = result.indexOf('MARKER');
+            const line05Pos = result.indexOf('Line_05');
+
+            // If the scroll worked, the click near the top of the widget landed on a
+            // line past the first few; MARKER must therefore appear after Line_05.
+            expect(markerPos).toBeGreaterThanOrEqual(0);
+            expect(markerPos).toBeGreaterThan(line05Pos);
+        });
     });
 });

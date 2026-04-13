@@ -241,7 +241,7 @@ export async function handleKeyAction(this: AppiumDesktopDriver, action: KeyActi
                 if (this.keyboardState.alt) {
                     await this.handleKeyAction({ type: 'keyUp', value: Key.ALT });
                 }
-                for (const key in Array.of(this.keyboardState.pressed)) {
+                for (const key of Array.from(this.keyboardState.pressed)) {
                     keyUp(key);
                     this.keyboardState.pressed.delete(key);
                 }

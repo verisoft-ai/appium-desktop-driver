@@ -69,6 +69,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
         meta: false,
         shift: false,
     };
+    mouseButtonsDown: Set<number> = new Set();
     _screenRecorder: ScreenRecorder | null = null;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {

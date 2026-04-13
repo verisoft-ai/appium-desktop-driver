@@ -67,22 +67,6 @@ export async function handleKeyActionSequence(this: AppiumDesktopDriver, actionS
     }
 }
 
-export async function handlePointerActionSequence(this: AppiumDesktopDriver, actionSequence: PointerActionSequence): Promise<void> {
-    switch (actionSequence.parameters?.pointerType) {
-        case 'touch':
-        case 'pen':
-            throw new errors.NotImplementedError(`Pointer type ${actionSequence.parameters?.pointerType} not implemented yet.`);
-        case 'mouse':
-        default:
-            await this.handleMousePointerActionSequence(actionSequence);
-    }
-}
-
-export async function handleMousePointerActionSequence(this: AppiumDesktopDriver, actionSequence: PointerActionSequence): Promise<void> {
-    for (const action of actionSequence.actions) {
-        await this.handleSingleMousePointerAction(action);
-    }
-}
 
 export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, action: PointerActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
@@ -91,9 +75,11 @@ export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, 
             break;
         case 'pointerDown':
             mouseDown(action.button);
+            this.mouseButtonsDown.add(action.button);
             break;
         case 'pointerUp':
             mouseUp(action.button);
+            this.mouseButtonsDown.delete(action.button);
             break;
         case 'pause':
             if (action.duration) {
@@ -105,11 +91,6 @@ export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, 
     }
 }
 
-export async function handleWheelActionSequence(this: AppiumDesktopDriver, actionSequence: WheelActionSequence): Promise<void> {
-    for (const action of actionSequence.actions) {
-        await this.handleSingleWheelAction(action);
-    }
-}
 
 export async function handleSingleWheelAction(this: AppiumDesktopDriver, action: WheelActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
@@ -127,14 +108,6 @@ export async function handleSingleWheelAction(this: AppiumDesktopDriver, action:
     }
 }
 
-export async function handleNullActionSequence(this: AppiumDesktopDriver, actionSequence: NullActionSequence): Promise<void> {
-    const actions = actionSequence.actions;
-    for (const action of actions) {
-        if (action.duration) {
-            await sleep(action.duration);
-        }
-    }
-}
 
 export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: PointerMoveAction | ScrollAction): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
@@ -162,7 +135,8 @@ export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: P
                     rect = JSON.parse(updatedRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
                 }
 
-                await mouseMoveAbsolute(action.x === 0 ? rect.x + rect.width / 2 : action.x, action.y === 0 ? rect.y + rect.height / 2 : action.y, action.duration, easingFunction);
+                // W3C spec: x and y are offsets from the element's centre point.
+                await mouseMoveAbsolute(rect.x + rect.width / 2 + (action.x ?? 0), rect.y + rect.height / 2 + (action.y ?? 0), action.duration, easingFunction);
                 break;
             }
 
@@ -284,7 +258,8 @@ export async function releaseActions(this: AppiumDesktopDriver): Promise<void> {
         keyUp(key);
     }
     this.keyboardState.pressed.clear();
-    mouseUp(0);
-    mouseUp(1);
-    mouseUp(2);
+    for (const button of this.mouseButtonsDown) {
+        mouseUp(button);
+    }
+    this.mouseButtonsDown.clear();
 }

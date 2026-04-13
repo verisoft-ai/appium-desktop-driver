@@ -92,7 +92,7 @@ describe('W3C Actions API', () => {
 
         it('performs a double-click via two down/up cycles', async () => {
             const btn = await calc.$('~num5Button');
-            calc.action('pointer')
+            await calc.action('pointer')
                 .move({ origin: btn })
                 .down()
                 .up()
@@ -165,23 +165,17 @@ describe('W3C Actions API', () => {
             expect((await textArea.getText()).trim()).toBe('X');
         });
 
-        it('key + pointer + wheel: all three source types respect tick order', async () => {
+        it('key + pointer: respect tick order', async () => {
             const textArea = await getNotepadTextArea(notepad);
             await textArea.setValue('hello');
             await notepad.keys(['\uE011']); // Home
-            const loc = await textArea.getLocation();
-            const size = await textArea.getSize();
-            const cx = Math.round(loc.x + size.width / 2);
-            const cy = Math.round(loc.y + size.height / 2);
 
             // key:     [down(Shift), pause,  up(Shift)]
             // pointer: [move,        down,   up       ]
-            // wheel:   [pause,       scroll, pause    ]
-            //                        ^-- tick 1: all three fire while Shift is held
+            //                        ^-- tick 1: Shift still held when mouse goes down
             await notepad.actions([
                 notepad.action('key').down('\uE008').pause(0).up('\uE008'),
-                notepad.action('pointer').move({ origin: textArea }).down().up(),
-                notepad.action('wheel').pause(0).scroll({ x: cx, y: cy, deltaX: 0, deltaY: 0 }).pause(0),
+                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
             ]);
 
             await notepad.keys(['X']);

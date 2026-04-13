@@ -157,7 +157,9 @@ export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: P
 
                 if (Object.values(rect).some((x) => x === 0x7FFFFFFF)) {
                     await this.sendPowerShellCommand(element.buildScrollIntoViewCommand());
-                    rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+                    // re-fetch the new rect json coordinates after scrolling into view
+                    const updatedRectJson = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
+                    rect = JSON.parse(updatedRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
                 }
 
                 await mouseMoveAbsolute(action.x === 0 ? rect.x + rect.width / 2 : action.x, action.y === 0 ? rect.y + rect.height / 2 : action.y, action.duration, easingFunction);

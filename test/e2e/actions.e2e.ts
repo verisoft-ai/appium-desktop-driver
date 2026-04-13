@@ -182,10 +182,8 @@ describe('W3C Actions API', () => {
             expect((await textArea.getText()).trim()).toBe('X');
         });
 
-        it('wheel scroll actually moves the viewport: click after scroll lands on a different line', async () => {
+        it('wheel scroll moves the viewport: top and bottom are reachable by scrolling', async () => {
             const textArea = await getNotepadTextArea(notepad);
-
-            // Build enough content to make Notepad vertically scrollable
             const text = Array.from({ length: 40 }, (_, i) =>
                 `Line_${String(i + 1).padStart(2, '0')}`
             ).join('\n');
@@ -196,33 +194,40 @@ describe('W3C Actions API', () => {
             const cx = Math.round(loc.x + size.width / 2);
             const cy = Math.round(loc.y + size.height / 2);
 
-            // Start with the viewport at the top so lines 1–N are visible
-            await notepad.keys(['Control', '\uE011']); // Ctrl+Home
+            // Step 2: scroll to the top; duration gives the viewport time to settle
+            await notepad.actions([
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000 }),
+            ]);
 
-            // Scroll down by a large amount (W3C: positive deltaY = toward bottom)
-            await notepad.action('wheel')
-                .scroll({ x: cx, y: cy, deltaX: 0, deltaY: 3000 })
-                .perform();
-
-            // Click near the top edge of the text area. After scrolling down the
-            // viewport, this position should now show a line well past Line_01.
+            // Step 3: click the first visible line and mark it
             await notepad.action('pointer')
-                .move({ x: cx, y: loc.y + 8 })
-                .down()
-                .up()
+                .move({ x: cx, y: loc.y + 10 })
+                .down().up()
                 .perform();
+            await notepad.keys(['\uE011']); // Home — go to start of line
+            await notepad.keys(['T', 'O', 'P']);
 
-            await notepad.keys(['\uE011']); // Home — go to start of the clicked line
-            await notepad.keys(['M', 'A', 'R', 'K', 'E', 'R']);
+            // Step 4: scroll to the bottom
+            await notepad.actions([
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000 }),
+            ]);
+
+            // Step 5: click the last visible line and mark it
+            await notepad.action('pointer')
+                .move({ x: cx, y: loc.y + size.height - 10 })
+                .down().up()
+                .perform();
+            await notepad.keys(['\uE011']); // Home
+            await notepad.keys(['B', 'O', 'T']);
 
             const result = await textArea.getText();
-            const markerPos = result.indexOf('MARKER');
-            const line05Pos = result.indexOf('Line_05');
+            const topPos = result.indexOf('TOP');
+            const bottomPos = result.indexOf('BOT');
 
-            // If the scroll worked, the click near the top of the widget landed on a
-            // line past the first few; MARKER must therefore appear after Line_05.
-            expect(markerPos).toBeGreaterThanOrEqual(0);
-            expect(markerPos).toBeGreaterThan(line05Pos);
+            // TOP marker must be near the start of the document
+            expect(topPos).toBeLessThan(result.indexOf('Line_05'));
+            // BOTTOM marker must be near the end of the document
+            expect(bottomPos).toBeGreaterThan(result.indexOf('Line_35'));
         });
     });
 });

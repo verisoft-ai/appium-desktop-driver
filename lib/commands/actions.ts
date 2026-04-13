@@ -15,6 +15,7 @@ import { AppiumDesktopDriver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
 import { sleep } from '../util';
 import { AutomationElement, FoundAutomationElement } from '../powershell';
+import { fetchElementRect } from './element';
 import { Key } from '../enums';
 
 export async function performActions(this: AppiumDesktopDriver, actionSequences: ActionSequence[]): Promise<void> {
@@ -95,8 +96,11 @@ export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, 
 export async function handleSingleWheelAction(this: AppiumDesktopDriver, action: WheelActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
         case 'scroll':
-            await this.handleMouseMoveAction(action);
+            await this.handleMouseMoveAction({ ...action, duration: 0 });
             mouseScroll(action.deltaX, action.deltaY);
+            if (action.duration) {
+                await sleep(action.duration);
+            }
             break;
         case 'pause':
             if (action.duration) {
@@ -125,14 +129,11 @@ export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: P
         default:
             if (action.origin?.[W3C_ELEMENT_KEY]) {
                 const element = new FoundAutomationElement(action.origin[W3C_ELEMENT_KEY]);
-                const rectJson = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
-                let rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+                let rect = await fetchElementRect(this, element);
 
                 if (Object.values(rect).some((x) => x === 0x7FFFFFFF)) {
                     await this.sendPowerShellCommand(element.buildScrollIntoViewCommand());
-                    // re-fetch the new rect json coordinates after scrolling into view
-                    const updatedRectJson = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
-                    rect = JSON.parse(updatedRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+                    rect = await fetchElementRect(this, element);
                 }
 
                 // W3C spec: x and y are offsets from the element's centre point.

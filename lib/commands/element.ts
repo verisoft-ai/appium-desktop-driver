@@ -163,11 +163,19 @@ export async function setValue(this: AppiumDesktopDriver, value: string | string
     await sendKeysAndResetArray();
 }
 
+async function fetchElementRect(driver: AppiumDesktopDriver, element: AutomationElement): Promise<Rect> {
+    const json = await driver.sendPowerShellCommand(element.buildGetElementRectCommand());
+    if (!json) {
+        throw new errors.NoSuchElementError();
+    }
+    return JSON.parse(json.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+}
+
+export { fetchElementRect };
+
 export async function getElementRect(this: AppiumDesktopDriver, elementId: string): Promise<Rect> {
-    const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
-    const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
-    const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
-    const rect = JSON.parse(result.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+    const rect = await fetchElementRect(this, new FoundAutomationElement(elementId));
+    const rootRect = await fetchElementRect(this, AutomationElement.automationRoot);
     rect.x -= rootRect.x;
     rect.y -= rootRect.y;
     rect.x = Math.min(0x7FFFFFFF, rect.x);

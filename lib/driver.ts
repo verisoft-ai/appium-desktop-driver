@@ -69,6 +69,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
         meta: false,
         shift: false,
     };
+    mouseButtonsDown: Set<number> = new Set();
     _screenRecorder: ScreenRecorder | null = null;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
@@ -242,6 +243,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
             await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
         }
 
+        await this.releaseActions();
         await this.terminatePowerShellSession();
         await super.deleteSession(sessionId);
     }

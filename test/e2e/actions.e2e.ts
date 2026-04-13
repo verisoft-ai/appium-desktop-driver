@@ -92,7 +92,7 @@ describe('W3C Actions API', () => {
 
         it('performs a double-click via two down/up cycles', async () => {
             const btn = await calc.$('~num5Button');
-            calc.action('pointer')
+            await calc.action('pointer')
                 .move({ origin: btn })
                 .down()
                 .up()
@@ -127,6 +127,107 @@ describe('W3C Actions API', () => {
                     .up()
                     .perform()
             ).resolves.not.toThrow();
+        });
+    });
+
+    describe('tick-based ordering across multiple input sources', () => {
+        let notepad: Browser;
+
+        beforeAll(async () => {
+            notepad = await createNotepadSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(notepad);
+        });
+
+        beforeEach(async () => {
+            await clearNotepad(notepad);
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.click();
+        });
+
+        it('Shift+Click selects text: Shift (key) is held across the pointer click tick', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.setValue('hello');
+            await notepad.keys(['\uE011']); // Home
+
+            // key:     [down(Shift), pause,  up(Shift)]
+            // pointer: [move,        down,   up       ]
+            //                        ^-- tick 1: Shift still held when mouse goes down
+            await notepad.actions([
+                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
+            ]);
+
+            // Shift held during click selects "hello"; typing X replaces it
+            await notepad.keys(['X']);
+            expect((await textArea.getText()).trim()).toBe('X');
+        });
+
+        it('key + pointer: respect tick order', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+            await textArea.setValue('hello');
+            await notepad.keys(['\uE011']); // Home
+
+            // key:     [down(Shift), pause,  up(Shift)]
+            // pointer: [move,        down,   up       ]
+            //                        ^-- tick 1: Shift still held when mouse goes down
+            await notepad.actions([
+                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
+            ]);
+
+            await notepad.keys(['X']);
+            expect((await textArea.getText()).trim()).toBe('X');
+        });
+
+        it('wheel scroll moves the viewport: top and bottom are reachable by scrolling', async () => {
+            const textArea = await getNotepadTextArea(notepad);
+            const text = Array.from({ length: 40 }, (_, i) =>
+                `Line_${String(i + 1).padStart(2, '0')}`
+            ).join('\n');
+            await textArea.setValue(text);
+
+            const loc = await textArea.getLocation();
+            const size = await textArea.getSize();
+            const cx = Math.round(loc.x + size.width / 2);
+            const cy = Math.round(loc.y + size.height / 2);
+
+            // Step 2: scroll to the top; duration gives the viewport time to settle
+            await notepad.actions([
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000 }),
+            ]);
+
+            // Step 3: click the first visible line and mark it
+            await notepad.action('pointer')
+                .move({ x: cx, y: loc.y + 10 })
+                .down().up()
+                .perform();
+            await notepad.keys(['\uE011']); // Home — go to start of line
+            await notepad.keys(['T', 'O', 'P']);
+
+            // Step 4: scroll to the bottom
+            await notepad.actions([
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000 }),
+            ]);
+
+            // Step 5: click the last visible line and mark it
+            await notepad.action('pointer')
+                .move({ x: cx, y: loc.y + size.height - 10 })
+                .down().up()
+                .perform();
+            await notepad.keys(['\uE011']); // Home
+            await notepad.keys(['B', 'O', 'T']);
+
+            const result = await textArea.getText();
+            const topPos = result.indexOf('TOP');
+            const bottomPos = result.indexOf('BOT');
+
+            // TOP marker must be near the start of the document
+            expect(topPos).toBeLessThan(result.indexOf('Line_05'));
+            // BOTTOM marker must be near the end of the document
+            expect(bottomPos).toBeGreaterThan(result.indexOf('Line_35'));
         });
     });
 });

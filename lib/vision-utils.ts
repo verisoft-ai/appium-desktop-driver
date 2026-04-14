@@ -1,5 +1,33 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+export type LLMProvider = 'anthropic' | 'openai' | 'google';
+
+/** Infers the LLM provider from the model identifier. */
+export function getProviderForModel(model: string): LLMProvider {
+    const lower = model.toLowerCase();
+    if (
+        lower.startsWith('gpt-') ||
+        lower.startsWith('o1-') ||
+        lower.startsWith('o3-') ||
+        lower.startsWith('o4-')
+    ) {
+        return 'openai';
+    }
+    if (lower.startsWith('gemini-')) {
+        return 'google';
+    }
+    return 'anthropic';
+}
+
+/** Returns the environment variable name that holds the API key for the given provider. */
+export function getApiKeyEnvVar(provider: LLMProvider): string {
+    switch (provider) {
+        case 'openai': return 'OPENAI_API_KEY';
+        case 'google': return 'GEMINI_API_KEY';
+        default: return 'ANTHROPIC_API_KEY';
+    }
+}
+
 export interface CoordMapping {
     offsetX: number;
     offsetY: number;
@@ -89,17 +117,12 @@ export function parseVisionCoords(
     return parsed;
 }
 
-/**
- * Sends a base64 screenshot + text prompt to a Claude vision model and returns
- * the raw text response. The caller is responsible for building the prompt and
- * parsing the result.
- */
-export async function callVisionLLM(
+async function callAnthropicVision(
     base64: string,
     textPrompt: string,
     model: string,
     apiKey: string,
-    maxTokens = 256,
+    maxTokens: number,
 ): Promise<string> {
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
@@ -117,4 +140,88 @@ export async function callVisionLLM(
         }],
     });
     return response.content.find((b) => b.type === 'text')?.text ?? '';
+}
+
+async function callOpenAIVision(
+    base64: string,
+    textPrompt: string,
+    model: string,
+    apiKey: string,
+    maxTokens: number,
+): Promise<string> {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            messages: [{
+                role: 'user',
+                content: [
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+                    { type: 'text', text: textPrompt },
+                ],
+            }],
+        }),
+    });
+    const data = await res.json() as { choices?: Array<{ message: { content: string } }>; error?: { message: string } };
+    if (!res.ok) {
+        throw new Error(`OpenAI API error: ${data.error?.message ?? res.statusText}`);
+    }
+    return data.choices?.[0]?.message?.content ?? '';
+}
+
+async function callGoogleVision(
+    base64: string,
+    textPrompt: string,
+    model: string,
+    apiKey: string,
+    maxTokens: number,
+): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{
+                parts: [
+                    { inline_data: { mime_type: 'image/png', data: base64 } },
+                    { text: textPrompt },
+                ],
+            }],
+            generationConfig: { maxOutputTokens: maxTokens },
+        }),
+    });
+    const data = await res.json() as {
+        candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+        error?: { message: string };
+    };
+    if (!res.ok) {
+        throw new Error(`Gemini API error: ${data.error?.message ?? res.statusText}`);
+    }
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+/**
+ * Sends a base64 screenshot + text prompt to a vision model and returns the raw
+ * text response. Dispatches to Anthropic, OpenAI, or Google Gemini based on the
+ * model name prefix. The caller is responsible for building the prompt and
+ * parsing the result.
+ */
+export async function callVisionLLM(
+    base64: string,
+    textPrompt: string,
+    model: string,
+    apiKey: string,
+    maxTokens = 256,
+): Promise<string> {
+    const provider = getProviderForModel(model);
+    switch (provider) {
+        case 'openai': return callOpenAIVision(base64, textPrompt, model, apiKey, maxTokens);
+        case 'google': return callGoogleVision(base64, textPrompt, model, apiKey, maxTokens);
+        default: return callAnthropicVision(base64, textPrompt, model, apiKey, maxTokens);
+    }
 }

@@ -3,8 +3,9 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockCreate } = vi.hoisted(() => ({
+const { mockCreate, mockFetch } = vi.hoisted(() => ({
     mockCreate: vi.fn(),
+    mockFetch: vi.fn(),
 }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -12,6 +13,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
         messages: { create: mockCreate },
     })),
 }));
+
+vi.stubGlobal('fetch', mockFetch);
 
 vi.mock('../../lib/winapi/user32', () => ({
     getResolutionScalingFactor: vi.fn().mockReturnValue(1.0),
@@ -55,13 +58,31 @@ describe('executeFindByVision', () => {
         process.env = { ...savedEnv };
     });
 
-    it('throws when ANTHROPIC_API_KEY is not set', async () => {
+    it('throws when ANTHROPIC_API_KEY is not set for default model', async () => {
         delete process.env.ANTHROPIC_API_KEY;
         const driver = makeMockDriver();
 
         await expect(
             executeFindByVision.call(driver as any, { prompt: 'OK button' })
         ).rejects.toThrow('ANTHROPIC_API_KEY');
+    });
+
+    it('throws when OPENAI_API_KEY is not set for GPT model', async () => {
+        delete process.env.OPENAI_API_KEY;
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'gpt-4o' })
+        ).rejects.toThrow('OPENAI_API_KEY');
+    });
+
+    it('throws when GEMINI_API_KEY is not set for Gemini model', async () => {
+        delete process.env.GEMINI_API_KEY;
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'gemini-2.0-flash' })
+        ).rejects.toThrow('GEMINI_API_KEY');
     });
 
     it('returns screen coordinates for app session at 100% DPI', async () => {
@@ -206,5 +227,91 @@ describe('executeFindByVision', () => {
         // Falls back to first monitor: scaleX = 2560/1920, scaleY = 1440/1080
         expect(result.x).toBe(Math.round(0 + 100 * (2560 / 1920)));
         expect(result.y).toBe(Math.round(0 + 100 * (1440 / 1080)));
+    });
+
+    describe('OpenAI provider', () => {
+        beforeEach(() => {
+            process.env.OPENAI_API_KEY = 'openai-test-key';
+        });
+
+        it('calls OpenAI API for gpt-4o model', async () => {
+            const driver = makeMockDriver();
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    choices: [{ message: { content: JSON.stringify({ x: 300, y: 400, label: 'button' }) } }],
+                }),
+            });
+
+            const result = await executeFindByVision.call(driver as any, {
+                prompt: 'button',
+                model: 'gpt-4o',
+            });
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                'https://api.openai.com/v1/chat/completions',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({ 'Authorization': 'Bearer openai-test-key' }),
+                })
+            );
+            expect(result.label).toBe('button');
+        });
+
+        it('throws on OpenAI API error response', async () => {
+            const driver = makeMockDriver();
+            mockFetch.mockResolvedValue({
+                ok: false,
+                statusText: 'Unauthorized',
+                text: () => Promise.resolve(JSON.stringify({ error: { message: 'Invalid API key' } })),
+            });
+
+            await expect(
+                executeFindByVision.call(driver as any, { prompt: 'button', model: 'gpt-4o-mini' })
+            ).rejects.toThrow('OpenAI API error: Invalid API key');
+        });
+    });
+
+    describe('Google Gemini provider', () => {
+        beforeEach(() => {
+            process.env.GEMINI_API_KEY = 'gemini-test-key';
+        });
+
+        it('calls Gemini API for gemini- model', async () => {
+            const driver = makeMockDriver();
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    candidates: [{ content: { parts: [{ text: JSON.stringify({ x: 200, y: 300, label: 'icon' }) }] } }],
+                }),
+            });
+
+            const result = await executeFindByVision.call(driver as any, {
+                prompt: 'icon',
+                model: 'gemini-2.0-flash',
+            });
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('generativelanguage.googleapis.com'),
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({ 'x-goog-api-key': 'gemini-test-key' }),
+                })
+            );
+            expect(result.label).toBe('icon');
+        });
+
+        it('throws on Gemini API error response', async () => {
+            const driver = makeMockDriver();
+            mockFetch.mockResolvedValue({
+                ok: false,
+                statusText: 'Bad Request',
+                text: () => Promise.resolve(JSON.stringify({ error: { message: 'API key not valid' } })),
+            });
+
+            await expect(
+                executeFindByVision.call(driver as any, { prompt: 'icon', model: 'gemini-1.5-pro' })
+            ).rejects.toThrow('Gemini API error: API key not valid');
+        });
     });
 });

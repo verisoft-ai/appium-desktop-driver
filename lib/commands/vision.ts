@@ -7,6 +7,8 @@ import {
     buildVisionPrompt,
     callVisionLLM,
     computeCoordMapping,
+    getApiKeyEnvVar,
+    getProviderForModel,
     parseVisionCoords,
 } from '../vision-utils';
 
@@ -44,17 +46,18 @@ export async function executeFindByVision(
     this: AppiumDesktopDriver,
     args: { prompt: string; model?: string },
 ): Promise<{ x: number; y: number; label: string }> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const model = args.model ?? 'claude-opus-4-6';
+    const envVar = getApiKeyEnvVar(getProviderForModel(model));
+    const apiKey = process.env[envVar];
     if (!apiKey) {
         throw new Error(
-            'ANTHROPIC_API_KEY environment variable is required for windows: findByVision'
+            `${envVar} environment variable is required for windows: findByVision (model: ${model})`
         );
     }
 
     const base64 = await this.getScreenshot();
     const { width: ssW, height: ssH } = getPngDimensions(base64);
 
-    const model = args.model ?? 'claude-opus-4-6';
     const raw = await callVisionLLM(base64, buildVisionPrompt(args.prompt, ssW, ssH), model, apiKey);
     const parsed = parseVisionCoords(raw, args.prompt);
 

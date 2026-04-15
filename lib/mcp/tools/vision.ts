@@ -10,6 +10,8 @@ import {
     buildVisionPrompt,
     callVisionLLM,
     computeCoordMapping,
+    getApiKeyEnvVar,
+    getProviderForModel,
     parseVisionCoords,
 } from '../../vision-utils';
 
@@ -52,7 +54,8 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                 'For "coordinates" format, locates a UI element and returns {x,y,label} with actual screen ' +
                 'coordinates (DPI-corrected) ready to pass to click tools. ' +
                 'For "text" format, answers a general question about the screen in plain text. ' +
-                'Requires ANTHROPIC_API_KEY environment variable.',
+                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), or ' +
+                'GEMINI_API_KEY (Gemini) depending on the chosen model.',
             inputSchema: {
                 prompt: z.string().min(1).describe('Question or instruction about the screenshot'),
                 responseFormat: z.enum(['coordinates', 'text']).default('coordinates').describe(
@@ -65,15 +68,18 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
         },
         async ({ prompt, responseFormat, model }) => {
             try {
-                const apiKey = process.env.ANTHROPIC_API_KEY;
+                const visionModel = model ?? DEFAULT_MODEL;
+                const envVar = getApiKeyEnvVar(getProviderForModel(visionModel));
+                const apiKey = process.env[envVar];
                 if (!apiKey) {
-                    throw new Error('ANTHROPIC_API_KEY environment variable is required for find_by_vision');
+                    throw new Error(
+                        `${envVar} environment variable is required for find_by_vision (model: ${visionModel})`
+                    );
                 }
 
                 const driver = session.getDriver();
                 const base64 = await driver.takeScreenshot() as string;
                 const { width: ssW, height: ssH } = getPngDimensions(base64);
-                const visionModel = model ?? DEFAULT_MODEL;
 
                 if (responseFormat === 'text') {
                     const textPrompt = `Answer the following about this screenshot: "${prompt}"\nRespond with plain text.`;

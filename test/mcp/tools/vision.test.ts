@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockCreate } = vi.hoisted(() => ({
+const { mockCreate, mockFetch } = vi.hoisted(() => ({
     mockCreate: vi.fn(),
+    mockFetch: vi.fn(),
 }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -9,6 +10,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
         messages: { create: mockCreate },
     })),
 }));
+
+vi.stubGlobal('fetch', mockFetch);
 
 vi.mock('../../../lib/util', () => ({
     getPngDimensions: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
@@ -199,6 +202,76 @@ describe('find_by_vision tool', () => {
         });
     });
 
+    describe('OpenAI provider', () => {
+        beforeEach(() => {
+            process.env.OPENAI_API_KEY = 'openai-test-key';
+        });
+
+        it('calls OpenAI API for gpt-4o model and returns coordinates', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    choices: [{ message: { content: JSON.stringify({ x: 300, y: 400, label: 'save button' }) } }],
+                }),
+            });
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'save button',
+                model: 'gpt-4o',
+            }) as any;
+
+            expect(result.isError).toBeUndefined();
+            const parsed = JSON.parse(result.content[0].text);
+            expect(parsed.label).toBe('save button');
+            expect(mockFetch).toHaveBeenCalledWith(
+                'https://api.openai.com/v1/chat/completions',
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'Authorization': 'Bearer openai-test-key' }),
+                })
+            );
+        });
+    });
+
+    describe('Google Gemini provider', () => {
+        beforeEach(() => {
+            process.env.GEMINI_API_KEY = 'gemini-test-key';
+        });
+
+        it('calls Gemini API for gemini- model and returns coordinates', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    candidates: [{ content: { parts: [{ text: JSON.stringify({ x: 100, y: 200, label: 'close' }) }] } }],
+                }),
+            });
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'close button',
+                model: 'gemini-2.0-flash',
+            }) as any;
+
+            expect(result.isError).toBeUndefined();
+            const parsed = JSON.parse(result.content[0].text);
+            expect(parsed.label).toBe('close');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('generativelanguage.googleapis.com'),
+                expect.objectContaining({ method: 'POST' })
+            );
+        });
+    });
+
     describe('model selection', () => {
         it('uses default model claude-opus-4-6 when none specified', async () => {
             const server = createMockServer();
@@ -230,7 +303,7 @@ describe('find_by_vision tool', () => {
     });
 
     describe('error handling', () => {
-        it('returns isError when ANTHROPIC_API_KEY is not set', async () => {
+        it('returns isError when ANTHROPIC_API_KEY is not set for default model', async () => {
             delete process.env.ANTHROPIC_API_KEY;
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
@@ -240,7 +313,39 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', { prompt: 'find something' }) as any;
 
             expect(result.isError).toBe(true);
-            expect(result.content[0].text).toContain('find_by_vision');
+            expect(result.content[0].text).toContain('ANTHROPIC_API_KEY');
+        });
+
+        it('returns isError when OPENAI_API_KEY is not set for GPT model', async () => {
+            delete process.env.OPENAI_API_KEY;
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'gpt-4o',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('OPENAI_API_KEY');
+        });
+
+        it('returns isError when GEMINI_API_KEY is not set for Gemini model', async () => {
+            delete process.env.GEMINI_API_KEY;
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'gemini-2.0-flash',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('GEMINI_API_KEY');
         });
 
         it('returns isError when takeScreenshot fails', async () => {

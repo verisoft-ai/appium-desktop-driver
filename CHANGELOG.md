@@ -1,3 +1,13 @@
+## [1.6.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.5.1...v1.6.0) (2026-04-15)
+
+### Features
+
+* **vision:** add extra llm support for vision command. ([4055904](https://github.com/verisoft-ai/appium-desktop-driver/commit/40559042ff5e730e84a155c925da71834c220dcd))
+
+### Bug Fixes
+
+* **vision:** address multi-provider review findings ([9c8a8ff](https://github.com/verisoft-ai/appium-desktop-driver/commit/9c8a8ff366bff7b3d9a047d3e09298f044d62aaf))
+
 ## [1.5.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.5.0...v1.5.1) (2026-04-13)
 
 ### Bug Fixes

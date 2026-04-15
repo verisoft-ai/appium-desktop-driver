@@ -263,7 +263,7 @@ describe('executeFindByVision', () => {
             mockFetch.mockResolvedValue({
                 ok: false,
                 statusText: 'Unauthorized',
-                json: () => Promise.resolve({ error: { message: 'Invalid API key' } }),
+                text: () => Promise.resolve(JSON.stringify({ error: { message: 'Invalid API key' } })),
             });
 
             await expect(
@@ -293,11 +293,10 @@ describe('executeFindByVision', () => {
 
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('generativelanguage.googleapis.com'),
-                expect.objectContaining({ method: 'POST' })
-            );
-            expect(mockFetch).toHaveBeenCalledWith(
-                expect.stringContaining('key=gemini-test-key'),
-                expect.anything()
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({ 'x-goog-api-key': 'gemini-test-key' }),
+                })
             );
             expect(result.label).toBe('icon');
         });
@@ -307,7 +306,7 @@ describe('executeFindByVision', () => {
             mockFetch.mockResolvedValue({
                 ok: false,
                 statusText: 'Bad Request',
-                json: () => Promise.resolve({ error: { message: 'API key not valid' } }),
+                text: () => Promise.resolve(JSON.stringify({ error: { message: 'API key not valid' } })),
             });
 
             await expect(

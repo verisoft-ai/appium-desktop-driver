@@ -633,6 +633,70 @@ if secondary:
     driver.execute_script('windows: click', {'x': cx, 'y': cy})
 ```
 
+### windows: findByVision
+
+Uses a vision-capable LLM to locate a UI element by natural language
+description. Takes a screenshot of the current window, sends it to the
+configured LLM, and returns the screen coordinates of the described element.
+
+The `model` argument controls which LLM provider is used. The corresponding
+API key must be set as an environment variable before starting the Appium
+server.
+
+#### Supported Models
+
+| Provider | Model prefix | Environment variable | Example models |
+| --- | --- | --- | --- |
+| Anthropic | `claude-` | `ANTHROPIC_API_KEY` | `claude-opus-4-6`, `claude-sonnet-4-6` |
+| OpenAI | `gpt-`, `o1`, `o3`, `o4` | `OPENAI_API_KEY` | `gpt-4o`, `o3` |
+| Google | `gemini-` | `GEMINI_API_KEY` | `gemini-1.5-pro`, `gemini-2.0-flash` |
+
+#### Arguments
+
+| Name | Type | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| prompt | string | yes | Natural language description of the element to find | `"Submit button"` |
+| model | string | no | LLM model identifier. Defaults to `claude-opus-4-6` | `"gpt-4o"` |
+
+#### Returns
+
+| Name | Type | Description |
+| --- | --- | --- |
+| x | number | Horizontal screen coordinate of the element center |
+| y | number | Vertical screen coordinate of the element center |
+| label | string | Brief description of the element as identified by the LLM |
+
+#### Example
+
+```javascript
+// WebdriverIO — locate and click an element using Claude
+const result = await driver.executeScript('windows: findByVision', [{
+    prompt: 'Save button in the toolbar',
+}]);
+await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
+```
+
+```javascript
+// WebdriverIO — use GPT-4o instead
+const result = await driver.executeScript('windows: findByVision', [{
+    prompt: 'Save button in the toolbar',
+    model: 'gpt-4o',
+}]);
+await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
+```
+
+```python
+# Python — locate and click using Gemini
+result = driver.execute_script('windows: findByVision', {
+    'prompt': 'Save button in the toolbar',
+    'model': 'gemini-1.5-pro',
+})
+driver.execute_script('windows: click', {
+    'x': result['x'],
+    'y': result['y'],
+})
+```
+
 ## Development
 
 it is recommended to use Matt Bierner's [Comment tagged templates](https://marketplace.visualstudio.com/items?itemName=bierner.comment-tagged-templates)

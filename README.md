@@ -656,7 +656,7 @@ server.
 | Name | Type | Required | Description | Example |
 | --- | --- | --- | --- | --- |
 | prompt | string | yes | Natural language description of the element to find | `"Submit button"` |
-| model | string | no | LLM model identifier. Defaults to `claude-opus-4-6` | `"gpt-4o"` |
+| model | string | yes | LLM model identifier | `"claude-opus-4-6"`, `"gpt-4o"` |
 
 #### Returns
 
@@ -672,6 +672,7 @@ server.
 // WebdriverIO — locate and click an element using Claude
 const result = await driver.executeScript('windows: findByVision', [{
     prompt: 'Save button in the toolbar',
+    model: 'claude-opus-4-6',
 }]);
 await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
 ```

@@ -69,6 +69,12 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
         },
         async ({ prompt, responseFormat, model }) => {
             try {
+                if (!model) {
+                    throw new Error(
+                        'find_by_vision requires a "model" argument. ' +
+                        'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), gemini-* (GEMINI_API_KEY).'
+                    );
+                }
                 const visionModel = model;
                 const envVar = getApiKeyEnvVar(getProviderForModel(visionModel));
                 const apiKey = process.env[envVar];

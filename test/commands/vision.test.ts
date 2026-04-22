@@ -58,12 +58,20 @@ describe('executeFindByVision', () => {
         process.env = { ...savedEnv };
     });
 
-    it('throws when ANTHROPIC_API_KEY is not set for default model', async () => {
+    it('throws when model argument is missing', async () => {
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'OK button' } as any)
+        ).rejects.toThrow('requires a "model" argument');
+    });
+
+    it('throws when ANTHROPIC_API_KEY is not set', async () => {
         delete process.env.ANTHROPIC_API_KEY;
         const driver = makeMockDriver();
 
         await expect(
-            executeFindByVision.call(driver as any, { prompt: 'OK button' })
+            executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'claude-opus-4-6' })
         ).rejects.toThrow('ANTHROPIC_API_KEY');
     });
 
@@ -94,7 +102,7 @@ describe('executeFindByVision', () => {
         });
         mockCreate.mockResolvedValue(makeLLMResponse(500, 300, 'OK button'));
 
-        const result = await executeFindByVision.call(driver as any, { prompt: 'OK button' });
+        const result = await executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'claude-opus-4-6' });
 
         expect(result.x).toBe(600);
         expect(result.y).toBe(500);
@@ -113,7 +121,7 @@ describe('executeFindByVision', () => {
         });
         mockCreate.mockResolvedValue(makeLLMResponse(960, 540, 'desktop center'));
 
-        const result = await executeFindByVision.call(driver as any, { prompt: 'desktop center' });
+        const result = await executeFindByVision.call(driver as any, { prompt: 'desktop center', model: 'claude-opus-4-6' });
 
         expect(result.x).toBe(960);
         expect(result.y).toBe(540);
@@ -131,7 +139,7 @@ describe('executeFindByVision', () => {
         });
         mockCreate.mockResolvedValue(makeLLMResponse(400, 300, 'button'));
 
-        const result = await executeFindByVision.call(driver as any, { prompt: 'button' });
+        const result = await executeFindByVision.call(driver as any, { prompt: 'button', model: 'claude-opus-4-6' });
 
         expect(result.x).toBe(400);
         expect(result.y).toBe(300);
@@ -142,7 +150,7 @@ describe('executeFindByVision', () => {
         mockCreate.mockResolvedValue(makeLLMResponse(-1, -1, 'not found'));
 
         await expect(
-            executeFindByVision.call(driver as any, { prompt: 'nonexistent element' })
+            executeFindByVision.call(driver as any, { prompt: 'nonexistent element', model: 'claude-opus-4-6' })
         ).rejects.toThrow('Element not found');
     });
 
@@ -153,7 +161,7 @@ describe('executeFindByVision', () => {
         });
 
         await expect(
-            executeFindByVision.call(driver as any, { prompt: 'something' })
+            executeFindByVision.call(driver as any, { prompt: 'something', model: 'claude-opus-4-6' })
         ).rejects.toThrow('Unexpected LLM response');
     });
 
@@ -163,21 +171,18 @@ describe('executeFindByVision', () => {
             content: [{ type: 'text', text: 'Sure! Here is the result: {"x":200,"y":150,"label":"Submit"}' }],
         });
 
-        const result = await executeFindByVision.call(driver as any, { prompt: 'Submit button' });
+        const result = await executeFindByVision.call(driver as any, { prompt: 'Submit button', model: 'claude-opus-4-6' });
 
         expect(result.x).toBeGreaterThanOrEqual(0);
         expect(result.label).toBe('Submit');
     });
 
-    it('uses default model claude-opus-4-6 when none specified', async () => {
+    it('throws when model is not specified', async () => {
         const driver = makeMockDriver();
-        mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
 
-        await executeFindByVision.call(driver as any, { prompt: 'item' });
-
-        expect(mockCreate).toHaveBeenCalledWith(
-            expect.objectContaining({ model: 'claude-opus-4-6' })
-        );
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'item' } as any)
+        ).rejects.toThrow('requires a "model" argument');
     });
 
     it('uses custom model when provided', async () => {
@@ -195,7 +200,7 @@ describe('executeFindByVision', () => {
         const driver = makeMockDriver();
         mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
 
-        await executeFindByVision.call(driver as any, { prompt: 'item' });
+        await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-opus-4-6' });
 
         expect(mockCreate).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -222,7 +227,7 @@ describe('executeFindByVision', () => {
         });
         mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
 
-        const result = await executeFindByVision.call(driver as any, { prompt: 'item' });
+        const result = await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-opus-4-6' });
 
         // Falls back to first monitor: scaleX = 2560/1920, scaleY = 1440/1080
         expect(result.x).toBe(Math.round(0 + 100 * (2560 / 1920)));

@@ -44,9 +44,15 @@ async function buildCoordMapping(
 
 export async function executeFindByVision(
     this: AppiumDesktopDriver,
-    args: { prompt: string; model?: string },
+    args: { prompt: string; model: string },
 ): Promise<{ x: number; y: number; label: string }> {
-    const model = args.model ?? 'claude-opus-4-6';
+    if (!args.model) {
+        throw new Error(
+            'windows: findByVision requires a "model" argument. ' +
+            'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), gemini-* (GEMINI_API_KEY).'
+        );
+    }
+    const model = args.model;
     const envVar = getApiKeyEnvVar(getProviderForModel(model));
     const apiKey = process.env[envVar];
     if (!apiKey) {

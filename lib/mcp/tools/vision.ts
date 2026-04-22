@@ -15,8 +15,6 @@ import {
     parseVisionCoords,
 } from '../../vision-utils';
 
-const DEFAULT_MODEL = 'claude-opus-4-6';
-
 async function buildCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
     try {
         const rect = await driver.getWindowRect();
@@ -62,13 +60,16 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                     '"coordinates" (default) locates an element and returns JSON {x,y,label} with converted screen coordinates. ' +
                     '"text" answers a general question about the screen in plain text.'
                 ),
-                model: z.string().optional().describe(`Vision model to use (default: ${DEFAULT_MODEL})`),
+                model: z.string().min(1).describe(
+                    'Vision model to use. Determines which API key is required: ' +
+                    'claude-* → ANTHROPIC_API_KEY, gpt-*/o-series → OPENAI_API_KEY, gemini-* → GEMINI_API_KEY.'
+                ),
             },
             annotations: { readOnlyHint: true },
         },
         async ({ prompt, responseFormat, model }) => {
             try {
-                const visionModel = model ?? DEFAULT_MODEL;
+                const visionModel = model;
                 const envVar = getApiKeyEnvVar(getProviderForModel(visionModel));
                 const apiKey = process.env[envVar];
                 if (!apiKey) {

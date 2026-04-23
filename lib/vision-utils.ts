@@ -1,13 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 
-export type LLMProvider = 'anthropic' | 'openai' | 'google';
+export type LLMProvider = 'anthropic' | 'openai' | 'google' | 'amazon';
 
 /** Infers the LLM provider from the model identifier. */
 const SUPPORTED_MODELS = [
-    'claude-*  (e.g. claude-sonnet-4-6)',
-    'gpt-*     (e.g. gpt-4o)',
+    'claude-*         (e.g. claude-sonnet-4-6)',
+    'gpt-*            (e.g. gpt-4o)',
     'o1, o3, o4, o1-mini, o3-pro, …',
-    'gemini-*  (e.g. gemini-1.5-pro)',
+    'gemini-*         (e.g. gemini-1.5-pro)',
+    'amazon.nova-*    (e.g. amazon.nova-pro-v1:0)',
+    'us.amazon.nova-* (cross-region inference, e.g. us.amazon.nova-pro-v1:0)',
+    'eu.amazon.nova-* (cross-region inference)',
+    'ap.amazon.nova-* (cross-region inference)',
 ];
 
 export function getProviderForModel(model: string): LLMProvider {
@@ -21,6 +26,9 @@ export function getProviderForModel(model: string): LLMProvider {
     if (lower.startsWith('claude-')) {
         return 'anthropic';
     }
+    if (/^(us\.|eu\.|ap\.)?amazon\./.test(lower)) {
+        return 'amazon';
+    }
     throw new Error(
         `Unsupported model: "${model}". ` +
         `Supported model prefixes are:\n  ${SUPPORTED_MODELS.join('\n  ')}`,
@@ -32,6 +40,7 @@ export function getApiKeyEnvVar(provider: LLMProvider): string {
     switch (provider) {
         case 'openai': return 'OPENAI_API_KEY';
         case 'google': return 'GEMINI_API_KEY';
+        case 'amazon': return 'AWS_ACCESS_KEY_ID';
         default: return 'ANTHROPIC_API_KEY';
     }
 }
@@ -234,11 +243,44 @@ async function callGoogleVision(
     return text;
 }
 
+async function callAmazonBedrockVision(
+    base64: string,
+    textPrompt: string,
+    model: string,
+    maxTokens: number,
+): Promise<string> {
+    const client = new BedrockRuntimeClient({
+        region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1',
+    });
+    const command = new ConverseCommand({
+        modelId: model,
+        messages: [{
+            role: 'user',
+            content: [
+                {
+                    image: {
+                        format: 'png',
+                        source: { bytes: Buffer.from(base64, 'base64') },
+                    },
+                },
+                { text: textPrompt },
+            ],
+        }],
+        inferenceConfig: { maxTokens },
+    });
+    const response = await client.send(command);
+    const text = response.output?.message?.content?.find((b) => 'text' in b && typeof b.text === 'string') as { text: string } | undefined;
+    if (!text) {
+        throw new Error(`Unexpected response from Amazon Bedrock model "${model}": no text content in output`);
+    }
+    return text.text;
+}
+
 /**
  * Sends a base64 screenshot + text prompt to a vision model and returns the raw
- * text response. Dispatches to Anthropic, OpenAI, or Google Gemini based on the
- * model name prefix. The caller is responsible for building the prompt and
- * parsing the result.
+ * text response. Dispatches to Anthropic, OpenAI, Google Gemini, or Amazon Bedrock
+ * based on the model name prefix. The caller is responsible for building the prompt
+ * and parsing the result.
  */
 export async function callVisionLLM(
     base64: string,
@@ -251,6 +293,7 @@ export async function callVisionLLM(
     switch (provider) {
         case 'openai': return callOpenAIVision(base64, textPrompt, model, apiKey, maxTokens);
         case 'google': return callGoogleVision(base64, textPrompt, model, apiKey, maxTokens);
+        case 'amazon': return callAmazonBedrockVision(base64, textPrompt, model, maxTokens);
         default: return callAnthropicVision(base64, textPrompt, model, apiKey, maxTokens);
     }
 }

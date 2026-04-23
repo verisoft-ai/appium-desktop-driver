@@ -45,6 +45,7 @@ export class AppiumSession {
             hostname: this.appiumConfig.appiumHost,
             port: this.appiumConfig.appiumPort,
             path: '/',
+            logLevel: 'silent',
             capabilities: caps as WebdriverIO.Capabilities,
         });
 

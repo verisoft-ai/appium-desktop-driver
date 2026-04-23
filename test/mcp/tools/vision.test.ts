@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockCreate, mockFetch } = vi.hoisted(() => ({
+const { mockCreate, mockFetch, mockBedrockSend } = vi.hoisted(() => ({
     mockCreate: vi.fn(),
     mockFetch: vi.fn(),
+    mockBedrockSend: vi.fn(),
 }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
     default: vi.fn().mockImplementation(() => ({
         messages: { create: mockCreate },
     })),
+}));
+
+vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
+    BedrockRuntimeClient: vi.fn().mockImplementation(() => ({
+        send: mockBedrockSend,
+    })),
+    ConverseCommand: vi.fn().mockImplementation((input: unknown) => input),
 }));
 
 vi.stubGlobal('fetch', mockFetch);
@@ -56,6 +64,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'where is the OK button?',
                 responseFormat: 'coordinates',
+                model: 'claude-opus-4-6',
             }) as any;
 
             expect(result.isError).toBeUndefined();
@@ -88,6 +97,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'find the close button',
                 responseFormat: 'coordinates',
+                model: 'claude-opus-4-6',
             }) as any;
 
             const parsed = JSON.parse(result.content[0].text);
@@ -114,6 +124,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'desktop taskbar',
                 responseFormat: 'coordinates',
+                model: 'claude-opus-4-6',
             }) as any;
 
             expect(result.isError).toBeUndefined();
@@ -134,6 +145,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'find something',
                 responseFormat: 'coordinates',
+                model: 'claude-opus-4-6',
             }) as any;
 
             expect(result.isError).toBeUndefined();
@@ -152,7 +164,7 @@ describe('find_by_vision tool', () => {
             mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'Save'));
             registerVisionTools(server, session);
 
-            await server.call('find_by_vision', { prompt: 'find the Save button' });
+            await server.call('find_by_vision', { prompt: 'find the Save button', model: 'claude-opus-4-6' });
 
             expect(mockCreate).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -179,6 +191,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'what app is open?',
                 responseFormat: 'text',
+                model: 'claude-opus-4-6',
             }) as any;
 
             expect(result.isError).toBeUndefined();
@@ -194,7 +207,7 @@ describe('find_by_vision tool', () => {
             mockCreate.mockResolvedValue(makeTextLLMResponse('answer'));
             registerVisionTools(server, session);
 
-            await server.call('find_by_vision', { prompt: 'describe the screen', responseFormat: 'text' });
+            await server.call('find_by_vision', { prompt: 'describe the screen', responseFormat: 'text', model: 'claude-opus-4-6' });
 
             expect(mockCreate).toHaveBeenCalledWith(
                 expect.objectContaining({ max_tokens: 1024 })
@@ -238,6 +251,97 @@ describe('find_by_vision tool', () => {
         });
     });
 
+    describe('Amazon Bedrock provider', () => {
+        beforeEach(() => {
+            process.env.AWS_ACCESS_KEY_ID = 'fake-access-key';
+            process.env.AWS_SECRET_ACCESS_KEY = 'fake-secret-key';
+            process.env.AWS_REGION = 'us-east-1';
+        });
+
+        it('calls Bedrock ConverseCommand for amazon.nova model and returns coordinates', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockBedrockSend.mockResolvedValue({
+                output: {
+                    message: {
+                        content: [{ text: JSON.stringify({ x: 200, y: 300, label: 'submit button' }) }],
+                    },
+                },
+            });
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'submit button',
+                model: 'amazon.nova-pro-v1:0',
+            }) as any;
+
+            expect(result.isError).toBeUndefined();
+            const parsed = JSON.parse(result.content[0].text);
+            expect(parsed.label).toBe('submit button');
+            expect(mockBedrockSend).toHaveBeenCalled();
+        });
+
+        it('calls Bedrock for cross-region us.amazon.nova model', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockBedrockSend.mockResolvedValue({
+                output: {
+                    message: {
+                        content: [{ text: JSON.stringify({ x: 100, y: 200, label: 'cancel' }) }],
+                    },
+                },
+            });
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'cancel button',
+                model: 'us.amazon.nova-lite-v1:0',
+            }) as any;
+
+            expect(result.isError).toBeUndefined();
+            const parsed = JSON.parse(result.content[0].text);
+            expect(parsed.label).toBe('cancel');
+        });
+
+        it('returns isError when AWS_ACCESS_KEY_ID is not set', async () => {
+            delete process.env.AWS_ACCESS_KEY_ID;
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'amazon.nova-pro-v1:0',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('AWS_ACCESS_KEY_ID');
+        });
+
+        it('returns isError when AWS_SECRET_ACCESS_KEY is not set', async () => {
+            delete process.env.AWS_SECRET_ACCESS_KEY;
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'amazon.nova-pro-v1:0',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('AWS_SECRET_ACCESS_KEY');
+        });
+    });
+
     describe('Google Gemini provider', () => {
         beforeEach(() => {
             process.env.GEMINI_API_KEY = 'gemini-test-key';
@@ -273,18 +377,16 @@ describe('find_by_vision tool', () => {
     });
 
     describe('model selection', () => {
-        it('uses default model claude-opus-4-6 when none specified', async () => {
+        it('returns isError when model is not specified', async () => {
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
-            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
-            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
-            mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
             registerVisionTools(server, session);
 
-            await server.call('find_by_vision', { prompt: 'find item' });
+            const result = await server.call('find_by_vision', { prompt: 'find item' }) as any;
 
-            expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-opus-4-6' }));
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('model');
         });
 
         it('uses custom model when provided', async () => {
@@ -303,14 +405,14 @@ describe('find_by_vision tool', () => {
     });
 
     describe('error handling', () => {
-        it('returns isError when ANTHROPIC_API_KEY is not set for default model', async () => {
+        it('returns isError when ANTHROPIC_API_KEY is not set', async () => {
             delete process.env.ANTHROPIC_API_KEY;
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             registerVisionTools(server, session);
 
-            const result = await server.call('find_by_vision', { prompt: 'find something' }) as any;
+            const result = await server.call('find_by_vision', { prompt: 'find something', model: 'claude-opus-4-6' }) as any;
 
             expect(result.isError).toBe(true);
             expect(result.content[0].text).toContain('ANTHROPIC_API_KEY');
@@ -354,7 +456,7 @@ describe('find_by_vision tool', () => {
             mockBrowser.takeScreenshot = vi.fn().mockRejectedValue(new Error('screenshot failed'));
             registerVisionTools(server, session);
 
-            const result = await server.call('find_by_vision', { prompt: 'find something' }) as any;
+            const result = await server.call('find_by_vision', { prompt: 'find something', model: 'claude-opus-4-6' }) as any;
 
             expect(result.isError).toBe(true);
             expect(result.content[0].text).toContain('screenshot failed');
@@ -372,6 +474,7 @@ describe('find_by_vision tool', () => {
             const result = await server.call('find_by_vision', {
                 prompt: 'a purple elephant',
                 responseFormat: 'coordinates',
+                model: 'claude-opus-4-6',
             }) as any;
 
             expect(result.isError).toBe(true);

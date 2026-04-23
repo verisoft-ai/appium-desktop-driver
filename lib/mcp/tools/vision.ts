@@ -15,8 +15,6 @@ import {
     parseVisionCoords,
 } from '../../vision-utils';
 
-const DEFAULT_MODEL = 'claude-opus-4-6';
-
 async function buildCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
     try {
         const rect = await driver.getWindowRect();
@@ -54,27 +52,43 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                 'For "coordinates" format, locates a UI element and returns {x,y,label} with actual screen ' +
                 'coordinates (DPI-corrected) ready to pass to click tools. ' +
                 'For "text" format, answers a general question about the screen in plain text. ' +
-                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), or ' +
-                'GEMINI_API_KEY (Gemini) depending on the chosen model.',
+                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), ' +
+                'GEMINI_API_KEY (Gemini), or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (Amazon Nova via Bedrock) ' +
+                'depending on the chosen model.',
             inputSchema: {
                 prompt: z.string().min(1).describe('Question or instruction about the screenshot'),
                 responseFormat: z.enum(['coordinates', 'text']).default('coordinates').describe(
                     '"coordinates" (default) locates an element and returns JSON {x,y,label} with converted screen coordinates. ' +
                     '"text" answers a general question about the screen in plain text.'
                 ),
-                model: z.string().optional().describe(`Vision model to use (default: ${DEFAULT_MODEL})`),
+                model: z.string().min(1).describe(
+                    'Vision model to use. Determines which credentials are required: ' +
+                    'claude-* → ANTHROPIC_API_KEY, gpt-*/o-series → OPENAI_API_KEY, ' +
+                    'gemini-* → GEMINI_API_KEY, amazon.nova-* → AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY.'
+                ),
             },
             annotations: { readOnlyHint: true },
         },
         async ({ prompt, responseFormat, model }) => {
             try {
-                const visionModel = model ?? DEFAULT_MODEL;
-                const envVar = getApiKeyEnvVar(getProviderForModel(visionModel));
+                if (!model) {
+                    throw new Error(
+                        'find_by_vision requires a "model" argument. ' +
+                        'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), ' +
+                        'gemini-* (GEMINI_API_KEY), amazon.nova-*/us.amazon.nova-*/eu.amazon.nova-*/ap.amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
+                    );
+                }
+                const visionModel = model;
+                const provider = getProviderForModel(visionModel);
+                const envVar = getApiKeyEnvVar(provider);
                 const apiKey = process.env[envVar];
                 if (!apiKey) {
                     throw new Error(
                         `${envVar} environment variable is required for find_by_vision (model: ${visionModel})`
                     );
+                }
+                if (provider === 'amazon' && !process.env.AWS_SECRET_ACCESS_KEY) {
+                    throw new Error('AWS_SECRET_ACCESS_KEY environment variable is required for Amazon Bedrock models');
                 }
 
                 const driver = session.getDriver();

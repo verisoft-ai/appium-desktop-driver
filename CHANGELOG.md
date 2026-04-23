@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.6.0...v1.6.1) (2026-04-23)
+
+### Bug Fixes
+
+* check amazon user and key ([4f45cf1](https://github.com/verisoft-ai/appium-desktop-driver/commit/4f45cf1ad1a16a6d2412902be1dcfd8a899b1493))
+* **vision:** make model argument mandatory in find_by_vision and executeFindByVision ([2eee54c](https://github.com/verisoft-ai/appium-desktop-driver/commit/2eee54cfa7fec16975f7ad748fe3fa4462bc9709))
+
 ## [1.6.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.5.1...v1.6.0) (2026-04-15)
 
 ### Features

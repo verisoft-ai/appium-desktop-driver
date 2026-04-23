@@ -10,7 +10,9 @@ const SUPPORTED_MODELS = [
     'o1, o3, o4, o1-mini, o3-pro, …',
     'gemini-*         (e.g. gemini-1.5-pro)',
     'amazon.nova-*    (e.g. amazon.nova-pro-v1:0)',
-    'us.amazon.nova-* (e.g. us.amazon.nova-pro-v1:0)',
+    'us.amazon.nova-* (cross-region inference, e.g. us.amazon.nova-pro-v1:0)',
+    'eu.amazon.nova-* (cross-region inference)',
+    'ap.amazon.nova-* (cross-region inference)',
 ];
 
 export function getProviderForModel(model: string): LLMProvider {

@@ -324,6 +324,22 @@ describe('find_by_vision tool', () => {
             expect(result.isError).toBe(true);
             expect(result.content[0].text).toContain('AWS_ACCESS_KEY_ID');
         });
+
+        it('returns isError when AWS_SECRET_ACCESS_KEY is not set', async () => {
+            delete process.env.AWS_SECRET_ACCESS_KEY;
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'amazon.nova-pro-v1:0',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('AWS_SECRET_ACCESS_KEY');
+        });
     });
 
     describe('Google Gemini provider', () => {

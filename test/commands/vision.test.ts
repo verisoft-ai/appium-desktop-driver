@@ -75,6 +75,16 @@ describe('executeFindByVision', () => {
         ).rejects.toThrow('ANTHROPIC_API_KEY');
     });
 
+    it('throws when AWS_SECRET_ACCESS_KEY is not set for Bedrock model', async () => {
+        process.env.AWS_ACCESS_KEY_ID = 'fake-key';
+        delete process.env.AWS_SECRET_ACCESS_KEY;
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'amazon.nova-pro-v1:0' })
+        ).rejects.toThrow('AWS_SECRET_ACCESS_KEY');
+    });
+
     it('throws when OPENAI_API_KEY is not set for GPT model', async () => {
         delete process.env.OPENAI_API_KEY;
         const driver = makeMockDriver();

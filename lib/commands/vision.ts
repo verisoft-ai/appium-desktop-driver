@@ -50,16 +50,20 @@ export async function executeFindByVision(
         throw new Error(
             'windows: findByVision requires a "model" argument. ' +
             'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), ' +
-            'gemini-* (GEMINI_API_KEY), amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
+            'gemini-* (GEMINI_API_KEY), amazon.nova-*/us.amazon.nova-*/eu.amazon.nova-*/ap.amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
         );
     }
     const model = args.model;
-    const envVar = getApiKeyEnvVar(getProviderForModel(model));
+    const provider = getProviderForModel(model);
+    const envVar = getApiKeyEnvVar(provider);
     const apiKey = process.env[envVar];
     if (!apiKey) {
         throw new Error(
             `${envVar} environment variable is required for windows: findByVision (model: ${model})`
         );
+    }
+    if (provider === 'amazon' && !process.env.AWS_SECRET_ACCESS_KEY) {
+        throw new Error('AWS_SECRET_ACCESS_KEY environment variable is required for Amazon Bedrock models');
     }
 
     const base64 = await this.getScreenshot();

@@ -650,7 +650,7 @@ server.
 | Anthropic | `claude-` | `ANTHROPIC_API_KEY` | `claude-opus-4-6`, `claude-sonnet-4-6` |
 | OpenAI | `gpt-`, `o1`, `o3`, `o4` | `OPENAI_API_KEY` | `gpt-4o`, `o3` |
 | Google | `gemini-` | `GEMINI_API_KEY` | `gemini-1.5-pro`, `gemini-2.0-flash` |
-| Amazon (Bedrock) | `amazon.nova-`, `us.amazon.nova-` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0` |
+| Amazon (Bedrock) | `amazon.nova-`, `us.amazon.nova-`, `eu.amazon.nova-`, `ap.amazon.nova-` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0` |
 
 For Amazon Bedrock, set `AWS_REGION` (or `AWS_DEFAULT_REGION`) to select the deployment region (defaults to `us-east-1`). IAM roles and AWS credential profiles are also supported via the standard AWS credential chain.
 

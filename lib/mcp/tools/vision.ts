@@ -75,16 +75,20 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                     throw new Error(
                         'find_by_vision requires a "model" argument. ' +
                         'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), ' +
-                        'gemini-* (GEMINI_API_KEY), amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
+                        'gemini-* (GEMINI_API_KEY), amazon.nova-*/us.amazon.nova-*/eu.amazon.nova-*/ap.amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
                     );
                 }
                 const visionModel = model;
-                const envVar = getApiKeyEnvVar(getProviderForModel(visionModel));
+                const provider = getProviderForModel(visionModel);
+                const envVar = getApiKeyEnvVar(provider);
                 const apiKey = process.env[envVar];
                 if (!apiKey) {
                     throw new Error(
                         `${envVar} environment variable is required for find_by_vision (model: ${visionModel})`
                     );
+                }
+                if (provider === 'amazon' && !process.env.AWS_SECRET_ACCESS_KEY) {
+                    throw new Error('AWS_SECRET_ACCESS_KEY environment variable is required for Amazon Bedrock models');
                 }
 
                 const driver = session.getDriver();

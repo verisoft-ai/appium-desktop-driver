@@ -49,7 +49,8 @@ export async function executeFindByVision(
     if (!args.model) {
         throw new Error(
             'windows: findByVision requires a "model" argument. ' +
-            'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), gemini-* (GEMINI_API_KEY).'
+            'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), ' +
+            'gemini-* (GEMINI_API_KEY), amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
         );
     }
     const model = args.model;

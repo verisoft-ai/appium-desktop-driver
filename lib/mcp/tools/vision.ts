@@ -52,8 +52,9 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                 'For "coordinates" format, locates a UI element and returns {x,y,label} with actual screen ' +
                 'coordinates (DPI-corrected) ready to pass to click tools. ' +
                 'For "text" format, answers a general question about the screen in plain text. ' +
-                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), or ' +
-                'GEMINI_API_KEY (Gemini) depending on the chosen model.',
+                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), ' +
+                'GEMINI_API_KEY (Gemini), or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (Amazon Nova via Bedrock) ' +
+                'depending on the chosen model.',
             inputSchema: {
                 prompt: z.string().min(1).describe('Question or instruction about the screenshot'),
                 responseFormat: z.enum(['coordinates', 'text']).default('coordinates').describe(
@@ -61,8 +62,9 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                     '"text" answers a general question about the screen in plain text.'
                 ),
                 model: z.string().min(1).describe(
-                    'Vision model to use. Determines which API key is required: ' +
-                    'claude-* → ANTHROPIC_API_KEY, gpt-*/o-series → OPENAI_API_KEY, gemini-* → GEMINI_API_KEY.'
+                    'Vision model to use. Determines which credentials are required: ' +
+                    'claude-* → ANTHROPIC_API_KEY, gpt-*/o-series → OPENAI_API_KEY, ' +
+                    'gemini-* → GEMINI_API_KEY, amazon.nova-* → AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY.'
                 ),
             },
             annotations: { readOnlyHint: true },
@@ -72,7 +74,8 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                 if (!model) {
                     throw new Error(
                         'find_by_vision requires a "model" argument. ' +
-                        'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), gemini-* (GEMINI_API_KEY).'
+                        'Supported prefixes: claude-* (ANTHROPIC_API_KEY), gpt-*/o-series (OPENAI_API_KEY), ' +
+                        'gemini-* (GEMINI_API_KEY), amazon.nova-* (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).'
                     );
                 }
                 const visionModel = model;

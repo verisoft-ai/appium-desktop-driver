@@ -645,18 +645,21 @@ server.
 
 #### Supported Models
 
-| Provider | Model prefix | Environment variable | Example models |
+| Provider | Model prefix | Environment variable(s) | Example models |
 | --- | --- | --- | --- |
 | Anthropic | `claude-` | `ANTHROPIC_API_KEY` | `claude-opus-4-6`, `claude-sonnet-4-6` |
 | OpenAI | `gpt-`, `o1`, `o3`, `o4` | `OPENAI_API_KEY` | `gpt-4o`, `o3` |
 | Google | `gemini-` | `GEMINI_API_KEY` | `gemini-1.5-pro`, `gemini-2.0-flash` |
+| Amazon (Bedrock) | `amazon.nova-`, `us.amazon.nova-` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0` |
+
+For Amazon Bedrock, set `AWS_REGION` (or `AWS_DEFAULT_REGION`) to select the deployment region (defaults to `us-east-1`). IAM roles and AWS credential profiles are also supported via the standard AWS credential chain.
 
 #### Arguments
 
 | Name | Type | Required | Description | Example |
 | --- | --- | --- | --- | --- |
 | prompt | string | yes | Natural language description of the element to find | `"Submit button"` |
-| model | string | yes | LLM model identifier | `"claude-opus-4-6"`, `"gpt-4o"` |
+| model | string | yes | LLM model identifier | `"claude-opus-4-6"`, `"gpt-4o"`, `"amazon.nova-pro-v1:0"` |
 
 #### Returns
 
@@ -682,6 +685,15 @@ await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
 const result = await driver.executeScript('windows: findByVision', [{
     prompt: 'Save button in the toolbar',
     model: 'gpt-4o',
+}]);
+await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
+```
+
+```javascript
+// WebdriverIO — use Amazon Nova via Bedrock
+const result = await driver.executeScript('windows: findByVision', [{
+    prompt: 'Save button in the toolbar',
+    model: 'amazon.nova-pro-v1:0',
 }]);
 await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
 ```

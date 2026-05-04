@@ -1,3 +1,14 @@
+## [1.7.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.6.1...v1.7.0) (2026-05-04)
+
+### Features
+
+* add analyze_screen mcp tool ([5c6b998](https://github.com/verisoft-ai/appium-desktop-driver/commit/5c6b998ebde79caa9f05261f252be3fcba847edd))
+* lazy load mcp server ([16a1533](https://github.com/verisoft-ai/appium-desktop-driver/commit/16a15337daacf2a2088f9eb4ee548a5cb03dce71))
+
+### Bug Fixes
+
+* remove last residuals of nova windows logs ([5b3627f](https://github.com/verisoft-ai/appium-desktop-driver/commit/5b3627fef8bb40d2cdb640f0956dfe5c254cfb57))
+
 ## [1.6.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.6.0...v1.6.1) (2026-04-23)
 
 ### Bug Fixes

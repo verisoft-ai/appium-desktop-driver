@@ -51,7 +51,7 @@ All driver commands live in `lib/commands/` and are mixed into the driver class 
 
 ### MCP server
 
-`lib/mcp/` is an independent MCP server binary (`novawindows-mcp`). It auto-starts and manages an Appium server process, creates WebdriverIO sessions, and exposes tools grouped by domain in `lib/mcp/tools/`. The server communicates via stdio using the `@modelcontextprotocol/sdk`.
+`lib/mcp/` is an independent MCP server binary (`appiumdesktop-mcp`). It auto-starts and manages an Appium server process, creates WebdriverIO sessions, and exposes tools grouped by domain in `lib/mcp/tools/`. The server communicates via stdio using the `@modelcontextprotocol/sdk`.
 
 ### TypeScript paths
 

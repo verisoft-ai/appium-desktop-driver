@@ -32,13 +32,13 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('writes a base64-encoded text file to disk', async () => {
-            cleanup = join(tmpdir(), `nova-push-${Date.now()}.txt`);
-            await driver.pushFile(cleanup, Buffer.from('Hello, NovaWindows!').toString('base64'));
+            cleanup = join(tmpdir(), `desktop-push-${Date.now()}.txt`);
+            await driver.pushFile(cleanup, Buffer.from('Hello, AppiumDesktop!').toString('base64'));
             expect(existsSync(cleanup)).toBe(true);
         });
 
         it('round-trips text content via pushFile → pullFile', async () => {
-            cleanup = join(tmpdir(), `nova-roundtrip-${Date.now()}.txt`);
+            cleanup = join(tmpdir(), `desktop-roundtrip-${Date.now()}.txt`);
             const content = 'round-trip test content';
             await driver.pushFile(cleanup, Buffer.from(content, 'utf8').toString('base64'));
             const pulled = await driver.pullFile(cleanup);
@@ -46,7 +46,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('round-trips binary data without corruption', async () => {
-            cleanup = join(tmpdir(), `nova-binary-${Date.now()}.bin`);
+            cleanup = join(tmpdir(), `desktop-binary-${Date.now()}.bin`);
             const bytes = Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD]);
             await driver.pushFile(cleanup, bytes.toString('base64'));
             const pulled = await driver.pullFile(cleanup);
@@ -54,7 +54,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('creates missing parent directories automatically', async () => {
-            const parentDir = join(tmpdir(), `nova-nested-${Date.now()}`);
+            const parentDir = join(tmpdir(), `desktop-nested-${Date.now()}`);
             const filePath = join(parentDir, 'sub', 'dir', 'file.txt');
             cleanup = parentDir;
             await driver.pushFile(filePath, Buffer.from('nested').toString('base64'));
@@ -62,7 +62,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('overwrites an existing file', async () => {
-            cleanup = join(tmpdir(), `nova-overwrite-${Date.now()}.txt`);
+            cleanup = join(tmpdir(), `desktop-overwrite-${Date.now()}.txt`);
             writeFileSync(cleanup, 'old content', 'utf8');
             await driver.pushFile(cleanup, Buffer.from('new content').toString('base64'));
             const pulled = await driver.pullFile(cleanup);
@@ -83,7 +83,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('returns the base64-encoded content of an existing file', async () => {
-            cleanup = join(tmpdir(), `nova-pull-${Date.now()}.txt`);
+            cleanup = join(tmpdir(), `desktop-pull-${Date.now()}.txt`);
             const content = 'pull this!';
             writeFileSync(cleanup, content, 'utf8');
             const result = await driver.pullFile(cleanup);
@@ -91,14 +91,14 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('result is a valid base64 string', async () => {
-            cleanup = join(tmpdir(), `nova-b64-${Date.now()}.txt`);
+            cleanup = join(tmpdir(), `desktop-b64-${Date.now()}.txt`);
             writeFileSync(cleanup, 'base64 check', 'utf8');
             const result = await driver.pullFile(cleanup);
             expect(() => Buffer.from(result, 'base64')).not.toThrow();
         });
 
         it('throws when the file does not exist', async () => {
-            const missing = join(tmpdir(), `nova-missing-${Date.now()}.txt`);
+            const missing = join(tmpdir(), `desktop-missing-${Date.now()}.txt`);
             await expect(driver.pullFile(missing)).rejects.toThrow();
         });
     });
@@ -116,7 +116,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('returns a base64-encoded ZIP with valid PK header', async () => {
-            cleanup = join(tmpdir(), `nova-folder-${Date.now()}`);
+            cleanup = join(tmpdir(), `desktop-folder-${Date.now()}`);
             mkdirSync(cleanup);
             writeFileSync(join(cleanup, 'a.txt'), 'file a');
             writeFileSync(join(cleanup, 'b.txt'), 'file b');
@@ -132,8 +132,8 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('ZIP is larger when folder has more content', async () => {
-            const smallDir = join(tmpdir(), `nova-small-${Date.now()}`);
-            const largeDir = join(tmpdir(), `nova-large-${Date.now()}`);
+            const smallDir = join(tmpdir(), `desktop-small-${Date.now()}`);
+            const largeDir = join(tmpdir(), `desktop-large-${Date.now()}`);
             cleanup = smallDir; // afterEach cleans one; we clean largeDir here manually
 
             mkdirSync(smallDir);
@@ -153,7 +153,7 @@ describe('pushFile / pullFile / pullFolder', () => {
         });
 
         it('throws when the directory does not exist', async () => {
-            const missing = join(tmpdir(), `nova-missing-dir-${Date.now()}`);
+            const missing = join(tmpdir(), `desktop-missing-dir-${Date.now()}`);
             await expect(driver.pullFolder(missing)).rejects.toThrow();
         });
     });

@@ -118,7 +118,7 @@ describe('App lifecycle commands', () => {
 
     describe('prerun / postrun scripts', () => {
         it('prerun script is executed before app launch (writes a marker file)', async () => {
-            const markerPath = join(tmpdir(), `novawindows-prerun-${Date.now()}.txt`);
+            const markerPath = join(tmpdir(), `appiumdesktop-prerun-${Date.now()}.txt`);
             const driver = await createCalculatorSession({
                 'appium:prerun': {
                     script: `New-Item -ItemType File -Path "${markerPath.replace(/\\/g, '\\\\')}" -Force | Out-Null`,
@@ -133,7 +133,7 @@ describe('App lifecycle commands', () => {
         });
 
         it('postrun script is executed after session deletion (writes a marker file)', async () => {
-            const markerPath = join(tmpdir(), `novawindows-postrun-${Date.now()}.txt`);
+            const markerPath = join(tmpdir(), `appiumdesktop-postrun-${Date.now()}.txt`);
             const driver = await createCalculatorSession({
                 'appium:postrun': {
                     script: `New-Item -ItemType File -Path "${markerPath.replace(/\\/g, '\\\\')}" -Force | Out-Null`,

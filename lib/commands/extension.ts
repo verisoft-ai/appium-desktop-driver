@@ -705,7 +705,7 @@ export async function startRecordingScreen(this: AppiumDesktopDriver, args?: {
             );
         }
     }
-    const videoPath = outputPath ?? join(tmpdir(), `novawindows-recording-${Date.now()}.${DEFAULT_EXT}`);
+    const videoPath = outputPath ?? join(tmpdir(), `appiumdesktop-recording-${Date.now()}.${DEFAULT_EXT}`);
     this._screenRecorder = new ScreenRecorder(videoPath, this.log, {
         fps: fps !== undefined ? parseInt(String(fps), 10) : undefined,
         timeLimit: timeLimit !== undefined ? parseInt(String(timeLimit), 10) : undefined,

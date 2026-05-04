@@ -118,7 +118,7 @@ desktop-driver-mcp  →  build/lib/mcp/index.js
 ### From source
 
 ```bash
-git clone https://github.com/AutomateThePlanet/appium-desktop-driver.git
+git clone https://github.com/verisoft-ai/appium-desktop-driver.git
 cd appium-desktop-driver
 npm install
 npm run build

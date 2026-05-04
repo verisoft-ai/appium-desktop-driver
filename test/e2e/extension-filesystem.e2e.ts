@@ -20,7 +20,7 @@ describe('windows: deleteFile and deleteFolder', () => {
         let testFilePath: string;
 
         beforeEach(() => {
-            testFilePath = join(tmpdir(), `novawindows-test-${Date.now()}.txt`);
+            testFilePath = join(tmpdir(), `appiumdesktop-test-${Date.now()}.txt`);
             writeFileSync(testFilePath, 'test content');
         });
 
@@ -42,7 +42,7 @@ describe('windows: deleteFile and deleteFolder', () => {
         });
 
         it('throws when the file does not exist', async () => {
-            const nonExistent = join(tmpdir(), 'novawindows-nonexistent-xyz.txt');
+            const nonExistent = join(tmpdir(), 'appiumdesktop-nonexistent-xyz.txt');
             await expect(
                 driver.executeScript('windows: deleteFile', [{ path: nonExistent }])
             ).rejects.toThrow();
@@ -59,7 +59,7 @@ describe('windows: deleteFile and deleteFolder', () => {
         let testDirPath: string;
 
         beforeEach(() => {
-            testDirPath = join(tmpdir(), `novawindows-dir-${Date.now()}`);
+            testDirPath = join(tmpdir(), `appiumdesktop-dir-${Date.now()}`);
         });
 
         afterEach(() => {
@@ -89,7 +89,7 @@ describe('windows: deleteFile and deleteFolder', () => {
         });
 
         it('throws when the folder does not exist', async () => {
-            const nonExistent = join(tmpdir(), 'novawindows-nonexistent-dir-xyz');
+            const nonExistent = join(tmpdir(), 'appiumdesktop-nonexistent-dir-xyz');
             await expect(
                 driver.executeScript('windows: deleteFolder', [{ path: nonExistent }])
             ).rejects.toThrow();

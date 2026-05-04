@@ -45,6 +45,52 @@ async function buildCoordMapping(driver: Browser, ssW: number, ssH: number): Pro
 
 export function registerVisionTools(server: McpServer, session: AppiumSession): void {
     server.registerTool(
+        'analyze_screen',
+        {
+            description:
+                'Take a screenshot and return it to the calling agent for visual analysis — no external API key needed. ' +
+                'Automatically computes a DPI-aware coordinate mapping: when the agent identifies an element, ' +
+                'it receives the conversion formula (img_x/img_y → screen_x/screen_y) so returned coordinates ' +
+                'are ready to pass directly to click tools.',
+            inputSchema: {
+                prompt: z.string().min(1).describe(
+                    'Question or instruction about the screenshot. ' +
+                    'For coordinate queries (e.g. "find the Submit button") the agent will return DPI-corrected screen coordinates.'
+                ),
+            },
+            annotations: { readOnlyHint: true },
+        },
+        async ({ prompt }) => {
+            try {
+                const driver = session.getDriver();
+                const base64 = await driver.takeScreenshot() as string;
+                const { width: ssW, height: ssH } = getPngDimensions(base64);
+                const mapping = await buildCoordMapping(driver, ssW, ssH);
+
+                let instruction = `${prompt}\n\nThe image is ${ssW}×${ssH} pixels. When identifying coordinates, reason in the full ${ssW}×${ssH} pixel space — not a scaled-down view.`;
+                if (mapping) {
+                    instruction +=
+                        `\n\nIf your answer includes screen coordinates:\n` +
+                        `  Step 1 — Find the element center in the image: img_x (0–${ssW}), img_y (0–${ssH}).\n` +
+                        `  Step 2 — Convert to screen coordinates:\n` +
+                        `    screen_x = round(${mapping.offsetX} + img_x × ${mapping.scaleX})\n` +
+                        `    screen_y = round(${mapping.offsetY} + img_y × ${mapping.scaleY})\n` +
+                        `  Report img_x, img_y, screen_x, and screen_y.`;
+                }
+
+                return {
+                    content: [
+                        { type: 'image' as const, data: base64, mimeType: 'image/png' as const },
+                        { type: 'text' as const, text: instruction },
+                    ],
+                };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
         'find_by_vision',
         {
             description:

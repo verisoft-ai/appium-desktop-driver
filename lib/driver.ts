@@ -171,7 +171,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
         }
 
         try {
-            this.log.debug('Creating NovaWindows driver session...');
+            this.log.debug('Creating AppiumDesktop driver session...');
             const [sessionId, caps] = await super.createSession(jwpCaps, reqCaps, w3cCaps, driverData);
             if (caps.smoothPointerMove) {
                 assertSupportedEasingFunction(caps.smoothPointerMove);
@@ -216,7 +216,7 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
     }
 
     override async deleteSession(sessionId?: string | null | undefined): Promise<void> {
-        this.log.debug('Deleting NovaWindows driver session...');
+        this.log.debug('Deleting AppiumDesktop driver session...');
 
         if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
             try {

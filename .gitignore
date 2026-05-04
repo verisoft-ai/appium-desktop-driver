@@ -138,7 +138,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# NovaWindows driver build directory
+# AppiumDesktop driver build directory
 build/
 
 # Ignore package-lock.json in favour of npm-shrinkwrap.json for npm publishing

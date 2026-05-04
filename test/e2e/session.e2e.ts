@@ -109,7 +109,7 @@ describe('Session creation and capabilities', () => {
     });
 
     it('creates a session with prerun script that executes before app launch', async () => {
-        const markerPath = join(tmpdir(), `novawindows-session-prerun-${Date.now()}.txt`);
+        const markerPath = join(tmpdir(), `appiumdesktop-session-prerun-${Date.now()}.txt`);
         const driver = await createCalculatorSession({
             'appium:prerun': {
                 script: `New-Item -ItemType File -Path "${markerPath}" -Force | Out-Null`,
@@ -124,7 +124,7 @@ describe('Session creation and capabilities', () => {
     });
 
     it('creates a session with postrun script that executes after session deletion', async () => {
-        const markerPath = join(tmpdir(), `novawindows-session-postrun-${Date.now()}.txt`);
+        const markerPath = join(tmpdir(), `appiumdesktop-session-postrun-${Date.now()}.txt`);
         const driver = await createCalculatorSession({
             'appium:postrun': {
                 script: `New-Item -ItemType File -Path "${markerPath}" -Force | Out-Null`,
@@ -137,11 +137,11 @@ describe('Session creation and capabilities', () => {
     });
 
     it('passes appEnvironment variables into the PowerShell session', async () => {
-        const markerPath = join(tmpdir(), `novawindows-session-env-${Date.now()}.txt`);
+        const markerPath = join(tmpdir(), `appiumdesktop-session-env-${Date.now()}.txt`);
         const driver = await createRootSession({
-            'appium:appEnvironment': { NOVA_TEST_VAR: 'hello_from_env' },
+            'appium:appEnvironment': { APPPIUM_TEST_VAR: 'hello_from_env' },
             'appium:prerun': {
-                script: `[System.IO.File]::WriteAllText('${markerPath}', $env:NOVA_TEST_VAR)`,
+                script: `[System.IO.File]::WriteAllText('${markerPath}', $env:APPPIUM_TEST_VAR)`,
             },
         });
         try {

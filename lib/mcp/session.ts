@@ -1,6 +1,25 @@
+import * as http from 'node:http';
 import { remote } from 'webdriverio';
 import type { Browser } from 'webdriverio';
 import type { McpConfig } from './config.js';
+
+function checkAppiumReachable(host: string, port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const req = http.get(
+            { hostname: host, port, path: '/status', timeout: 3000 },
+            (res) => {
+                let body = '';
+                res.on('data', (chunk) => { body += chunk; });
+                res.on('end', () => {
+                    try { resolve(JSON.parse(body)?.value?.ready === true); }
+                    catch { resolve(false); }
+                });
+            }
+        );
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+}
 
 /** Session parameters provided by the agent via the create_session tool. */
 export interface SessionParams {
@@ -23,6 +42,11 @@ export class AppiumSession {
     async create(params: SessionParams): Promise<void> {
         if (this.driver) {
             throw new Error('A session is already active. Call delete_session first.');
+        }
+
+        const { appiumHost: host, appiumPort: port } = this.appiumConfig;
+        if (!await checkAppiumReachable(host, port)) {
+            throw new Error(`Appium not running on ${host}:${port}. Start it first with: appium --port ${port}`);
         }
 
         process.stderr.write(`[MCP] Creating Appium session for app: ${params.app}\n`);

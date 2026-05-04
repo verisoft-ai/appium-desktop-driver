@@ -98,14 +98,14 @@ describe('windows: screen recording', () => {
         });
 
         it('rejects outputPath with a non-mp4 extension with an explanatory error', async () => {
-            const outputPath = join(tmpdir(), `novawindows-test-recording-${Date.now()}.avi`);
+            const outputPath = join(tmpdir(), `appiumdesktop-test-recording-${Date.now()}.avi`);
             await expect(
                 driver.executeScript('windows: startRecordingScreen', [{ outputPath }])
             ).rejects.toThrow(/\.mp4/);
         });
 
         it('recording is saved to the specified outputPath', async () => {
-            const outputPath = join(tmpdir(), `novawindows-test-recording-${Date.now()}.mp4`);
+            const outputPath = join(tmpdir(), `appiumdesktop-test-recording-${Date.now()}.mp4`);
             try {
                 await driver.executeScript('windows: startRecordingScreen', [{ outputPath }]);
                 await resetCalculator(driver);

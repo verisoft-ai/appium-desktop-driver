@@ -69,6 +69,12 @@ export async function startPowerShellSession(this: AppiumDesktopDriver): Promise
         await this.sendPowerShellCommand(INIT_ROOT_ELEMENT);
     }
 
+    if (this.caps.webviewEnabled && this.webviewDevtoolsPort) {
+        const args = `--remote-debugging-port=${this.webviewDevtoolsPort}`;
+        await this.sendPowerShellCommand(`$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '${args}'`);
+        this.log.info(`WebView2: set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=${args}`);
+    }
+
     if (this.caps.app && this.caps.app.toLowerCase() !== 'none' && this.caps.app.toLowerCase() !== 'root') {
         this.log.info(`Application path specified in capabilities: ${this.caps.app}`);
         const envVarsSet: Set<string> = new Set();

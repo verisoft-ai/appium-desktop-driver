@@ -1,12 +1,22 @@
 import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { system } from 'appium/support';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { Chromedriver } from 'appium-chromedriver';
 import type { ScreenRecorder } from './commands/screen-recorder';
 import commands from './commands';
 import {
     AppiumDesktopDriverConstraints,
     UI_AUTOMATION_DRIVER_CONSTRAINTS
 } from './constraints';
+import type {
+    DefaultCreateSessionResult,
+    DriverData,
+    Element,
+    InitialOpts,
+    StringRecord,
+    W3CDriverCaps,
+    RouteMatcher
+} from '@appium/types';
 import {
     AutomationElement,
     Condition,
@@ -22,18 +32,11 @@ import {
 import {
     assertIntegerCap,
     assertSupportedEasingFunction,
+    findFreePort,
 } from './util';
 import { setDpiAwareness } from './winapi/user32';
 import { xpathToElIdOrIds } from './xpath';
 
-import type {
-    DefaultCreateSessionResult,
-    DriverData,
-    Element,
-    InitialOpts,
-    StringRecord,
-    W3CDriverCaps
-} from '@appium/types';
 
 type W3CAppiumDesktopDriverCaps = W3CDriverCaps<AppiumDesktopDriverConstraints>;
 type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<AppiumDesktopDriverConstraints>;
@@ -45,6 +48,22 @@ type KeyboardState = {
     meta: boolean,
     alt: boolean,
 }
+
+const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
+    ['GET', new RegExp('^/session/[^/]+/appium')],
+    ['GET', new RegExp('^/session/[^/]+/context')],
+    ['GET', new RegExp('^/session/[^/]+/element/[^/]+/rect')],
+    ['GET', new RegExp('^/session/[^/]+/orientation')],
+    ['POST', new RegExp('^/session/[^/]+/appium')],
+    ['POST', new RegExp('^/session/[^/]+/context')],
+    ['POST', new RegExp('^/session/[^/]+/orientation')],
+    ['POST', new RegExp('^/session/[^/]+/execute$')],
+    ['POST', new RegExp('^/session/[^/]+/execute/sync')],
+    ['GET', new RegExp('^/session/[^/]+/log/types$')],
+    ['POST', new RegExp('^/session/[^/]+/log$')],
+    ['GET', new RegExp('^/session/[^/]+/se/log/types$')],
+    ['POST', new RegExp('^/session/[^/]+/se/log$')],
+];
 
 const LOCATION_STRATEGIES = Object.freeze([
     'id',
@@ -71,6 +90,12 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
     };
     mouseButtonsDown: Set<number> = new Set();
     _screenRecorder: ScreenRecorder | null = null;
+    chromedriver: Chromedriver | null = null;
+    proxyReqRes: ((...args: any[]) => any) | null = null;
+    proxyCommand: ((...args: any[]) => any) | null = null;
+    jwpProxyActive: boolean = false;
+    currentContext: string | null = null;
+    webviewDevtoolsPort: number | null = null;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
         super(opts, shouldValidateCaps);
@@ -83,6 +108,18 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
         for (const key in commands) { // TODO: create a decorator that will do that for the class
             (this as any)[key] = commands[key].bind(this);
         }
+    }
+
+    override canProxy(): boolean {
+        return true;
+    }
+
+    override proxyActive(): boolean {
+        return this.jwpProxyActive;
+    }
+
+    override getProxyAvoidList(): RouteMatcher[] {
+        return this.jwpProxyActive && this.chromedriver ? CHROMEDRIVER_NO_PROXY : [];
     }
 
     override async findElement(strategy: string, selector: string): Promise<Element> {
@@ -199,6 +236,13 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
                 this.caps.shouldCloseApp = true; // set default value
             }
 
+            if (caps.webviewEnabled) {
+                this.webviewDevtoolsPort = caps.webviewDevtoolsPort
+                    ? Number(caps.webviewDevtoolsPort)
+                    : await findFreePort(10900, 11000);
+                this.log.debug(`WebView2 enabled — CDP port ${this.webviewDevtoolsPort}`);
+            }
+
             await this.startPowerShellSession();
 
             if (this.caps.prerun) {
@@ -217,6 +261,11 @@ export class AppiumDesktopDriver extends BaseDriver<AppiumDesktopDriverConstrain
 
     override async deleteSession(sessionId?: string | null | undefined): Promise<void> {
         this.log.debug('Deleting AppiumDesktop driver session...');
+
+        if (this.chromedriver) {
+            try { await this.chromedriver.stop(); } catch { /* noop */ }
+            this.chromedriver = null;
+        }
 
         if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
             try {

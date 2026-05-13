@@ -143,3 +143,10 @@ build/
 
 # Ignore package-lock.json in favour of npm-shrinkwrap.json for npm publishing
 package-lock.json*
+
+# .NET fixture build output
+test/fixtures/**/bin/
+test/fixtures/**/obj/
+
+# EdgeDriver binary (downloaded at runtime, platform/version-specific)
+edgedriver/

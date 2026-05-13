@@ -54,8 +54,27 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     'ms:windowSwitchInterval': {
         isNumber: true,
     },
+    webviewEnabled: {
+        isBoolean: true,
+    },
+    webviewDevtoolsPort: {
+        isNumber: true,
+    },
+    chromedriverCdnUrl: {
+        isString: true,
+    },
+    edgedriverCdnUrl: {
+        isString: true,
+    },
+    chromedriverExecutablePath: {
+        isString: true,
+    },
+    edgedriverExecutablePath: {
+        isString: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
 export type AppiumDesktopDriverConstraints = typeof UI_AUTOMATION_DRIVER_CONSTRAINTS;
+export type DesktopDriverConstraints = AppiumDesktopDriverConstraints;

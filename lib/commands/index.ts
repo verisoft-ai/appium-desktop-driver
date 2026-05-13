@@ -6,8 +6,10 @@ import * as device from './device';
 import * as system from './system';
 import * as app from './app';
 import * as vision from './vision';
+import * as contexts from './contexts';
 
 const commands = {
+    ...contexts,
     ...actions,
     ...powershell,
     ...element,

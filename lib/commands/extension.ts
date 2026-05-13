@@ -1,4 +1,4 @@
-import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { PROTOCOLS, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { Element, Rect } from '@appium/types';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
@@ -123,9 +123,32 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
         return await this[EXTENSION_COMMANDS[script]](...args);
     }
 
+    if (script === 'mobile: getContexts' || script === 'mobile:getContexts') {
+        const rawArg = Array.isArray(args[0]) ? args[0][0] : args[0];
+        const params = rawArg ?? {};
+        const details = await this.getWebViewDetails(params.waitForWebviewMs);
+        const result: Array<{ id: string; title?: string; url?: string }> = [
+            { id: 'NATIVE_APP' },
+            ...(details.pages?.map((page) => ({
+                id: `WEBVIEW_${page.id}`,
+                title: page.title || undefined,
+                url: page.url || undefined,
+            })) ?? []),
+        ];
+        return result;
+    }
+
     if (script === 'powerShell') {
         this.assertFeatureEnabled(POWER_SHELL_FEATURE);
-        return await this.executePowerShellScript(args[0]);
+        const scriptArg = Array.isArray(args[0]) ? args[0][0] : args[0];
+        return await this.executePowerShellScript(scriptArg);
+    }
+
+    if (this.chromedriver && this.proxyActive()) {
+        const endpoint = this.chromedriver.jwproxy.downstreamProtocol === PROTOCOLS.MJSONWP
+            ? '/execute'
+            : '/execute/sync';
+        return await this.chromedriver.jwproxy.command(endpoint, 'POST', { script, args });
     }
 
     if (script === 'return window.name') {

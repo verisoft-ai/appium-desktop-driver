@@ -12,6 +12,11 @@ vi.mock('../../lib/util', async (importOriginal) => {
     };
 });
 
-vi.mock('node:path', () => ({
-    normalize: (p: string) => p,
-}));
+vi.mock('node:path', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:path')>();
+    return {
+        ...actual,
+        default: actual,
+        normalize: (p: string) => p,
+    };
+});

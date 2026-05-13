@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import path from 'node:path';
 import type { Browser } from 'webdriverio';
 import { remote } from 'webdriverio';
 
@@ -11,6 +12,10 @@ export const APPIUM_SERVER = {
 export const CALCULATOR_APP_ID = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App';
 export const NOTEPAD_APP_PATH = 'C:\\Windows\\notepad.exe';
 export const TODO_APP_ID = 'Microsoft.Todos_8wekyb3d8bbwe!App';
+export const WEBVIEW2_APP_PATH = path.resolve(
+    import.meta.dirname,
+    '../../fixtures/webview2-app/bin/Release/net8.0-windows/WebView2TestApp.exe'
+);
 
 type Caps = WebdriverIO.Capabilities;
 
@@ -70,9 +75,26 @@ export async function createRootSession(extraCaps?: Record<string, unknown>): Pr
     return driver;
 }
 
+export async function createWebView2Session(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': WEBVIEW2_APP_PATH,
+            'appium:webviewEnabled': true,
+            'appium:shouldCloseApp': true,
+            'appium:ms:waitForAppLaunch': 3,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 5000 });
+    return driver;
+}
+
 /** Kill any Calculator, Notepad or To-Do processes left open by a previous test. */
 export function closeAllTestApps(): void {
-    for (const name of ['Calculator.exe', 'CalculatorApp.exe', 'notepad.exe', 'Microsoft.Todos.exe']) {
+    for (const name of ['Calculator.exe', 'CalculatorApp.exe', 'notepad.exe', 'Microsoft.Todos.exe', 'WebView2TestApp.exe']) {
         try {
             execSync(`taskkill /F /IM "${name}"`, { stdio: 'ignore' });
         } catch {

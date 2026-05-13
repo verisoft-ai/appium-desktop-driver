@@ -88,4 +88,84 @@ describe('execute (command router)', () => {
             extension.execute.call(driver, 'unknownScript', [])
         ).rejects.toThrow('Method is not implemented');
     });
+
+    it('routes mobile:getContexts to getWebViewDetails', async () => {
+        const mockDetails = {
+            info: { Browser: 'Chrome/120.0.0.0' },
+            pages: [{ id: 'page1', title: 'Test', url: 'https://example.com', webSocketDebuggerUrl: 'ws://localhost:10900/devtools/page/page1', description: '', devtoolsFrontendUrl: '', faviconUrl: '', type: 'page' }],
+        };
+        driver.getWebViewDetails = vi.fn().mockResolvedValue(mockDetails);
+
+        const result = await extension.execute.call(driver, 'mobile:getContexts', [{}]) as any[];
+        expect(driver.getWebViewDetails).toHaveBeenCalledWith(undefined);
+        expect(result[0]).toEqual({ id: 'NATIVE_APP' });
+        expect(result[1]).toMatchObject({ id: 'WEBVIEW_page1', title: 'Test', url: 'https://example.com' });
+    });
+
+    it('routes mobile: getContexts (space variant) the same way', async () => {
+        driver.getWebViewDetails = vi.fn().mockResolvedValue({ info: undefined, pages: undefined });
+        const result = await extension.execute.call(driver, 'mobile: getContexts', [{}]) as any[];
+        expect(result).toEqual([{ id: 'NATIVE_APP' }]);
+    });
+
+    it('mobile:getContexts unwraps WDIO-spread array args', async () => {
+        driver.getWebViewDetails = vi.fn().mockResolvedValue({ info: undefined, pages: undefined });
+        await extension.execute.call(driver, 'mobile:getContexts', [[{ waitForWebviewMs: 500 }]]);
+        expect(driver.getWebViewDetails).toHaveBeenCalledWith(500);
+    });
+
+    it('proxies arbitrary script to chromedriver jwproxy when jwpProxyActive', async () => {
+        const mockCommand = vi.fn().mockResolvedValue('proxy-result');
+        driver.chromedriver = {
+            jwproxy: {
+                downstreamProtocol: 'W3C',
+                command: mockCommand,
+            },
+        };
+        driver.jwpProxyActive = true;
+        driver.proxyActive = vi.fn().mockReturnValue(true);
+
+        const result = await extension.execute.call(driver, 'return document.title', []);
+        expect(mockCommand).toHaveBeenCalledWith('/execute/sync', 'POST', { script: 'return document.title', args: [] });
+        expect(result).toBe('proxy-result');
+    });
+
+    it('proxy uses /execute endpoint for MJSONWP protocol', async () => {
+        const mockCommand = vi.fn().mockResolvedValue(undefined);
+        driver.chromedriver = {
+            jwproxy: {
+                downstreamProtocol: 'MJSONWP',
+                command: mockCommand,
+            },
+        };
+        driver.jwpProxyActive = true;
+        driver.proxyActive = vi.fn().mockReturnValue(true);
+
+        await extension.execute.call(driver, 'return 1', []);
+        expect(mockCommand).toHaveBeenCalledWith('/execute', 'POST', expect.anything());
+    });
+
+    it('powerShell unwraps WDIO-spread array args', async () => {
+        driver.assertFeatureEnabled = vi.fn();
+        driver.caps = {};
+        driver.sendPowerShellCommand.mockResolvedValue('hello');
+        await extension.execute.call(driver, 'powerShell', [[{ script: 'Write-Output "hello"' }]]);
+        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
+            expect.stringContaining('V3JpdGUtT3V0cHV0ICJoZWxsbyI')
+        );
+    });
+
+    it('powerShell runs before proxy passthrough even when jwpProxyActive', async () => {
+        const mockCommand = vi.fn();
+        driver.chromedriver = { jwproxy: { downstreamProtocol: 'W3C', command: mockCommand } };
+        driver.jwpProxyActive = true;
+        driver.proxyActive = vi.fn().mockReturnValue(true);
+        driver.assertFeatureEnabled = vi.fn();
+        driver.caps = {};
+        driver.sendPowerShellCommand.mockResolvedValue('output');
+
+        await extension.execute.call(driver, 'powerShell', [{ script: 'Get-Date' }]);
+        expect(mockCommand).not.toHaveBeenCalled();
+        expect(driver.sendPowerShellCommand).toHaveBeenCalled();
+    });
 });

@@ -266,6 +266,9 @@ export async function setWindowRect(
     }
 
     const el = new FoundAutomationElement(elementId);
+    // TransformPattern.Move/Resize fail when window is maximized or minimized;
+    // restore to normal state first so CanMove/CanResize are true.
+    await this.sendPowerShellCommand(el.buildRestoreCommand());
     if (x !== null && y !== null) {
         await this.sendPowerShellCommand(el.buildMoveCommand(x, y));
     }

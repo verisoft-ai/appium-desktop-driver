@@ -132,12 +132,16 @@ describe('windows: getMonitors extension command', () => {
             const primary = monitors.find((m: any) => m.primary);
             const windowRect = await calc.getWindowRect();
 
+            // Maximized windows on Windows report rect with ~8 px negative inset (invisible
+            // drop-shadow border), so allow a small tolerance.
+            const TOLERANCE = 16;
+
             // Calculator window should fall within primary monitor bounds
             // (it was launched without any monitor preference, so it opens on primary)
-            expect(windowRect.x).toBeGreaterThanOrEqual(primary.bounds.x);
-            expect(windowRect.y).toBeGreaterThanOrEqual(primary.bounds.y);
-            expect(windowRect.x + windowRect.width).toBeLessThanOrEqual(primary.bounds.x + primary.bounds.width);
-            expect(windowRect.y + windowRect.height).toBeLessThanOrEqual(primary.bounds.y + primary.bounds.height);
+            expect(windowRect.x).toBeGreaterThanOrEqual(primary.bounds.x - TOLERANCE);
+            expect(windowRect.y).toBeGreaterThanOrEqual(primary.bounds.y - TOLERANCE);
+            expect(windowRect.x + windowRect.width).toBeLessThanOrEqual(primary.bounds.x + primary.bounds.width + TOLERANCE);
+            expect(windowRect.y + windowRect.height).toBeLessThanOrEqual(primary.bounds.y + primary.bounds.height + TOLERANCE);
         });
     });
 });

@@ -1,5 +1,7 @@
-# Claude Code local settings
-.claude/
+# C# build artifacts
+csharp/**/bin/
+csharp/**/obj/
+native/
 
 # Logs
 logs
@@ -148,5 +150,7 @@ package-lock.json*
 test/fixtures/**/bin/
 test/fixtures/**/obj/
 
-# EdgeDriver binary (downloaded at runtime, platform/version-specific)
+# Ignore downloaded chromedriver/edgedriver/ffmpeg binaries
+chromedriver/
 edgedriver/
+ffmpeg/

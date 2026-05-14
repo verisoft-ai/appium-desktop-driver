@@ -12,19 +12,9 @@ export default defineConfig(
     files: ['test/e2e/**/*.ts'],
   },
   {
+    files: ['scripts/**/*.js'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'import/no-unresolved': ['error', { ignore: ['^@modelcontextprotocol/sdk/'] }],
-    },
-  },
-  {
-    files: ['docs/**/*.js'],
-    languageOptions: {
-      globals: {
-        document: 'readonly',
-        navigator: 'readonly',
-        setTimeout: 'readonly',
-      },
+      'no-console': 'off',
     },
   },
 );

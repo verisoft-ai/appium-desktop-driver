@@ -292,6 +292,7 @@ const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int
 const SetProcessDPIAware = user32.func(/* c */ `bool __stdcall SetProcessDPIAware()`) as () => boolean;
 const GetDpiForSystem = user32.func(/* c */ `unsigned int __stdcall GetDpiForSystem()`) as () => number;
 const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (lpPoint: Point) => boolean;
+const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (x: number, y: number) => boolean;
 const EnumDisplaySettingsA = user32.func(/* c */ `bool __stdcall EnumDisplaySettingsA(str lpszDeviceName, uint iModeNum, _Out_ DEVMODEA *lpDevMode)`) as (lpszDeviceName: string | null, iModeNum: number, lpDevMode: Buffer) => boolean;
 // end TODO
 
@@ -420,56 +421,28 @@ function makeMouseUpEvents(button: number): MouseEvent[] {
     return [mouseEvent];
 }
 
-function makeMouseMoveEvents(args: {
-        /** The absolute position of the mouse, or the amount of motion since the last mouse event was generated, depending on the value of the dwFlags member. Absolute data is specified as the x coordinate of the mouse; relative data is specified as the number of pixels moved. */
-        x: number,
-        /** The absolute position of the mouse, or the amount of motion since the last mouse event was generated, depending on the value of the dwFlags member. Absolute data is specified as the y coordinate of the mouse; relative data is specified as the number of pixels moved. */
-        y: number,
-        /** Set to true if the event is a mouse wheel move, and false if it's a mouse move. */
-        wheel: boolean,
-        /** Set to true if the event is a mouse move with relative coordinates. This argument is ignored for mouse wheel move. */
-        relative?: boolean,
-    }
-): MouseEvent[] {
-    const { x, y, wheel, relative } = args;
+// Builds the SendInput payload for a wheel scroll. Cursor movement no longer
+// goes through this function — `setCursorAbsolute` (SetCursorPos) handles all
+// positioning; an earlier MOUSEEVENTF_ABSOLUTE|VIRTUALDESK path was removed
+// because SetCursorPos is simpler and DPI-agnostic.
+function makeMouseWheelEvents(x: number, y: number): MouseEvent[] {
+    const mouseEvents: MouseEvent[] = [];
 
-    if (wheel) {
-        const mouseEvents: MouseEvent[] = [];
-
-        if (x !== 0) {
-            const horizontalScrollEvent = makeEmptyMouseEvent();
-            horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
-            horizontalScrollEvent.u.mi.mouseData = x;
-            mouseEvents.push(horizontalScrollEvent);
-        }
-
-        if (y !== 0) {
-            const verticalScrollEvent = makeEmptyMouseEvent();
-            verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
-            verticalScrollEvent.u.mi.mouseData = y;
-            mouseEvents.push(verticalScrollEvent);
-        }
-
-        return mouseEvents;
+    if (x !== 0) {
+        const horizontalScrollEvent = makeEmptyMouseEvent();
+        horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
+        horizontalScrollEvent.u.mi.mouseData = x;
+        mouseEvents.push(horizontalScrollEvent);
     }
 
-    const mouseEvent: MouseEvent = makeEmptyMouseEvent();
-
-    if (relative) {
-        mouseEvent.u.mi.dx = Math.trunc(x);
-        mouseEvent.u.mi.dy = Math.trunc(y);
-        mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MOVE;
-    } else {
-        const virt = getVirtualScreenBounds();
-        mouseEvent.u.mi.dx = Math.trunc(((x - virt.left) * UINT16_MAX) / virt.width);
-        mouseEvent.u.mi.dy = Math.trunc(((y - virt.top) * UINT16_MAX) / virt.height);
-        mouseEvent.u.mi.dwFlags =
-            MouseEventFlags.MOUSEEVENTF_MOVE |
-            MouseEventFlags.MOUSEEVENTF_ABSOLUTE |
-            MouseEventFlags.MOUSEEVENTF_VIRTUALDESK;
+    if (y !== 0) {
+        const verticalScrollEvent = makeEmptyMouseEvent();
+        verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
+        verticalScrollEvent.u.mi.mouseData = y;
+        mouseEvents.push(verticalScrollEvent);
     }
 
-    return [mouseEvent];
+    return mouseEvents;
 }
 
 function charToKeyboardEvents(char: string, down: boolean, forceUnicode: boolean = false): KeyboardEvent[] {
@@ -646,6 +619,22 @@ function sendMouseButtonInput(button: number, down: boolean) {
     assertSuccessSendInputReturnCode(returnCode);
 }
 
+function setCursorAbsolute(x: number, y: number): void {
+    const ix = Math.trunc(x);
+    const iy = Math.trunc(y);
+    SetCursorPos(ix, iy);
+    // Known Windows quirk — on a multi-monitor setup where the monitors have
+    // different sizes (or DPI scale factors), the first SetCursorPos call
+    // after the cursor crosses from one monitor to another can land at x=0
+    // on the target monitor instead of the requested coord. Verify via
+    // GetCursorPos and retry once. Credit: FlaUI.Core/Input/Mouse.cs Position
+    // setter — see https://stackoverflow.com/questions/58753372
+    const verify: Point = { x: 0, y: 0 };
+    if (GetCursorPos(verify) && (verify.x !== ix || verify.y !== iy)) {
+        SetCursorPos(ix, iy);
+    }
+}
+
 async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string }): Promise<void> {
     const { duration } = args;
     let { x, y, easingFunction, relative } = args;
@@ -658,17 +647,29 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
         y: 0,
     } satisfies Point;
 
-    if (GetCursorPos(cursorPosition) && iterations > 1) {
-        if (relative) {
+    // Cursor movement goes through SetCursorPos rather than
+    // SendInput(MOUSEEVENTF_MOVE|MOUSEEVENTF_ABSOLUTE). SendInput in absolute
+    // mode normalizes coords into [0, 65535] and — without
+    // MOUSEEVENTF_VIRTUALDESK — clips to the primary monitor. Even with
+    // VIRTUALDESK, legacy-DPI-aware processes hit edge cases when monitors
+    // have different scale factors. SetCursorPos takes raw physical pixel
+    // coordinates across the entire virtual screen and Just Works on
+    // multi-monitor setups, which is what FlaUI uses (Mouse.cs:118-139).
+    // Kept SendInput only for button events (mouseDown / mouseUp).
+    const hasCurrentCursorPos = GetCursorPos(cursorPosition);
+    if (relative) {
+        if (hasCurrentCursorPos) {
             x += cursorPosition.x;
             y += cursorPosition.y;
+            relative = false;
+        } else {
+            // Without a current cursor position we can't turn a relative move
+            // into an absolute SetCursorPos. Fall back to single teleport.
+            easingFunction = undefined;
         }
+    }
 
-        // setting relative to false since coordinates are now absolute
-        relative = false;
-    } else {
-        // ignore easing function of it can't retrieve current cursor position
-        // this is preventing the method from failing
+    if (!hasCurrentCursorPos || iterations <= 1) {
         easingFunction = undefined;
     }
 
@@ -692,24 +693,18 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
                 const interpolatedX = cursorPosition.x + (x - cursorPosition.x) * easedProgress;
                 const interpolatedY = cursorPosition.y + (y - cursorPosition.y) * easedProgress;
 
-                const events = makeMouseMoveEvents({ x: interpolatedX, y: interpolatedY, wheel: false });
-                const returnCode = SendInput(events.length, events, sizeof(INPUT));
-
-                assertSuccessSendInputReturnCode(returnCode);
+                setCursorAbsolute(interpolatedX, interpolatedY);
             }, i * updateInterval);
         }
     } else {
-        const events = makeMouseMoveEvents({ x, y, wheel: false });
-        const returnCode = SendInput(events.length, events, sizeof(INPUT));
-
-        assertSuccessSendInputReturnCode(returnCode);
+        setCursorAbsolute(x, y);
     }
 
     await sleep(duration);
 }
 
 function sendMouseScrollInput(x: number, y: number) {
-    const events = makeMouseMoveEvents({ x, y, wheel: true });
+    const events = makeMouseWheelEvents(x, y);
     const returnCode = SendInput(events.length, events, sizeof(INPUT));
 
     assertSuccessSendInputReturnCode(returnCode);
@@ -729,6 +724,13 @@ export function getResolutionScalingFactor(): number {
     getResolutionScalingFactor = () => scalingFactor;
 
     return scalingFactor;
+}
+
+function getScreenResolution(): [number, number] {
+    return [
+        GetSystemMetrics(SystemMetric.SM_CXSCREEN),
+        GetSystemMetrics(SystemMetric.SM_CYSCREEN),
+    ];
 }
 
 function getRefreshRate(): number {
@@ -751,36 +753,6 @@ function getRefreshRate(): number {
     return refreshRate;
 }
 
-function getScreenResolution(): [number, number] {
-    const width = GetSystemMetrics(SystemMetric.SM_CXSCREEN);
-    const height = GetSystemMetrics(SystemMetric.SM_CYSCREEN);
-
-    const resolution = [width, height] satisfies ReturnType<typeof getScreenResolution>;
-
-    const nonMemoizedMethod = getScreenResolution;
-    const currentTime = new Date().getTime();
-
-    // @ts-expect-error memoizing the function to prevent repeated calls that might crash Node.js
-    getScreenResolution = () => {
-        if (new Date().getTime() - currentTime > 1000) {
-            // @ts-expect-error reset memoization after 1 second
-            getScreenResolution = nonMemoizedMethod;
-        }
-        return resolution;
-    };
-
-    return resolution;
-}
-
-export function getVirtualScreenBounds(): { left: number; top: number; width: number; height: number } {
-    return {
-        left: GetSystemMetrics(SystemMetric.SM_XVIRTUALSCREEN),
-        top: GetSystemMetrics(SystemMetric.SM_YVIRTUALSCREEN),
-        width: GetSystemMetrics(SystemMetric.SM_CXVIRTUALSCREEN),
-        height: GetSystemMetrics(SystemMetric.SM_CYVIRTUALSCREEN),
-    };
-}
-
 export function keyDown(char: string, forceUnicode: boolean = false): void {
     sendKeyInput(char, true, forceUnicode);
 }
@@ -797,8 +769,22 @@ export function mouseScroll(x: number, y: number): void {
     sendMouseScrollInput(x, y);
 }
 
-export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {
+// `duration = 0` → single SetCursorPos teleport (fastest; the default path).
+// Callers that need interpolated cursor movement (WPF ContextMenu / MenuItem
+// hover tracking — see FlaUI.Core/Input/Mouse.cs:118-139) pass an explicit
+// duration; the path is then walked in per-frame SetCursorPos steps.
+// `easingFunction` defaults to `'linear'` so callers get a straight
+// interpolated path without also needing to pass an easing curve.
+export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction: string = 'linear'): Promise<void> {
     await sendMouseMoveInput({x, y, relative: false, duration, easingFunction});
+}
+
+export function getCursorPos(): { x: number; y: number } | null {
+    const point: Point = { x: 0, y: 0 };
+    if (GetCursorPos(point)) {
+        return { x: point.x, y: point.y };
+    }
+    return null;
 }
 
 export function mouseDown(button: number = 0): void {
@@ -810,8 +796,8 @@ export function mouseUp(button: number = 0): void {
 }
 
 export function getDisplayOrientation(): Orientation {
-    const resolution = getScreenResolution();
-    return resolution[0] > resolution[1] ? 'LANDSCAPE' : 'PORTRAIT';
+    const [width, height] = getScreenResolution();
+    return width > height ? 'LANDSCAPE' : 'PORTRAIT';
 }
 
 export function setDpiAwareness() {

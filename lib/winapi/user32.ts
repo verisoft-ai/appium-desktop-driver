@@ -173,7 +173,6 @@ const easingFunctions = Object.freeze({
 } as const);
 
 const UINT32_MAX = 0xFFFFFFFF;
-const UINT16_MAX = 0xFFFF;
 
 const user32 = load('user32.dll');
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { propertyCondition, andCondition, orCondition } from '../server/conditions';

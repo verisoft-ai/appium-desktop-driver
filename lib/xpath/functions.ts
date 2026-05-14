@@ -170,7 +170,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: XPathEl
             const elIds = await sendCommand('findElements', {
                 scope: 'children',
                 condition: { type: 'true' },
-                contextElementId: contextId,
+                contextElementId: rootId,
             }) as string[];
             const lastElementIndex = (elIds ?? []).length;
             return name === LAST ? [lastElementIndex as T] : Array.from({ length: lastElementIndex }, () => 0 as T);
@@ -188,7 +188,9 @@ export async function handleFunctionCall<T>(name: FunctionName, context: XPathEl
             if (!isXPathElement(element)) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be element'));
             }
-            const elId = element.type === 'found' ? element.elementId! : await sendCommand('saveRootElementToTable', {}) as string;
+            const elId = (element.type === 'found' && element.elementId)
+                ? element.elementId
+                : await sendCommand('saveRootElementToTable', {}) as string;
             const result = await sendCommand('getTagName', { elementId: elId }) as string;
             return [result as T];
         }

@@ -110,7 +110,7 @@ function foundElement(elementId: string): XPathElement {
 }
 
 function getContextElementId(el: XPathElement): string | null {
-    return el.type === 'found' ? el.elementId! : null;
+    return el.type === 'found' && el.elementId ? el.elementId : null;
 }
 
 export async function xpathToElIdOrIds(selector: string, mult: boolean, context: string | undefined, sendCommand: SendCommandFn): Promise<Element | Element[]> {
@@ -152,7 +152,7 @@ export async function xpathToElIdOrIds(selector: string, mult: boolean, context:
     const foundElements = await processExprNode<XPathElement>(parsedXPath, contextEl, sendCommand);
     const els = foundElements
         .filter((el): el is XPathElement => typeof el === 'object' && el !== null && 'type' in el && el.type === 'found')
-        .map((el) => ({ [W3C_ELEMENT_KEY]: el.elementId! }));
+        .map((el) => ({ [W3C_ELEMENT_KEY]: el.elementId ?? '' }));
 
     if (mult) {
         return els;

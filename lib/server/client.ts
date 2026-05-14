@@ -84,6 +84,7 @@ export class NovaUIAutomationClient {
             throw new errors.UnknownError('NovaUIAutomationServer is not running.');
         }
 
+        const process = this.process;
         const id = ++this.requestId;
         const request: ServerRequest = { id, method, params };
         const json = JSON.stringify(request);
@@ -98,7 +99,7 @@ export class NovaUIAutomationClient {
 
         return new Promise<unknown>((resolve, reject) => {
             this.pendingRequests.set(id, { resolve, reject, method, startTime: Date.now() });
-            this.process!.stdin.write(json + '\n');
+            process.stdin.write(json + '\n');
         });
     }
 

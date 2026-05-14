@@ -46,7 +46,7 @@ export async function startServerSession(this: AppiumDesktopDriver): Promise<voi
                 await this.serverClient.dispose();
                 this.serverClient = undefined;
                 // Delay before retrying to let COM resources be released
-                await new Promise((r) => setTimeout(r, INIT_RETRY_DELAY_MS));
+                await new Promise((resolve) => setTimeout(resolve, INIT_RETRY_DELAY_MS));
             } else {
                 throw err;
             }

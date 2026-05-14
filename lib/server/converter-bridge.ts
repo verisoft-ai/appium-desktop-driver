@@ -1,5 +1,5 @@
 import type { ConditionDto } from './protocol';
-import { Condition, PropertyCondition, AndCondition, OrCondition, NotCondition, TrueCondition, FalseCondition } from '../powershell/conditions';
+import { Condition, TrueCondition, FalseCondition } from '../powershell/conditions';
 import { PSObject } from '../powershell/core';
 import { PSString, PSBoolean, PSInt32, PSInt32Array, PSControlType, PSOrientationType, PSAutomationHeadingLevel } from '../powershell/common';
 
@@ -44,16 +44,6 @@ export function conditionToDto(condition: Condition): ConditionDto {
  * Conditions register themselves here when created through our enhanced constructors.
  */
 export const conditionDtoMap = new WeakMap<Condition, ConditionDto>();
-
-// Patch the condition constructors to register DTO metadata.
-// This is done by wrapping the constructors.
-
-const OriginalPropertyCondition = PropertyCondition;
-const OriginalAndCondition = AndCondition;
-const OriginalOrCondition = OrCondition;
-const OriginalNotCondition = NotCondition;
-const OriginalTrueCondition = TrueCondition;
-const OriginalFalseCondition = FalseCondition;
 
 /**
  * Register a PropertyCondition's DTO metadata based on its constructor arguments.

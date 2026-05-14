@@ -20,7 +20,7 @@ export async function findFreePort(start: number, end: number): Promise<number> 
     throw new Error(`No free port available in range ${start}-${end}.`);
 }
 
-export const MODULE_NAME = 'appium-novawindows-driver';
+export const MODULE_NAME = 'appium-desktop-driver';
 
 /**
  * Resolves the path to the bundled ffmpeg binary from the ffmpeg-static package.

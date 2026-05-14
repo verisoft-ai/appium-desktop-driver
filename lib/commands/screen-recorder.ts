@@ -1,8 +1,8 @@
-import type { AppiumLogger } from '@appium/types';
-import { fs, net, system, util } from 'appium/support';
+import { fs, net, util } from 'appium/support';
 import { waitForCondition } from 'asyncbox';
-import { SubProcess } from 'teen_process';
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { getBundledFfmpegPath } from '../util';
+import { AppiumDesktopDriver } from '../driver';
 
 const RETRY_PAUSE = 300;
 const RETRY_TIMEOUT = 5000;
@@ -32,12 +32,12 @@ export interface UploadOptions {
     formFields?: Array<[string, string]> | Record<string, string>;
 }
 
-async function requireFfmpegPath(): Promise<string> {
-    const bundled = getBundledFfmpegPath();
+async function requireFfmpegPath(driver: AppiumDesktopDriver): Promise<string> {
+    const bundled = await getBundledFfmpegPath(driver);
     if (bundled) {
         return bundled;
     }
-    const ffmpegBinary = `ffmpeg${system.isWindows() ? '.exe' : ''}`;
+    const ffmpegBinary = 'ffmpeg.exe';
     try {
         return await fs.which(ffmpegBinary);
     } catch {
@@ -71,9 +71,9 @@ export async function uploadRecordedMedia(
 }
 
 export class ScreenRecorder {
-    private log: AppiumLogger;
+    private _driver: AppiumDesktopDriver;
     private _videoPath: string;
-    private _process: SubProcess | null = null;
+    private _process: ChildProcessWithoutNullStreams | null = null;
     private _fps: number;
     private _audioInput?: string;
     private _captureCursor: boolean;
@@ -82,8 +82,8 @@ export class ScreenRecorder {
     private _videoFilter?: string;
     private _timeLimit: number;
 
-    constructor(videoPath: string, log: AppiumLogger, opts: ScreenRecorderOptions = {}) {
-        this.log = log;
+    constructor(videoPath: string, driver: AppiumDesktopDriver, opts: ScreenRecorderOptions = {}) {
+        this._driver = driver;
         this._videoPath = videoPath;
         this._fps = opts.fps && opts.fps > 0 ? opts.fps : DEFAULT_FPS;
         this._audioInput = opts.audioInput;
@@ -108,14 +108,14 @@ export class ScreenRecorder {
     }
 
     isRunning(): boolean {
-        return !!this._process?.isRunning;
+        return !!this._process && !this._process.killed;
     }
 
     async _enforceTermination(): Promise<string> {
         if (this._process && this.isRunning()) {
-            this.log.debug('Force-stopping the currently running video recording');
+            this._driver.log.debug('Force-stopping the currently running video recording');
             try {
-                await this._process.stop('SIGKILL');
+                this._process.kill('SIGKILL');
             } catch {}
         }
         this._process = null;
@@ -127,7 +127,7 @@ export class ScreenRecorder {
     }
 
     async start(): Promise<void> {
-        const ffmpegPath = await requireFfmpegPath();
+        const ffmpegPath = await requireFfmpegPath(this._driver);
 
         const args: string[] = [
             '-loglevel', 'error',
@@ -149,27 +149,38 @@ export class ScreenRecorder {
             this._videoPath,
         ];
 
-        this._process = new SubProcess(ffmpegPath, args, { windowsHide: true });
-        this.log.debug(`Starting ffmpeg: ${util.quote([ffmpegPath, ...args])}`);
+        this._process = spawn(ffmpegPath, args, { windowsHide: true });
 
-        this._process.on('output', (stdout: string, stderr: string) => {
-            const out = stdout || stderr;
-            if (out?.trim()) {
-                this.log.debug(`[ffmpeg] ${out}`);
+        this._driver.log.debug(`Starting ffmpeg: ${util.quote([ffmpegPath, ...args])}`);
+
+        this._process.stdout.on('data', (data: Buffer) => {
+            const out = data.toString();
+            if (out.trim()) {
+                this._driver.log.debug(`[ffmpeg] ${out.trim()}`);
+            }
+        });
+
+        this._process.stderr.on('data', (data: Buffer) => {
+            const out = data.toString();
+            if (out.trim()) {
+                this._driver.log.debug(`[ffmpeg] ${out.trim()}`);
             }
         });
 
         this._process.once('exit', async (code: number, signal: string) => {
             this._process = null;
             if (code === 0) {
-                this.log.debug('Screen recording exited without errors');
+                this._driver.log.debug('Screen recording exited without errors');
             } else {
                 await this._enforceTermination();
-                this.log.warn(`Screen recording exited with error code ${code}, signal ${signal}`);
+                this._driver.log.warn(`Screen recording exited with error code ${code}, signal ${signal}`);
             }
         });
 
-        await this._process.start(0);
+        await new Promise<void>((resolve, reject) => {
+            this._process?.once('error', reject);
+            setTimeout(resolve, 50);
+        });
 
         try {
             await waitForCondition(
@@ -192,7 +203,7 @@ export class ScreenRecorder {
             );
         }
 
-        this.log.info(
+        this._driver.log.info(
             `The video recording has started. Will timeout in ${util.pluralize('second', this._timeLimit, true)}`,
         );
     }
@@ -203,7 +214,7 @@ export class ScreenRecorder {
         }
 
         if (!this.isRunning()) {
-            this.log.debug('Screen recording is not running. Returning the recent result');
+            this._driver.log.debug('Screen recording is not running. Returning the recent result');
             return await this.getVideoPath();
         }
 
@@ -222,8 +233,8 @@ export class ScreenRecorder {
                 }
             });
 
-            this._process?.proc?.stdin?.write('q');
-            this._process?.proc?.stdin?.end();
+            this._process?.stdin?.write('q');
+            this._process?.stdin?.end();
         });
     }
 }

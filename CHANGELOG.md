@@ -1,3 +1,9 @@
+## [1.7.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.0...v1.7.1) (2026-05-23)
+
+### Miscellaneous Chores
+
+* remove powershell insecure check - alway allow ([2225b79](https://github.com/verisoft-ai/appium-desktop-driver/commit/2225b79fc9972f0000ff6a3982b6f993506baca5))
+
 ## [1.7.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.6.1...v1.7.0) (2026-05-04)
 
 ### Features

@@ -62,11 +62,9 @@ describe('execute (command router)', () => {
     });
 
     it('routes powerShell to executePowerShellScript', async () => {
-        driver.assertFeatureEnabled = vi.fn();
         driver.caps = {};
         driver.sendPowerShellCommand.mockResolvedValue('output');
         await extension.execute.call(driver, 'powerShell', ['Get-Process']);
-        expect(driver.assertFeatureEnabled).toHaveBeenCalledWith('power_shell');
         // Script is base64-encoded in pwsh wrapper; verify Get-Process is present
         expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
             expect.stringContaining('R2V0LVByb2Nlc3M')

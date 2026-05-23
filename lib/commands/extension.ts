@@ -2,7 +2,7 @@ import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { Element, Rect } from '@appium/types';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
-import { MODIFY_FS_FEATURE, POWER_SHELL_FEATURE } from '../constants';
+import { MODIFY_FS_FEATURE } from '../constants';
 import { AppiumDesktopDriver } from '../driver';
 import { ClickType, Enum, Key } from '../enums';
 import {
@@ -124,7 +124,6 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
     }
 
     if (script === 'powerShell') {
-        this.assertFeatureEnabled(POWER_SHELL_FEATURE);
         return await this.executePowerShellScript(args[0]);
     }
 

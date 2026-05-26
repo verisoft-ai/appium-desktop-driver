@@ -16,6 +16,7 @@ vi.mock('appium-chromedriver', () => ({
         stop: vi.fn().mockResolvedValue(undefined),
         proxyReq: vi.fn(),
         jwproxy: { command: vi.fn() },
+        sessionId: vi.fn().mockReturnValue('mock-session-id'),
     })),
 }));
 
@@ -114,7 +115,7 @@ describe('getWebViewDetails', () => {
 
     it('throws InvalidArgumentError when webviewEnabled is false', async () => {
         const driver = createMockDriver({ webviewEnabled: false });
-        await expect(contexts.getWebViewDetails.call(driver)).rejects.toThrow('webviewEnabled');
+        await expect(contexts.getWebViewDetails.call(driver)).rejects.toThrow('WebView support is not enabled');
     });
 
     it('throws when app is none and webviewDevtoolsPort is not set', async () => {
@@ -272,6 +273,7 @@ describe('setContext', () => {
             stop: vi.fn(),
             proxyReq: vi.fn(),
             jwproxy: { command: vi.fn() },
+            sessionId: vi.fn().mockReturnValue('mock-session-id'),
         };
         (Chromedriver as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(() => mockCdInstance);
 

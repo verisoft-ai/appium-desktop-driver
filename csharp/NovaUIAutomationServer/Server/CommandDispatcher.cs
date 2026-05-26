@@ -78,6 +78,7 @@ public class CommandDispatcher
             // Process
             ["startProcess"] = ProcessCommands.StartProcess,
             ["getProcessIds"] = ProcessCommands.GetProcessIds,
+            ["getChildProcessIds"] = ProcessCommands.GetChildProcessIds,
             ["stopProcess"] = ProcessCommands.StopProcess,
             ["executePowerShellScript"] = ProcessCommands.ExecutePowerShellScript,
 

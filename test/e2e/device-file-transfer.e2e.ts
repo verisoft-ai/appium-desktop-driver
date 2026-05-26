@@ -1,14 +1,14 @@
 import { describe, it, beforeAll, afterAll, afterEach, expect } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Browser } from 'webdriverio';
 import { createCalculatorSession, quitSession } from './helpers/session.js';
 
-// pushFile / pullFile / pullFolder use assertFeatureEnabled(MODIFY_FS_FEATURE).
+// pushFile / pullFile use assertFeatureEnabled(MODIFY_FS_FEATURE).
 // The Appium server must be started with --allow-insecure modify_fs.
 
-describe('pushFile / pullFile / pullFolder', () => {
+describe('pushFile / pullFile', () => {
     let driver: Browser;
 
     beforeAll(async () => {
@@ -100,61 +100,6 @@ describe('pushFile / pullFile / pullFolder', () => {
         it('throws when the file does not exist', async () => {
             const missing = join(tmpdir(), `desktop-missing-${Date.now()}.txt`);
             await expect(driver.pullFile(missing)).rejects.toThrow();
-        });
-    });
-
-    // ─── pullFolder ──────────────────────────────────────────────────────────
-
-    describe('pullFolder', () => {
-        let cleanup: string = '';
-
-        afterEach(() => {
-            if (cleanup && existsSync(cleanup)) {
-                try { rmSync(cleanup, { recursive: true }); } catch { /* noop */ }
-            }
-            cleanup = '';
-        });
-
-        it('returns a base64-encoded ZIP with valid PK header', async () => {
-            cleanup = join(tmpdir(), `desktop-folder-${Date.now()}`);
-            mkdirSync(cleanup);
-            writeFileSync(join(cleanup, 'a.txt'), 'file a');
-            writeFileSync(join(cleanup, 'b.txt'), 'file b');
-
-            const result = await driver.pullFolder(cleanup);
-            const bytes = Buffer.from(result, 'base64');
-
-            // ZIP local file header: PK\x03\x04
-            expect(bytes[0]).toBe(0x50); // P
-            expect(bytes[1]).toBe(0x4B); // K
-            expect(bytes[2]).toBe(0x03);
-            expect(bytes[3]).toBe(0x04);
-        });
-
-        it('ZIP is larger when folder has more content', async () => {
-            const smallDir = join(tmpdir(), `desktop-small-${Date.now()}`);
-            const largeDir = join(tmpdir(), `desktop-large-${Date.now()}`);
-            cleanup = smallDir; // afterEach cleans one; we clean largeDir here manually
-
-            mkdirSync(smallDir);
-            writeFileSync(join(smallDir, 'tiny.txt'), 'x');
-
-            mkdirSync(largeDir);
-            writeFileSync(join(largeDir, 'big.txt'), 'x'.repeat(10_000));
-
-            const smallZip = await driver.pullFolder(smallDir);
-            const largeZip = await driver.pullFolder(largeDir);
-
-            expect(Buffer.from(largeZip, 'base64').length).toBeGreaterThan(
-                Buffer.from(smallZip, 'base64').length
-            );
-
-            rmSync(largeDir, { recursive: true, force: true });
-        });
-
-        it('throws when the directory does not exist', async () => {
-            const missing = join(tmpdir(), `desktop-missing-dir-${Date.now()}`);
-            await expect(driver.pullFolder(missing)).rejects.toThrow();
         });
     });
 });

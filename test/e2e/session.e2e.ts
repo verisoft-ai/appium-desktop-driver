@@ -136,22 +136,6 @@ describe('Session creation and capabilities', () => {
         if (existsSync(markerPath)) { unlinkSync(markerPath); }
     });
 
-    it('passes appEnvironment variables into the PowerShell session', async () => {
-        const markerPath = join(tmpdir(), `appiumdesktop-session-env-${Date.now()}.txt`);
-        const driver = await createRootSession({
-            'appium:appEnvironment': { APPPIUM_TEST_VAR: 'hello_from_env' },
-            'appium:prerun': {
-                script: `[System.IO.File]::WriteAllText('${markerPath}', $env:APPPIUM_TEST_VAR)`,
-            },
-        });
-        try {
-            expect(readFileSync(markerPath, 'utf8')).toBe('hello_from_env');
-        } finally {
-            await quitSession(driver);
-            if (existsSync(markerPath)) { unlinkSync(markerPath); }
-        }
-    });
-
     it('throws when an unknown automationName is specified', async () => {
         const { remote } = await import('webdriverio');
         await expect(

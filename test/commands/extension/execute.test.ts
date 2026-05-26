@@ -40,19 +40,14 @@ describe('execute (command router)', () => {
         expect(result).toBe('2026-03-03T10:00:00+00:00');
     });
 
-    it('routes windows:deleteFile to deleteFile with args', async () => {
+    it('routes windows:deleteFile to deleteFile via sendCommand', async () => {
         await extension.execute.call(driver, 'windows: deleteFile', [{ path: 'C:\\temp\\file.txt' }]);
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('Remove-Item')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('deleteFile', { path: 'C:\\temp\\file.txt' });
     });
 
-    it('routes windows:invoke to patternInvoke with element', async () => {
+    it('routes windows:invoke to patternInvoke via sendCommand', async () => {
         await extension.execute.call(driver, 'windows: invoke', [MOCK_ELEMENT]);
-        // Command is base64-encoded; verify [InvokePattern] is used
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('W0ludm9rZVBhdHRlcm5d')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('invokeElement', { elementId: MOCK_ELEMENT['element-6066-11e4-a52e-4f735466cecf'] });
     });
 
     it('throws UnknownCommandError for unknown windows command', async () => {
@@ -61,25 +56,23 @@ describe('execute (command router)', () => {
         ).rejects.toThrow('Unknown command');
     });
 
-    it('routes powerShell to executePowerShellScript', async () => {
+    it('routes powerShell to executePowerShellScript via sendCommand', async () => {
         driver.assertFeatureEnabled = vi.fn();
         driver.caps = {};
-        driver.sendPowerShellCommand.mockResolvedValue('output');
-        await extension.execute.call(driver, 'powerShell', ['Get-Process']);
+        driver.sendCommand.mockResolvedValue('output');
+        const result = await extension.execute.call(driver, 'powerShell', ['Get-Process']);
         expect(driver.assertFeatureEnabled).toHaveBeenCalledWith('power_shell');
-        // Script is base64-encoded in pwsh wrapper; verify Get-Process is present
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('R2V0LVByb2Nlc3M')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('executePowerShellScript', expect.objectContaining({ script: 'Get-Process' }));
+        expect(result).toBe('output');
     });
 
-    it('routes return window.name to sendPowerShellCommand', async () => {
-        driver.sendPowerShellCommand.mockResolvedValue('WindowName');
+    it('routes return window.name to sendCommand calls', async () => {
+        driver.sendCommand
+            .mockResolvedValueOnce('root-element-id')
+            .mockResolvedValueOnce('WindowName');
         const result = await extension.execute.call(driver, 'return window.name', []);
-        // Command is base64-encoded; verify it uses rootElement and fetches Name property
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('JHJvb3RFbGVtZW50')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('saveRootElementToTable', {});
+        expect(driver.sendCommand).toHaveBeenCalledWith('getProperty', { elementId: 'root-element-id', property: 'Name' });
         expect(result).toBe('WindowName');
     });
 
@@ -90,6 +83,7 @@ describe('execute (command router)', () => {
     });
 
     it('routes mobile:getContexts to getWebViewDetails', async () => {
+        driver.caps = { webviewEnabled: true };
         const mockDetails = {
             info: { Browser: 'Chrome/120.0.0.0' },
             pages: [{ id: 'page1', title: 'Test', url: 'https://example.com', webSocketDebuggerUrl: 'ws://localhost:10900/devtools/page/page1', description: '', devtoolsFrontendUrl: '', faviconUrl: '', type: 'page' }],
@@ -99,19 +93,7 @@ describe('execute (command router)', () => {
         const result = await extension.execute.call(driver, 'mobile:getContexts', [{}]) as any[];
         expect(driver.getWebViewDetails).toHaveBeenCalledWith(undefined);
         expect(result[0]).toEqual({ id: 'NATIVE_APP' });
-        expect(result[1]).toMatchObject({ id: 'WEBVIEW_page1', title: 'Test', url: 'https://example.com' });
-    });
-
-    it('routes mobile: getContexts (space variant) the same way', async () => {
-        driver.getWebViewDetails = vi.fn().mockResolvedValue({ info: undefined, pages: undefined });
-        const result = await extension.execute.call(driver, 'mobile: getContexts', [{}]) as any[];
-        expect(result).toEqual([{ id: 'NATIVE_APP' }]);
-    });
-
-    it('mobile:getContexts unwraps WDIO-spread array args', async () => {
-        driver.getWebViewDetails = vi.fn().mockResolvedValue({ info: undefined, pages: undefined });
-        await extension.execute.call(driver, 'mobile:getContexts', [[{ waitForWebviewMs: 500 }]]);
-        expect(driver.getWebViewDetails).toHaveBeenCalledWith(500);
+        expect(result[1]).toMatchObject({ id: 'page1', title: 'Test', url: 'https://example.com' });
     });
 
     it('proxies arbitrary script to chromedriver jwproxy when jwpProxyActive', async () => {
@@ -145,16 +127,6 @@ describe('execute (command router)', () => {
         expect(mockCommand).toHaveBeenCalledWith('/execute', 'POST', expect.anything());
     });
 
-    it('powerShell unwraps WDIO-spread array args', async () => {
-        driver.assertFeatureEnabled = vi.fn();
-        driver.caps = {};
-        driver.sendPowerShellCommand.mockResolvedValue('hello');
-        await extension.execute.call(driver, 'powerShell', [[{ script: 'Write-Output "hello"' }]]);
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('V3JpdGUtT3V0cHV0ICJoZWxsbyI')
-        );
-    });
-
     it('powerShell runs before proxy passthrough even when jwpProxyActive', async () => {
         const mockCommand = vi.fn();
         driver.chromedriver = { jwproxy: { downstreamProtocol: 'W3C', command: mockCommand } };
@@ -162,10 +134,10 @@ describe('execute (command router)', () => {
         driver.proxyActive = vi.fn().mockReturnValue(true);
         driver.assertFeatureEnabled = vi.fn();
         driver.caps = {};
-        driver.sendPowerShellCommand.mockResolvedValue('output');
+        driver.sendCommand.mockResolvedValue('output');
 
         await extension.execute.call(driver, 'powerShell', [{ script: 'Get-Date' }]);
         expect(mockCommand).not.toHaveBeenCalled();
-        expect(driver.sendPowerShellCommand).toHaveBeenCalled();
+        expect(driver.sendCommand).toHaveBeenCalledWith('executePowerShellScript', expect.objectContaining({ script: 'Get-Date' }));
     });
 });

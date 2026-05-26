@@ -2,6 +2,7 @@ import { normalize } from 'node:path';
 import { AppiumDesktopDriver } from '../driver';
 import { NovaUIAutomationClient } from '../server/client';
 import { findFreePort } from '../util';
+import { getAllWindowHandles, getWindowAllHandlesForProcessIds, trySetForegroundWindow } from '../winapi/user32';
 
 const MAX_INIT_RETRIES = 5;
 const INIT_RETRY_DELAY_MS = 500;
@@ -126,10 +127,11 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
 
     try {
         if (isUwp) {
-            const processIds = await this.sendCommand('getProcessIds', { processName: 'ApplicationFrameHost' }) as number[];
-            if (processIds.length === 0) {return false;}
-            await this.attachToApplicationWindow(processIds, { isUwp: true });
-            return true;
+            // UWP: scan all visible windows and attach to one that has content.
+            // attachToWindowHandles uses the focusable-descendant probe to skip
+            // empty ApplicationFrameHost frames.
+            const handles = getAllWindowHandles();
+            return await this.attachToWindowHandles(handles);
         }
 
         const normalizedPath = normalize(appPath);
@@ -137,8 +139,19 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
         const executable = breadcrumbs[breadcrumbs.length - 1];
         const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
         const processIds = await this.sendCommand('getProcessIds', { processName }) as number[];
-        if (processIds.length === 0) {return false;}
-        await this.attachToApplicationWindow(processIds, { isUwp: false });
+        if (processIds.length === 0) { return false; }
+
+        const handles = getWindowAllHandlesForProcessIds(processIds);
+        if (handles.length === 0) { return false; }
+
+        // Use the last handle (most recently shown window for this process).
+        const elementId = await this.sendCommand('elementFromHandle', { handle: handles[handles.length - 1] }) as string ?? '';
+        if (!elementId) { return false; }
+
+        await this.sendCommand('setRootElementFromElementId', { elementId });
+        const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
+        const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
+        trySetForegroundWindow(nwh);
         return true;
     } catch {
         return false;

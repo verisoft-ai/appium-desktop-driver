@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using NovaUIAutomationServer.State;
 
@@ -75,6 +76,68 @@ public static class ProcessCommands
             .ToArray();
 
         return processes;
+    }
+
+    public static object? GetChildProcessIds(SessionState state, JsonElement? parameters)
+    {
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var parentPid = p.GetProperty("parentPid").GetInt32();
+
+        var childPids = new List<int>();
+        var snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snapshot == InvalidHandleValue) return childPids.ToArray();
+
+        try
+        {
+            var entry = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
+            if (Process32First(snapshot, ref entry))
+            {
+                do
+                {
+                    if ((int)entry.th32ParentProcessID == parentPid)
+                    {
+                        childPids.Add((int)entry.th32ProcessID);
+                    }
+                } while (Process32Next(snapshot, ref entry));
+            }
+        }
+        finally
+        {
+            CloseHandle(snapshot);
+        }
+
+        return childPids.ToArray();
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+    private static readonly IntPtr InvalidHandleValue = new(-1);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct PROCESSENTRY32
+    {
+        public uint dwSize;
+        public uint cntUsage;
+        public uint th32ProcessID;
+        public IntPtr th32DefaultHeapID;
+        public uint th32ModuleID;
+        public uint cntThreads;
+        public uint th32ParentProcessID;
+        public int pcPriClassBase;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szExeFile;
     }
 
     public static object? StopProcess(SessionState state, JsonElement? parameters)

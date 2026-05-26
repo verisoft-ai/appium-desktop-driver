@@ -93,7 +93,7 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
         return await this[EXTENSION_COMMANDS[script]](...args);
     }
 
-    if (script === 'mobile:getContexts') {
+    if (script.replace(/\s/g, '') === 'mobile:getContexts') {
         if (!this.caps.webviewEnabled) {
             throw new errors.InvalidArgumentError('WebView support is not enabled. To use this command, enable WebView support by setting the "webviewEnabled" capability to true.');
         }
@@ -101,7 +101,7 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
         const webViewDetails = await this.getWebViewDetails(waitForWebviewMs);
         return [{
             id: 'NATIVE_APP',
-        }, ...(webViewDetails.pages ?? [])];
+        }, ...(webViewDetails.pages ?? []).map((page) => ({ ...page, id: `WEBVIEW_${page.id}` }))];
     }
 
     if (script === 'powerShell') {

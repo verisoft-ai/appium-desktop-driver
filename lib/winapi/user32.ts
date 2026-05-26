@@ -1,4 +1,7 @@
 import { Orientation } from '@appium/types';
+import { logger } from '@appium/support';
+
+const log = logger.getLogger('user32');
 import {
     load,
     struct,
@@ -807,23 +810,55 @@ export function setDpiAwareness() {
 
 export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {
     const handles: number[] = [];
-    EnumWindows((hWnd) => {
-        const ptr: [LPDWORD | null] = [null];
-        GetWindowThreadProcessId(hWnd, ptr);
-        const pid = ptr[0];
-        if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
-            const buffer = Buffer.alloc(256); // Adjust size as needed
-            GetWindowTextA(hWnd, buffer, buffer.length);
-            const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
-
-            if (windowTitle) {
-                handles.push(Number(address(hWnd)));
+    log.debug(`getWindowAllHandlesForProcessIds called with processIds: ${processIds.join(', ')}`);
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                const ptr: [LPDWORD | null] = [null];
+                GetWindowThreadProcessId(hWnd, ptr);
+                const pid = ptr[0];
+                if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(256);
+                    GetWindowTextA(hWnd, buffer, buffer.length);
+                    const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
+                    if (windowTitle) {
+                        handles.push(Number(address(hWnd)));
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
             }
-        }
 
-        return true;
-    }, 0);
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    log.debug(`getWindowAllHandlesForProcessIds returning ${handles.length} handles`);
+    return handles;
+}
 
+export function getAllWindowHandles(): number[] {
+    const handles: number[] = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(256);
+                    GetWindowTextA(hWnd, buffer, buffer.length);
+                    const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
+                    if (windowTitle) {
+                        handles.push(Number(address(hWnd)));
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
     return handles;
 }
 

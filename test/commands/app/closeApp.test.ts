@@ -10,28 +10,31 @@ describe('closeApp (W3C)', () => {
         vi.clearAllMocks();
     });
 
-    it('closes the session app window via UI Automation close', async () => {
+    it('closes the session app window via C# server commands', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand
-            .mockResolvedValueOnce('element-123') // automationRoot.buildCommand()
-            .mockResolvedValueOnce(undefined) // buildCloseCommand()
-            .mockResolvedValueOnce(undefined); // $rootElement = $null
+        driver.sendCommand
+            .mockResolvedValueOnce('element-123')
+            .mockResolvedValueOnce(undefined)
+            .mockResolvedValueOnce(undefined);
 
         await closeApp.call(driver);
 
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledTimes(3);
+        expect(driver.sendCommand).toHaveBeenCalledTimes(3);
+        expect(driver.sendCommand).toHaveBeenNthCalledWith(1, 'saveRootElementToTable', {});
+        expect(driver.sendCommand).toHaveBeenNthCalledWith(2, 'closeWindow', { elementId: 'element-123' });
+        expect(driver.sendCommand).toHaveBeenNthCalledWith(3, 'setRootElementNull', {});
     });
 
-    it('throws NoSuchWindowError when no root element exists', async () => {
+    it('throws NoSuchWindowError when root element is empty string', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValueOnce(''); // empty = window already gone
+        driver.sendCommand.mockResolvedValueOnce('');
 
         await expect(closeApp.call(driver)).rejects.toThrow('No active app window');
     });
 
-    it('throws NoSuchWindowError when root element returns only whitespace', async () => {
+    it('throws NoSuchWindowError when root element is null', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValueOnce('  \n  \n  ');
+        driver.sendCommand.mockResolvedValueOnce(null);
 
         await expect(closeApp.call(driver)).rejects.toThrow('No active app window');
     });

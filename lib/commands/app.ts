@@ -6,6 +6,7 @@ import type { RectResult } from '../server/protocol';
 import { sleep } from '../util';
 import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
 import {
+    getAllWindowHandles,
     getWindowAllHandlesForProcessIds,
     keyDown,
     keyUp,
@@ -186,6 +187,15 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
 
     if (isUwp) {
         this.log.debug('Detected app path to be in the UWP format.');
+
+        // Snapshot all visible windows before launch so we can detect new ones.
+        // WinUI 3 packaged apps (e.g. Windows 11 Calculator) run in their own
+        // process rather than being hosted inside ApplicationFrameHost like
+        // legacy UWP apps. The snapshot lets us tell apart the new app window
+        // from pre-existing windows that belong to other apps or to
+        // ApplicationFrameHost itself.
+        const handlesBeforeLaunch = new Set(getAllWindowHandles());
+
         await this.sendCommand('startProcess', {
             path: 'explorer.exe',
             arguments: `shell:AppsFolder\\${path}`,
@@ -195,19 +205,42 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         // deadline / attempt limit is reached. Each iteration is one
         // POLL_INTERVAL_MS tick — no blind sleep up front.
         for (let i = 1; deadline ? Date.now() < deadline : i <= 10; i++) {
-            const processIds = await this.sendCommand('getProcessIds', { processName: 'ApplicationFrameHost' }) as number[];
-
-            if (processIds.length > 0) {
-                this.log.debug('Process IDs of ApplicationFrameHost processes: ' + processIds.join(', '));
+            // Strategy 1: new window detection.
+            // Works for WinUI 3 / standalone packaged apps that spawn a new
+            // top-level window in their own process.
+            const newHandles = getAllWindowHandles().filter((h) => !handlesBeforeLaunch.has(h));
+            if (newHandles.length > 0) {
+                this.log.debug(`Found ${newHandles.length} new window(s) since launch: ${newHandles.map((h) => `0x${h.toString(16).padStart(8, '0')}`).join(', ')}`);
                 try {
-                    const result = await this.attachToApplicationWindow(processIds, { isUwp: true, deadline });
-                    if (!result.focused && deadline && Date.now() < deadline) {
-                        this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
-                        await this.waitForMainWindow(processIds, { isUwp: true }, deadline);
+                    if (await this.attachToWindowHandles(newHandles)) {
+                        return;
                     }
-                    return;
-                } catch {
-                    // noop — retry after a short delay
+                } catch (err) {
+                    if (err instanceof Error) {
+                        this.log.debug(`New-window strategy failed: ${err.message}`);
+                    }
+                }
+            }
+
+            // Strategy 2: ApplicationFrameHost.
+            // Works for legacy hosted UWP apps. Prefer newly appeared
+            // ApplicationFrameHost windows (i.e. the frame that opened for
+            // this specific launch) to avoid accidentally attaching to a
+            // pre-existing frame that belongs to another UWP app.
+            const processIds = await this.sendCommand('getProcessIds', { processName: 'ApplicationFrameHost' }) as number[];
+            if (processIds.length > 0) {
+                const afhHandles = getWindowAllHandlesForProcessIds(processIds);
+                const newAfhHandles = afhHandles.filter((h) => !handlesBeforeLaunch.has(h));
+                const handlesToTry = newAfhHandles.length > 0 ? newAfhHandles : afhHandles;
+                this.log.debug(`ApplicationFrameHost strategy: trying ${handlesToTry.length} handle(s).`);
+                try {
+                    if (await this.attachToWindowHandles(handlesToTry)) {
+                        return;
+                    }
+                } catch (err) {
+                    if (err instanceof Error) {
+                        this.log.debug(`ApplicationFrameHost strategy failed: ${err.message}`);
+                    }
                 }
             }
 
@@ -217,38 +250,23 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
     } else {
         this.log.debug('Detected app path to be in the classic format.');
         const normalizedPath = normalize(path);
-        await this.sendCommand('startProcess', {
+        const launcherPid = await this.sendCommand('startProcess', {
             path: normalizedPath,
             arguments: this.caps.appArguments ?? null,
             workingDir: this.caps.appWorkingDir ?? null,
             waitForAppLaunchMs: waitForAppLaunchMs || null,
-        });
+        }) as number | null;
 
-        const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
-        const executable = breadcrumbs[breadcrumbs.length - 1];
-        const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
-
-        for (let i = 1; deadline ? Date.now() < deadline : i <= MAX_POLL_ATTEMPTS; i++) {
-            try {
-                const processIds = await this.sendCommand('getProcessIds', { processName }) as number[];
-                if (processIds.length > 0) {
-                    this.log.debug(`Process IDs of '${processName}' processes: ` + processIds.join(', '));
-                    const result = await this.attachToApplicationWindow(processIds, { isUwp: false, deadline });
-                    if (!result.focused && deadline && Date.now() < deadline) {
-                        this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
-                        await this.waitForMainWindow(processIds, { isUwp: false }, deadline);
-                    }
-                    return;
-                }
-            } catch (err) {
-                if (err instanceof Error) {
-                    this.log.debug(`Received error:\n${err.message}`);
-                }
-            }
-
-            this.log.info(`Failed to locate window of the app. Sleeping for ${POLL_INTERVAL_MS}ms and retrying... (attempt ${i})`);
-            await sleep(POLL_INTERVAL_MS);
+        if (!launcherPid) {
+            throw new errors.UnknownError('Process did not start (no PID returned).');
         }
+
+        const result = await this.attachToApplicationWindow(launcherPid, { deadline });
+        if (!result.focused && deadline && Date.now() < deadline) {
+            this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
+            await this.waitForMainWindow(result.knownPids, deadline);
+        }
+        return;
     }
 
     throw new errors.UnknownError('Failed to locate window of the app.');
@@ -335,24 +353,32 @@ export async function setWindowRect(
 }
 
 /**
- * Polls for a visible Win32 window belonging to the given process ID.
+ * Polls for a visible Win32 window in the process tree rooted at launcherPid.
  *
- * Uses EnumWindows + GetWindowThreadProcessId under the hood. Returns the
- * last handle found (most recently created window for the process).
+ * On each iteration, discovers children of every known PID via
+ * getChildProcessIds and accumulates them so they survive if the launcher
+ * exits before the next poll. This lets stub-launcher apps (e.g. the
+ * notepad.exe that immediately re-execs the real one in a child process) be
+ * detected without waiting out the full timeout on a windowless PID.
  *
- * For UWP apps the ApplicationFrameHost process usually already has
- * windows, so this returns almost immediately. For classic apps it
- * polls until the newly launched process creates its first window.
+ * Returns the HWND of the found window together with all discovered PIDs so
+ * the caller can use them for subsequent ProcessId-based searches without a
+ * separate getProcessIds round-trip.
  */
-export async function waitForNewWindow(this: AppiumDesktopDriver, pid: number, timeout: number): Promise<number> {
+export async function waitForNewWindow(this: AppiumDesktopDriver, launcherPid: number, timeout: number): Promise<{ handle: number, knownPids: number[] }> {
     const start = Date.now();
     let attempts = 0;
+    const knownPids = new Set<number>([launcherPid]);
 
     while (Date.now() - start < timeout) {
-        const handles = getWindowAllHandlesForProcessIds([pid]);
+        for (const pid of [...knownPids]) {
+            const childPids = await this.sendCommand('getChildProcessIds', { parentPid: pid }) as number[];
+            for (const child of childPids) { knownPids.add(child); }
+        }
 
+        const handles = getWindowAllHandlesForProcessIds([...knownPids]);
         if (handles.length > 0) {
-            return handles[handles.length - 1];
+            return { handle: handles[handles.length - 1], knownPids: [...knownPids] };
         }
 
         this.log.debug(`Waiting for the process window to appear... (${++attempts}/${Math.floor(timeout / POLL_INTERVAL_MS)})`);
@@ -363,150 +389,110 @@ export async function waitForNewWindow(this: AppiumDesktopDriver, pid: number, t
 }
 
 /**
- * Attaches the driver session to the application window owned by one of the
- * given process IDs. This is the core of the app launch flow — it bridges
- * from a Win32 window handle to a UIAutomation element.
+ * Iterates a list of Win32 window handles, finds the first one whose UIA
+ * subtree has at least two keyboard-focusable descendants (indicating it is a
+ * real, loaded app window rather than a splash or empty frame), sets it as the
+ * session root, and brings it to the foreground.
  *
- * ### Search order depends on app type
+ * Returns true if a window was successfully attached, false if none qualified.
+ */
+export async function attachToWindowHandles(
+    this: AppiumDesktopDriver,
+    handles: number[],
+): Promise<boolean> {
+    let fallbackElementId = '';
+
+    for (const hwnd of handles) {
+        let candidateId = '';
+        try {
+            candidateId = await this.sendCommand('elementFromHandle', { handle: hwnd }) as string ?? '';
+        } catch {
+            continue;
+        }
+        if (!candidateId) { continue; }
+        if (!fallbackElementId) { fallbackElementId = candidateId; }
+
+        const focusables = await this.sendCommand('findElements', {
+            scope: 'descendants',
+            condition: propertyCondition('IsKeyboardFocusable', true),
+            contextElementId: candidateId,
+        }) as string[];
+
+        if (focusables && focusables.length >= 2) {
+            this.log.info(`Attaching to window 0x${hwnd.toString(16).padStart(8, '0')} (${focusables.length} focusable descendants).`);
+            await this.sendCommand('setRootElementFromElementId', { elementId: candidateId });
+            const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
+            if (isNotNull) {
+                const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
+                const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
+                trySetForegroundWindow(nwh);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Attaches the driver session to the window spawned by launcherPid.
  *
- * **Classic (Win32) apps** — `isUwp: false` (default):
- *   1. Try NativeWindowHandle first (fast, exact match).
- *   2. Fall back to ProcessId if the handle isn't in the UIA tree yet.
- *
- * **UWP / packaged apps** — `isUwp: true`:
- *   1. Try ProcessId first. The Win32 handle from EnumWindows almost never
- *      matches the UIAutomation NativeWindowHandle for UWP apps because
- *      UWP windows are hosted inside ApplicationFrameHost, and the UIA
- *      tree reports the inner (XAML) window handle, not the outer frame.
- *      Skipping the doomed NativeWindowHandle search saves one full
- *      findElement round-trip per retry iteration.
- *   2. Fall back to NativeWindowHandle (rarely needed, but harmless).
- *
- * @param processIds - Process IDs returned by getProcessIds for the app.
- * @param options.isUwp - When true, search by ProcessId first (see above).
+ * Delegates process-tree discovery to waitForNewWindow, then resolves the
+ * Win32 HWND to a UIA element via elementFromHandle (with a short ProcessId
+ * fallback for the rare case where UIA registration lags the Win32 window).
+ * Returns focused=false when the attached window looks like a splash screen
+ * (fewer than 2 keyboard-focusable descendants), signalling the caller to
+ * run waitForMainWindow.
  */
 export async function attachToApplicationWindow(
     this: AppiumDesktopDriver,
-    processIds: number[],
-    options: { isUwp?: boolean, deadline?: number | null } = {},
-): Promise<{ focused: boolean }> {
-    const { isUwp = false, deadline = null } = options;
+    launcherPid: number,
+    options: { deadline?: number | null } = {},
+): Promise<{ focused: boolean, knownPids: number[] }> {
+    const { deadline = null } = options;
     const waitForAppLaunchMs = normalizeWaitForAppLaunchMs(this.caps['ms:waitForAppLaunch']) || POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS;
     const windowTimeout = deadline
         ? Math.min(waitForAppLaunchMs, Math.max(0, deadline - Date.now()))
         : waitForAppLaunchMs;
-    const nativeWindowHandle = await waitForNewWindow.call(
-        this,
-        processIds[0],
-        windowTimeout,
-    );
+
+    const { handle: nativeWindowHandle, knownPids } = await waitForNewWindow.call(this, launcherPid, windowTimeout);
 
     let elementId = '';
 
-    for (let i = 1; deadline ? Date.now() < deadline : i <= MAX_POLL_ATTEMPTS; i++) {
-        // --- Strategy A: match by NativeWindowHandle (best for classic apps) ---
-        // --- Strategy B: match by ProcessId (best for UWP apps) ---
-        // Run the preferred strategy first to avoid a wasted round-trip.
+    // Short retry for UIA registration lag: the Win32 window exists (waitForNewWindow
+    // confirmed it), but the UIA COM provider may take a moment to initialise.
+    // 5 attempts × 200 ms = 1 s — enough for any real app; avoids the old 6 s burn.
+    for (let i = 1; i <= 5; i++) {
+        try {
+            elementId = await this.sendCommand('elementFromHandle', { handle: nativeWindowHandle }) as string ?? '';
+        } catch {
+            elementId = '';
+        }
 
-        if (!isUwp) {
-            // Classic path: resolve the HWND directly via AutomationElement.FromHandle.
-            // One COM call to the target window's provider — no TreeScope.Children
-            // enumeration of the desktop, so a neighboring unresponsive top-level
-            // window can't block us for the full 60s COM RPC timeout.
-            try {
-                elementId = await this.sendCommand('elementFromHandle', { handle: nativeWindowHandle }) as string ?? '';
-            } catch {
-                elementId = '';
-            }
+        if (!elementId) {
+            for (const pid of knownPids) {
+                const foundId = await this.sendCommand('findElement', {
+                    scope: 'children',
+                    condition: propertyCondition('ProcessId', pid),
+                    contextElementId: null,
+                }) as string ?? '';
 
-            if (!elementId) {
-                // Fallback to ProcessId (still uses the desktop children walk — only
-                // reached when FromHandle returned null, e.g. HWND not in UIA tree yet).
-                for (const pid of processIds) {
-                    const foundId = await this.sendCommand('findElement', {
-                        scope: 'children',
-                        condition: propertyCondition('ProcessId', pid),
-                        contextElementId: null,
-                    }) as string ?? '';
-
-                    if (foundId) {
-                        this.log.info(`Found window by ProcessId ${pid} (handle mismatch: Win32=0x${nativeWindowHandle.toString(16).padStart(8, '0')})`);
-                        elementId = foundId;
-                        break;
-                    }
-                }
-            }
-        } else {
-            // UWP path: ApplicationFrameHost often has several HWNDs
-            // (pre-existing for other UWP apps, plus calc's outer frame and
-            // inner XAML host). Iterate all of them, attaching via
-            // elementFromHandle, and pick the first whose subtree actually has
-            // focusable content — that's the loaded app. elementFromHandle is
-            // sub-ms; the IsKeyboardFocusable probe is whatever the native
-            // FindFirst costs for that window, which is negligible when the
-            // window has no content and sub-100ms when it does.
-            const uwpHandles = getWindowAllHandlesForProcessIds(processIds);
-            let fallbackElementId = '';
-            for (const hwnd of uwpHandles) {
-                let candidateId = '';
-                try {
-                    candidateId = await this.sendCommand('elementFromHandle', { handle: hwnd }) as string ?? '';
-                } catch {
-                    continue;
-                }
-                if (!candidateId) {continue;}
-                if (!fallbackElementId) {fallbackElementId = candidateId;}
-
-                const focusables = await this.sendCommand('findElements', {
-                    scope: 'descendants',
-                    condition: propertyCondition('IsKeyboardFocusable', true),
-                    contextElementId: candidateId,
-                }) as string[];
-
-                if (focusables && focusables.length >= 2) {
-                    this.log.info(`Found UWP window 0x${hwnd.toString(16).padStart(8, '0')} with content (${focusables.length} focusable descendants).`);
-                    elementId = candidateId;
+                if (foundId) {
+                    this.log.info(`Found window by ProcessId ${pid} (handle mismatch: Win32=0x${nativeWindowHandle.toString(16).padStart(8, '0')})`);
+                    elementId = foundId;
                     break;
                 }
             }
-
-            if (!elementId && fallbackElementId) {
-                // No window with content yet (calc still loading). Attach to the
-                // most recent HWND; the retry loop will try again or the post-
-                // attach splash probe will fire waitForMainWindow.
-                elementId = fallbackElementId;
-            }
-
-            if (!elementId) {
-                // No HWND matched at all — fall back to ProcessId search on
-                // desktop (slow while UWP apps are loading, but correct once
-                // calc's window is registered).
-                for (const pid of processIds) {
-                    const foundId = await this.sendCommand('findElement', {
-                        scope: 'children',
-                        condition: propertyCondition('ProcessId', pid),
-                        contextElementId: null,
-                    }) as string ?? '';
-
-                    if (foundId) {
-                        this.log.info(`Found UWP window by ProcessId ${pid}`);
-                        elementId = foundId;
-                        break;
-                    }
-                }
-            }
         }
 
-        if (elementId) {
-            break;
-        }
+        if (elementId) { break; }
 
-        this.log.info(`The window with handle 0x${nativeWindowHandle.toString(16).padStart(8, '0')} is not yet available in the UI Automation tree. Sleeping for ${POLL_INTERVAL_MS}ms and retrying... (attempt ${i})`);
+        this.log.debug(`Window 0x${nativeWindowHandle.toString(16).padStart(8, '0')} not yet in UIA tree, retry ${i}/5...`);
         await sleep(POLL_INTERVAL_MS);
     }
 
     if (!elementId) {
-        throw new errors.UnknownError(`Failed to find window in UI Automation tree after ${MAX_POLL_ATTEMPTS} retries.`);
+        throw new errors.UnknownError(`Window 0x${nativeWindowHandle.toString(16).padStart(8, '0')} did not appear in the UI Automation tree.`);
     }
 
     await this.sendCommand('setRootElementFromElementId', { elementId });
@@ -517,22 +503,15 @@ export async function attachToApplicationWindow(
         let focused = trySetForegroundWindow(nwh);
         if (!focused) {
             try {
-                await this.focusElement({
-                    [W3C_ELEMENT_KEY]: elementId,
-                } satisfies Element);
+                await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);
                 focused = true;
             } catch {
                 // Window cannot receive focus (e.g. splash screen)
             }
         }
 
-        // Splash-screen guard. UIA3's SetFocus returns success even on splash
-        // windows (unlike UIA1, which threw on non-focusable targets). Probe
-        // the attached window for keyboard-focusable descendants — splash
-        // screens typically have 0–1 (a bitmap plus maybe a single button),
-        // real app windows have several (inputs + action buttons). If the
-        // window looks splash-shaped, flag it as unfocused so the caller
-        // runs waitForMainWindow and re-attaches once the real window appears.
+        // Splash-screen guard: probe for focusable descendants.
+        // Splash screens have 0–1; real app windows have several.
         if (focused) {
             try {
                 const focusables = await this.sendCommand('findElements', {
@@ -545,13 +524,13 @@ export async function attachToApplicationWindow(
                     focused = false;
                 }
             } catch {
-                // If the check itself fails, we can't tell — leave focused as-is.
+                // leave focused as-is
             }
         }
 
-        return { focused };
+        return { focused, knownPids };
     }
-    return { focused: false };
+    return { focused: false, knownPids };
 }
 
 /**
@@ -564,8 +543,7 @@ export async function attachToApplicationWindow(
  */
 export async function waitForMainWindow(
     this: AppiumDesktopDriver,
-    processIds: number[],
-    options: { isUwp: boolean },
+    knownPids: number[],
     deadline: number,
 ): Promise<void> {
     // Capture the splash screen's window handle so we can detect when a new window appears
@@ -605,7 +583,7 @@ export async function waitForMainWindow(
             await this.sendCommand('setRootElementNull', {});
             // attachToApplicationWindow has its own polling loop for the UIA tree,
             // so it will wait until the new main window registers.
-            const result = await this.attachToApplicationWindow(processIds, { isUwp: options.isUwp, deadline });
+            const result = await this.attachToApplicationWindow(knownPids[0], { deadline });
             if (result.focused) {
                 this.log.info('Successfully attached to the main application window after splash screen.');
             } else {
@@ -616,7 +594,7 @@ export async function waitForMainWindow(
 
         // Root is still alive — check if the process now has a different (new) window
         if (splashHandle != null) {
-            const handles = getWindowAllHandlesForProcessIds(processIds);
+            const handles = getWindowAllHandlesForProcessIds(knownPids);
             const newHandle = handles.find((h) => h !== splashHandle);
             if (newHandle) {
                 this.log.info(`New window detected (0x${newHandle.toString(16).padStart(8, '0')}) alongside splash screen (attempt ${attempt}). Waiting for splash to close...`);

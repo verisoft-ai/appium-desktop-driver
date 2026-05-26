@@ -1,17 +1,12 @@
 /**
- * E2E tests for WebView2 context switching.
+ * E2E tests for WebView/CDP context switching.
  *
- * Uses the minimal WinForms + WebView2 fixture app at
- * test/fixtures/webview2-app/. Build it once with:
- *   dotnet build -c Release test/fixtures/webview2-app/WebView2TestApp.csproj
- *
- * The app opens a single WebView2 panel navigated to https://example.com
- * alongside a native WinForms status label — giving both a native UIA tree
- * and a live WebView2 CDP endpoint to test against.
+ * Uses Chrome launched with --remote-debugging-port to expose a CDP endpoint.
+ * Requires Chrome installed at the default path on the test machine.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Browser } from 'webdriverio';
-import { quitSession, closeAllTestApps, createWebView2Session } from './helpers/session.js';
+import { quitSession, closeAllTestApps, createChromeWebviewSession } from './helpers/session.js';
 
 /** Switch to the first WEBVIEW_ context; throws if none found. */
 async function switchToFirstWebview(driver: Browser): Promise<string> {
@@ -22,13 +17,13 @@ async function switchToFirstWebview(driver: Browser): Promise<string> {
     return webviewId;
 }
 
-describe('WebView2 context support', () => {
+describe('Chrome WebView context support', () => {
     let driver: Browser;
 
     beforeEach(async () => {
         closeAllTestApps();
-        driver = await createWebView2Session();
-        // Give WebView2 time to finish initialising and navigate to example.com
+        driver = await createChromeWebviewSession();
+        // Give Chrome time to finish loading the page
         await driver.pause(3000);
     });
 
@@ -59,7 +54,7 @@ describe('WebView2 context support', () => {
         expect(webview!.url).toContain('example.com');
     });
 
-    it('switches to WebView2 context and executes JavaScript', async () => {
+    it('switches to Chrome webview context and executes JavaScript', async () => {
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
 
@@ -74,7 +69,7 @@ describe('WebView2 context support', () => {
         expect(url).toContain('example.com');
     });
 
-    it('finds element by CSS selector inside WebView2', async () => {
+    it('finds element by CSS selector inside Chrome webview', async () => {
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
 
@@ -86,7 +81,30 @@ describe('WebView2 context support', () => {
         expect(text.length).toBeGreaterThan(0);
     });
 
-    it('switches back to NATIVE_APP and finds native UIA elements', async () => {
+    it('finds element by XPath inside Chrome webview', async () => {
+        const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
+        const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
+
+        await driver.switchContext(webviewId);
+
+        const h1 = await driver.$('//h1');
+        expect(await h1.isExisting()).toBe(true);
+        const text = await h1.getText();
+        expect(text.length).toBeGreaterThan(0);
+    });
+
+    it('can interact with elements inside Chrome webview', async () => {
+        const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
+        const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
+
+        await driver.switchContext(webviewId);
+
+        const body = await driver.$('body');
+        await body.click();
+        expect(await body.isDisplayed()).toBe(true);
+    });
+
+    it('switches back to NATIVE_APP after entering webview context', async () => {
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
 
@@ -94,13 +112,9 @@ describe('WebView2 context support', () => {
         await driver.switchContext('NATIVE_APP');
 
         expect(await driver.getContext()).toBe('NATIVE_APP');
-
-        // StatusLabel is a native WinForms Label — confirms UIA tree is live
-        const label = await driver.$('//Text[@Name="StatusLabel"]');
-        expect(await label.isExisting()).toBe(true);
     });
 
-    it('executes JS mutation inside WebView2 and reads it back', async () => {
+    it('executes JS mutation inside webview and reads it back', async () => {
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         const webviewId = contexts.find((c) => c.id.startsWith('WEBVIEW_'))!.id;
 
@@ -123,41 +137,19 @@ describe('WebView2 context support', () => {
     it('powerShell execute works in webview context', async () => {
         await switchToFirstWebview(driver);
 
-        // powerShell: execute is also in CHROMEDRIVER_NO_PROXY via execute/sync route
         const result = await driver.execute('powerShell', [{ script: 'Write-Output "hello"' }]) as string;
         expect(result.trim()).toBe('hello');
-    });
-
-    it('CDP port auto-selected when webviewDevtoolsPort cap omitted', async () => {
-        // Session created without explicit port — driver picks one via findFreePort.
-        // Verify webview is still reachable (port selection worked).
-        const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
-        expect(contexts.some((c) => c.id.startsWith('WEBVIEW_'))).toBe(true);
     });
 
     it('explicit webviewDevtoolsPort cap works', async () => {
         await quitSession(driver);
         closeAllTestApps();
 
-        driver = await createWebView2Session({ 'appium:webviewDevtoolsPort': 10950 });
+        driver = await createChromeWebviewSession({ 'appium:webviewDevtoolsPort': 10950 });
         await driver.pause(3000);
 
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         expect(contexts.some((c) => c.id.startsWith('WEBVIEW_'))).toBe(true);
-    });
-
-    it('getContexts returns only NATIVE_APP before WebView2 has loaded any page', async () => {
-        // Use waitForWebviewMs=0 immediately after session start (before the 3s pause)
-        // by creating a fresh session and querying immediately.
-        await quitSession(driver);
-        closeAllTestApps();
-
-        driver = await createWebView2Session({ 'appium:ms:waitForAppLaunch': 0 });
-        // No pause — query immediately, WebView2 may not be ready yet
-        const contexts = await driver.execute('mobile: getContexts', [{ waitForWebviewMs: 0 }]) as Array<{ id: string }>;
-        // NATIVE_APP must always be present
-        expect(contexts.some((c) => c.id === 'NATIVE_APP')).toBe(true);
-        // (pages may or may not be present — we only assert NATIVE_APP exists)
     });
 
     it('setContext throws for unknown context name', async () => {
@@ -165,7 +157,6 @@ describe('WebView2 context support', () => {
     });
 
     it('switching between two webview sessions tears down previous Chromedriver', async () => {
-        // Get two page IDs (if app exposes multiple); otherwise switch to same id twice.
         const contexts = await driver.execute('mobile: getContexts', [{}]) as Array<{ id: string }>;
         const webviewIds = contexts.filter((c) => c.id.startsWith('WEBVIEW_')).map((c) => c.id);
 
@@ -183,19 +174,17 @@ describe('WebView2 context support', () => {
             expect(await driver.getContext()).toBe(webviewIds[0]);
         }
 
-        // UIA still works after all the switching
         await driver.switchContext('NATIVE_APP');
-        const label = await driver.$('//Text[@Name="StatusLabel"]');
-        expect(await label.isExisting()).toBe(true);
+        expect(await driver.getContext()).toBe('NATIVE_APP');
     });
 });
 
-describe('WebView2 disabled (webviewEnabled: false)', () => {
+describe('WebView disabled (webviewEnabled: false)', () => {
     let driver: Browser;
 
     beforeEach(async () => {
         closeAllTestApps();
-        driver = await createWebView2Session({ 'appium:webviewEnabled': false });
+        driver = await createChromeWebviewSession({ 'appium:webviewEnabled': false });
         await driver.pause(1000);
     });
 
@@ -210,7 +199,6 @@ describe('WebView2 disabled (webviewEnabled: false)', () => {
     });
 
     it('getContext returns NATIVE_APP even when webviewEnabled is false', async () => {
-        // getCurrentContext does not require webviewEnabled — it just returns current state
         const ctx = await driver.getContext();
         expect(ctx).toBe('NATIVE_APP');
     });

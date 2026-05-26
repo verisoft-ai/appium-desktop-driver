@@ -18,36 +18,24 @@ describe('deleteFile', () => {
         await expect(
             deleteFile.call(driver, { path: '' })
         ).rejects.toThrow("'path' must be provided");
-        expect(driver.sendPowerShellCommand).not.toHaveBeenCalled();
+        expect(driver.sendCommand).not.toHaveBeenCalled();
     });
 
-    it('sends Remove-Item with -Path for simple paths', async () => {
+    it('sends deleteFile command with path', async () => {
         const driver = createMockDriver() as any;
         await deleteFile.call(driver, { path: 'C:\\temp\\file.txt' });
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('Remove-Item')
-        );
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('-Path \'C:\\temp\\file.txt\'')
-        );
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('-Force')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('deleteFile', { path: 'C:\\temp\\file.txt' });
     });
 
-    it('uses -LiteralPath when path contains brackets', async () => {
+    it('asserts MODIFY_FS_FEATURE before sending command', async () => {
+        const driver = createMockDriver() as any;
+        await deleteFile.call(driver, { path: 'C:\\temp\\file.txt' });
+        expect(driver.assertFeatureEnabled).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes path with special characters unchanged', async () => {
         const driver = createMockDriver() as any;
         await deleteFile.call(driver, { path: 'C:\\temp\\file[1].txt' });
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('-LiteralPath')
-        );
-    });
-
-    it('escapes single quotes in path', async () => {
-        const driver = createMockDriver() as any;
-        await deleteFile.call(driver, { path: "C:\\temp\\file's.txt" });
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('file\'\'s.txt')
-        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('deleteFile', { path: 'C:\\temp\\file[1].txt' });
     });
 });

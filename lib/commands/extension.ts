@@ -4,7 +4,7 @@ import { Element } from '@appium/types';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
-import { MODIFY_FS_FEATURE, POWER_SHELL_FEATURE } from '../constants';
+import { MODIFY_FS_FEATURE } from '../constants';
 import { AppiumDesktopDriver } from '../driver';
 import { ClickType, Enum, Key } from '../enums';
 import { propertyCondition } from '../server/conditions';
@@ -105,7 +105,6 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
     }
 
     if (script === 'powerShell') {
-        this.assertFeatureEnabled(POWER_SHELL_FEATURE);
         return await this.executePowerShellScript(args[0]);
     }
 

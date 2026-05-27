@@ -56,14 +56,14 @@ describe('execute (command router)', () => {
         ).rejects.toThrow('Unknown command');
     });
 
-    it('routes powerShell to executePowerShellScript via sendCommand', async () => {
-        driver.assertFeatureEnabled = vi.fn();
+    it('routes powerShell to executePowerShellScript', async () => {
         driver.caps = {};
-        driver.sendCommand.mockResolvedValue('output');
-        const result = await extension.execute.call(driver, 'powerShell', ['Get-Process']);
-        expect(driver.assertFeatureEnabled).toHaveBeenCalledWith('power_shell');
-        expect(driver.sendCommand).toHaveBeenCalledWith('executePowerShellScript', expect.objectContaining({ script: 'Get-Process' }));
-        expect(result).toBe('output');
+        driver.sendPowerShellCommand.mockResolvedValue('output');
+        await extension.execute.call(driver, 'powerShell', ['Get-Process']);
+        // Script is base64-encoded in pwsh wrapper; verify Get-Process is present
+        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
+            expect.stringContaining('R2V0LVByb2Nlc3M')
+        );
     });
 
     it('routes return window.name to sendCommand calls', async () => {

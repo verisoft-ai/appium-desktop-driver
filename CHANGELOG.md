@@ -1,3 +1,13 @@
+## [1.7.2-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.1...v1.7.2-preview.1) (2026-05-27)
+
+### Bug Fixes
+
+* **webview:** Chrome CDP context switching and window attachment bugs ([8fafd5b](https://github.com/verisoft-ai/appium-desktop-driver/commit/8fafd5b8de7265b7cdb0a9455926f1e8a2948898))
+
+### Miscellaneous Chores
+
+* trigger publish on develop ([2e0123f](https://github.com/verisoft-ai/appium-desktop-driver/commit/2e0123faf5de734874f62fe16280b4e86557d7ac))
+
 ## [1.7.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.0...v1.7.1) (2026-05-23)
 
 ### Miscellaneous Chores

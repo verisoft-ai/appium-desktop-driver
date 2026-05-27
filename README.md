@@ -708,6 +708,135 @@ driver.execute_script('windows: click', {
 })
 ```
 
+## WebView / Chrome CDP Support
+
+The driver supports automating embedded web content (WebView2 controls, Electron apps, or standalone Chrome/Edge) by connecting to a Chrome DevTools Protocol (CDP) endpoint and proxying commands through Chromedriver.
+
+### How it works
+
+1. Your app (or browser) exposes a CDP endpoint via `--remote-debugging-port`
+2. The driver connects to that endpoint to discover available pages
+3. You call `mobile: getContexts` to list all contexts (native + web)
+4. You switch to a web context — the driver auto-downloads the matching Chromedriver/EdgeDriver and proxies all WebDriver commands to it
+5. You switch back to `NATIVE_APP` to resume UIA automation
+
+### Required capabilities
+
+| Capability | Type | Required | Description |
+|---|---|---|---|
+| `appium:webviewEnabled` | boolean | yes | Enable CDP/WebView support |
+| `appium:webviewDevtoolsPort` | number | no | CDP port. Auto-selected if omitted (WebView2 only) |
+| `appium:chromedriverExecutablePath` | string | no | Path to local chromedriver binary (skips auto-download) |
+| `appium:edgedriverExecutablePath` | string | no | Path to local msedgedriver binary (skips auto-download) |
+| `appium:chromedriverCdnUrl` | string | no | Custom CDN base URL for Chromedriver downloads |
+| `appium:edgedriverCdnUrl` | string | no | Custom CDN base URL for EdgeDriver downloads |
+
+### Automating a standalone Chrome or Edge browser
+
+Launch the browser with `--remote-debugging-port` in `appium:appArguments` and set `appium:webviewDevtoolsPort` to the same port.
+
+```javascript
+const driver = await remote({
+    hostname: '127.0.0.1',
+    port: 4723,
+    capabilities: {
+        platformName: 'Windows',
+        'appium:automationName': 'DesktopDriver',
+        'appium:app': 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'appium:appArguments': '--remote-debugging-port=9222 --user-data-dir=C:\\Temp\\chrome-test --no-first-run https://example.com',
+        'appium:webviewEnabled': true,
+        'appium:webviewDevtoolsPort': 9222,
+    },
+});
+```
+
+### Automating a WebView2 app
+
+For apps that embed a WebView2 control, omit `appArguments` — the driver injects the debug port automatically via the `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` environment variable. You can also omit `webviewDevtoolsPort` and the driver will pick a free port automatically.
+
+```javascript
+const driver = await remote({
+    hostname: '127.0.0.1',
+    port: 4723,
+    capabilities: {
+        platformName: 'Windows',
+        'appium:automationName': 'DesktopDriver',
+        'appium:app': 'C:\\Path\\To\\YourApp.exe',
+        'appium:webviewEnabled': true,
+        // webviewDevtoolsPort is optional — auto-selected when omitted
+    },
+});
+```
+
+### Listing available contexts
+
+Use `mobile: getContexts` to get all available contexts with page metadata:
+
+```javascript
+const contexts = await driver.execute('mobile: getContexts', [{}]);
+// Returns:
+// [
+//   { id: 'NATIVE_APP' },
+//   { id: 'WEBVIEW_4F81DBA83CD27B1868B4193151C76A92', title: 'Example Domain', url: 'https://example.com/', type: 'page', ... },
+// ]
+```
+
+To wait for the WebView to finish loading before querying, pass `waitForWebviewMs`:
+
+```javascript
+const contexts = await driver.execute('mobile: getContexts', [{ waitForWebviewMs: 3000 }]);
+```
+
+The standard `driver.getContexts()` command also works but returns only IDs without metadata.
+
+### Switching to a web context
+
+```javascript
+const contexts = await driver.execute('mobile: getContexts', [{}]);
+const webviewId = contexts.find(c => c.id.startsWith('WEBVIEW_')).id;
+
+await driver.switchContext(webviewId);
+
+// Now all commands are proxied through Chromedriver
+const title = await driver.getTitle();
+const url = await driver.getUrl();
+
+const h1 = await driver.$('h1');               // CSS selector
+const heading = await driver.$('//h1');         // XPath
+console.log(await h1.getText());
+
+const docTitle = await driver.execute('return document.title');
+```
+
+### Switching back to native UIA
+
+```javascript
+await driver.switchContext('NATIVE_APP');
+
+// UIA automation resumes — find native elements normally
+const btn = await driver.$('~myButton');
+await btn.click();
+```
+
+### Running UIA commands while in a web context
+
+`windows:` extension commands and `powerShell` are always routed to the native UIA layer regardless of the active context:
+
+```javascript
+await driver.switchContext(webviewId);
+
+// These still hit UIA, not Chromedriver
+const deviceTime = await driver.execute('windows: getDeviceTime', [{}]);
+const result = await driver.execute('powerShell', [{ script: 'Get-Date' }]);
+```
+
+### Notes
+
+- The driver auto-downloads the correct Chromedriver or EdgeDriver version to match the browser. Internet access is required unless you provide `chromedriverExecutablePath` / `edgedriverExecutablePath`.
+- Only one web context can be active at a time. Switching to a second web context tears down the previous Chromedriver instance and starts a new one.
+- Use `--user-data-dir` when launching Chrome/Edge to ensure the debug port is respected even if another Chrome instance is already running.
+- Background pages, service workers, and extension pages appear in `mobile: getContexts` results. Filter by `type === 'page'` to target only real tab pages.
+
 ## Development
 
 it is recommended to use Matt Bierner's [Comment tagged templates](https://marketplace.visualstudio.com/items?itemName=bierner.comment-tagged-templates)

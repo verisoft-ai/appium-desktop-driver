@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main          # check out main (has the bumped package.json)
+          ref: ${{ github.event.workflow_run.head_branch || 'main' }}
           fetch-depth: 0
 
       - name: Use Node.js

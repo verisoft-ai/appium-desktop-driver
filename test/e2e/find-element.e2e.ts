@@ -71,7 +71,7 @@ describe('Element finding strategies', () => {
         });
 
         it('finds a descendant scoped with relative XPath', async () => {
-            const parent = await driver.$('//Window');
+            const parent = await driver.$('//Custom/Group/Group[4]');
             const child = await parent.$('.//Button');
             expect(await child.isExisting()).toBe(true);
         });
@@ -120,14 +120,14 @@ describe('Element finding strategies', () => {
 
     describe('findElementFromElement and findElementsFromElement', () => {
         it('finds a child element scoped from a parent element', async () => {
-            const window = await driver.$('//Window');
-            const child = await window.findElement('tag name', 'Button');
+            const group = await driver.$('//Custom/Group/Group[4]');
+            const child = await group.findElement('tag name', 'Button');
             expect(child).toBeDefined();
         });
 
         it('finds multiple children scoped from a parent element', async () => {
-            const window = await driver.$('//Window');
-            const children = await window.findElements('tag name', 'Button');
+            const group = await driver.$('//Custom/Group/Group[4]');
+            const children = await group.findElements('tag name', 'Button');
             expect(children.length).toBeGreaterThan(1);
         });
 

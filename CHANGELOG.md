@@ -1,3 +1,9 @@
+## [1.7.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.1...v1.7.2) (2026-05-28)
+
+### Bug Fixes
+
+* handle SetFocus failure during session attachment ([ab67483](https://github.com/verisoft-ai/appium-desktop-driver/commit/ab67483b628a6283084ab2a823df88d214b28312))
+
 ## [1.7.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.0...v1.7.1) (2026-05-23)
 
 ### Miscellaneous Chores

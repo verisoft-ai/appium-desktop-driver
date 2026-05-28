@@ -314,9 +314,13 @@ export async function attachToApplicationWindow(this: AppiumDesktopDriver, proce
                         this.log.info(`Successfully attached to window. Native window handle: 0x${confirmedHandle.toString(16).padStart(8, '0')}`);
                         this.appProcessIds = currentPids;
                         if (!trySetForegroundWindow(confirmedHandle)) {
-                            await this.focusElement({
-                                [W3C_ELEMENT_KEY]: elementId,
-                            } satisfies Element);
+                            try {
+                                await this.focusElement({
+                                    [W3C_ELEMENT_KEY]: elementId,
+                                } satisfies Element);
+                            } catch (e) {
+                                this.log.warn(`Could not focus app window: ${(e as Error).message}`);
+                            }
                         }
                         return;
                     }

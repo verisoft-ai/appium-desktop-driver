@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.Jab;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
@@ -14,6 +15,12 @@ public static class ElementCommands
             ?? throw new ArgumentException("elementId is required.");
         var propertyName = p.GetProperty("property").GetString()
             ?? throw new ArgumentException("property is required.");
+
+        if (JabElement.IsJabId(elementId))
+        {
+            var jabEl = state.Jab!.GetById(elementId);
+            return state.Jab.GetProperty(jabEl, propertyName);
+        }
 
         var element = state.GetElement(elementId);
 
@@ -101,6 +108,9 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
+        if (JabElement.IsJabId(elementId))
+            return state.Jab!.GetTagName(state.Jab.GetById(elementId));
+
         var element = state.GetElement(elementId);
         var ctId = element.CurrentControlType;
         return ConditionBuilder.ControlTypeNameById.TryGetValue(ctId, out var name) ? name : ctId.ToString();
@@ -111,6 +121,9 @@ public static class ElementCommands
         var p = parameters ?? throw new ArgumentException("Parameters required.");
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
+
+        if (JabElement.IsJabId(elementId))
+            return state.Jab!.GetText(state.Jab.GetById(elementId));
 
         var element = state.GetElement(elementId);
 
@@ -146,6 +159,9 @@ public static class ElementCommands
         var p = parameters ?? throw new ArgumentException("Parameters required.");
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
+
+        if (JabElement.IsJabId(elementId))
+            return state.Jab!.GetRect(state.Jab.GetById(elementId));
 
         var element = state.GetElement(elementId);
         var rect = element.CurrentBoundingRectangle;
@@ -183,6 +199,9 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
+        // JAB: no direct focus API — skip silently
+        if (JabElement.IsJabId(elementId)) return null;
+
         var element = state.GetElement(elementId);
         element.SetFocus();
         return null;
@@ -194,6 +213,12 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
         var value = p.GetProperty("value").GetString() ?? "";
+
+        if (JabElement.IsJabId(elementId))
+        {
+            state.Jab!.SetValue(state.Jab.GetById(elementId), value);
+            return null;
+        }
 
         var element = state.GetElement(elementId);
         if (element.GetCurrentPattern(UIA.ValuePatternId) is IUIAutomationValuePattern vp)
@@ -209,6 +234,9 @@ public static class ElementCommands
         var p = parameters ?? throw new ArgumentException("Parameters required.");
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
+
+        if (JabElement.IsJabId(elementId))
+            return state.Jab!.GetText(state.Jab.GetById(elementId));
 
         var element = state.GetElement(elementId);
         if (element.GetCurrentPattern(UIA.ValuePatternId) is IUIAutomationValuePattern vp)

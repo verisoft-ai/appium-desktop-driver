@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.Jab;
 using NovaUIAutomationServer.Protocol;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
@@ -19,6 +20,12 @@ public static class FindCommands
         if (p.TryGetProperty("contextElementId", out var ctxProp) && ctxProp.ValueKind == JsonValueKind.String)
         {
             contextElementId = ctxProp.GetString();
+        }
+
+        // Route to JAB when context is a JAB element or the UIA root is a Java window.
+        if (TryRouteToJab(state, contextElementId, out var jabRoot))
+        {
+            return state.Jab!.FindFirst(jabRoot!, conditionDto, scope);
         }
 
         // When searching from the session root we re-resolve the attached HWND
@@ -83,6 +90,12 @@ public static class FindCommands
         if (p.TryGetProperty("contextElementId", out var ctxProp) && ctxProp.ValueKind == JsonValueKind.String)
         {
             contextElementId = ctxProp.GetString();
+        }
+
+        // Route to JAB when context is a JAB element or the UIA root is a Java window.
+        if (TryRouteToJab(state, contextElementId, out var jabRoot))
+        {
+            return state.Jab!.FindAll(jabRoot!, conditionDto, scope);
         }
 
         // When searching from the session root we re-resolve the attached HWND
@@ -404,6 +417,47 @@ public static class FindCommands
             }
         }
         return results.ToArray();
+    }
+
+    // ── JAB routing ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns true when the find request should be routed to the Java Access Bridge.
+    /// Sets <paramref name="jabRoot"/> to the JAB element to search from.
+    /// </summary>
+    private static bool TryRouteToJab(SessionState state, string? contextElementId, out JabElement? jabRoot)
+    {
+        jabRoot = null;
+        if (!state.JavaSwingEnabled || state.Jab == null) return false;
+
+        // Context is already a JAB element — search within JAB subtree directly.
+        if (contextElementId != null && JabElement.IsJabId(contextElementId))
+        {
+            jabRoot = state.Jab.GetById(contextElementId);
+            return true;
+        }
+
+        // Determine the UIA element that is the search root.
+        IUIAutomationElement? uiaRoot = null;
+        if (contextElementId != null)
+        {
+            try { uiaRoot = state.GetElement(contextElementId); }
+            catch { return false; }
+        }
+        else
+        {
+            uiaRoot = state.GetLiveRoot();
+        }
+
+        if (uiaRoot == null) return false;
+
+        // Check if the UIA element sits on a Java window.
+        if (!state.IsJavaWindowElement(uiaRoot)) return false;
+
+        // Get the JAB root for this Java window HWND.
+        var hwnd = uiaRoot.CurrentNativeWindowHandle;
+        jabRoot = state.Jab.GetWindowRoot(hwnd);
+        return jabRoot != null;
     }
 
     // Native UIA3 descendant search first — sub-millisecond on typical apps.

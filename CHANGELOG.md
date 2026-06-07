@@ -1,3 +1,10 @@
+## [1.8.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.2-preview.1...v1.8.0-preview.1) (2026-06-07)
+
+### Features
+
+* **jab:** add STA message-pump thread for Java Access Bridge ([4df8fe1](https://github.com/verisoft-ai/appium-desktop-driver/commit/4df8fe14911dc8d328349acca227537ef9b778e0))
+* **javaswing:** first implementation ([2643e75](https://github.com/verisoft-ai/appium-desktop-driver/commit/2643e75012a74cdebfcc665f8f8c89b9ded4a5c2))
+
 ## [1.7.2-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.1...v1.7.2-preview.1) (2026-05-27)
 
 ### Bug Fixes

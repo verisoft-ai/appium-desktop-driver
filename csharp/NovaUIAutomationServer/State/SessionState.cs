@@ -1,3 +1,4 @@
+using NovaUIAutomationServer.Jab;
 using NovaUIAutomationServer.Uia3;
 
 namespace NovaUIAutomationServer.State;
@@ -13,6 +14,10 @@ public class SessionState
     public IUIAutomationElement? RootElement { get; private set; }
     public IUIAutomationCacheRequest? CacheRequest { get; set; }
     public IUIAutomationTreeWalker? TreeWalker { get; set; }
+
+    // Java Access Bridge
+    internal JabService? Jab { get; private set; }
+    public bool JavaSwingEnabled { get; private set; }
 
     // HWND of the attached top-level window (0 if the root is the desktop or
     // an element with no native handle). We re-resolve the root via
@@ -85,6 +90,29 @@ public class SessionState
         return RootElement ?? throw new InvalidOperationException("Root element is not set.");
     }
 
+    public void EnableJavaSwing()
+    {
+        Jab ??= new JabService();
+        if (!Jab.TryInitialize())
+            throw new InvalidOperationException(
+                "Java Access Bridge could not be loaded. Ensure a 64-bit JRE is installed and 'jabswitch -enable' has been run.");
+        JavaSwingEnabled = true;
+    }
+
+    /// <summary>
+    /// Returns true if the given UIA element's HWND is a Java window (requires JAB enabled).
+    /// </summary>
+    public bool IsJavaWindowElement(IUIAutomationElement element)
+    {
+        if (!JavaSwingEnabled || Jab == null) return false;
+        try
+        {
+            var hwnd = element.CurrentNativeWindowHandle;
+            return hwnd != IntPtr.Zero && Jab.IsJavaWindow(hwnd);
+        }
+        catch { return false; }
+    }
+
     public void Initialize()
     {
         // UIA3 cache requests are passed per-call (not pushed thread-locally like
@@ -107,5 +135,8 @@ public class SessionState
         SetRoot(null);
         CacheRequest = null;
         TreeWalker = null;
+        Jab?.Dispose();
+        Jab = null;
+        JavaSwingEnabled = false;
     }
 }

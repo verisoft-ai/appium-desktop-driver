@@ -58,12 +58,10 @@ describe('execute (command router)', () => {
 
     it('routes powerShell to executePowerShellScript', async () => {
         driver.caps = {};
-        driver.sendPowerShellCommand.mockResolvedValue('output');
-        await extension.execute.call(driver, 'powerShell', ['Get-Process']);
-        // Script is base64-encoded in pwsh wrapper; verify Get-Process is present
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledWith(
-            expect.stringContaining('R2V0LVByb2Nlc3M')
-        );
+        driver.sendCommand.mockResolvedValue('output');
+        const result = await extension.execute.call(driver, 'powerShell', ['Get-Process']);
+        expect(driver.sendCommand).toHaveBeenCalledWith('executePowerShellScript', expect.objectContaining({ script: 'Get-Process' }));
+        expect(result).toBe('output');
     });
 
     it('routes return window.name to sendCommand calls', async () => {
@@ -93,7 +91,7 @@ describe('execute (command router)', () => {
         const result = await extension.execute.call(driver, 'mobile:getContexts', [{}]) as any[];
         expect(driver.getWebViewDetails).toHaveBeenCalledWith(undefined);
         expect(result[0]).toEqual({ id: 'NATIVE_APP' });
-        expect(result[1]).toMatchObject({ id: 'page1', title: 'Test', url: 'https://example.com' });
+        expect(result[1]).toMatchObject({ id: 'WEBVIEW_page1', title: 'Test', url: 'https://example.com' });
     });
 
     it('proxies arbitrary script to chromedriver jwproxy when jwpProxyActive', async () => {

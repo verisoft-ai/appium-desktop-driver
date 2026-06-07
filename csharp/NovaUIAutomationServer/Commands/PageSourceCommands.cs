@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml;
+using NovaUIAutomationServer.Jab;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
@@ -14,6 +15,21 @@ public static class PageSourceCommands
         if (root == null)
         {
             return "<DummyRoot></DummyRoot>";
+        }
+
+        // When Java Swing mode is active and the root is a Java window, build
+        // the page source from the JAB accessibility tree instead of UIA
+        // (which sees the Java window as an opaque pane with no children).
+        if (state.JavaSwingEnabled && state.Jab != null && state.IsJavaWindowElement(root))
+        {
+            var hwnd = root.CurrentNativeWindowHandle;
+            var jabRoot = state.Jab.GetWindowRoot(hwnd);
+            if (jabRoot != null)
+            {
+                var jabDoc = new XmlDocument();
+                state.Jab.BuildXml(jabRoot, jabDoc, null);
+                return jabDoc.OuterXml;
+            }
         }
 
         var xmlDoc = new XmlDocument();

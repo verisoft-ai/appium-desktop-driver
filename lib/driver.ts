@@ -265,6 +265,12 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
 
             await this.startServerSession();
 
+            if (this.caps.javaSwing) {
+                this.log.info('Java Swing mode enabled — loading Java Access Bridge...');
+                await this.sendCommand('enableJavaSwing', {});
+                this.log.info('Java Access Bridge loaded successfully.');
+            }
+
             if (this.caps.prerun) {
                 this.log.info('Executing prerun PowerShell script...');
                 await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);

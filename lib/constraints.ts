@@ -73,6 +73,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     ffmpegExecutablePath: {
         isString: true,
     },
+    javaSwing: {
+        isBoolean: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;

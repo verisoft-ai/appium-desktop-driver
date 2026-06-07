@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.Jab;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
 
@@ -8,6 +9,16 @@ public static class PatternCommands
 {
     public static object? Invoke(SessionState state, JsonElement? parameters)
     {
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var elementId = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        if (JabElement.IsJabId(elementId))
+        {
+            state.Jab!.Invoke(state.Jab.GetById(elementId));
+            return null;
+        }
+
         var element = GetElement(state, parameters);
 
         // Fallback chain: most callers treat "invoke" as "do the default action",

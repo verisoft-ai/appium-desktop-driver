@@ -13,8 +13,10 @@ internal sealed class JabService : IDisposable
 {
     private bool _initialized;
     private bool _available;
+    private JabMessageThread? _jabThread;
 
     private readonly Dictionary<string, JabElement> _elements = new();
+    private readonly object _elementsLock = new();
 
     // JAB role_en_US → UIA ControlType name (subset, for XPath condition mapping)
     private static readonly Dictionary<string, string> RoleToControlType = new(StringComparer.OrdinalIgnoreCase)
@@ -51,7 +53,7 @@ internal sealed class JabService : IDisposable
         ["page tab list"]  = "Tab",
         ["table"]          = "Table",
         ["tree"]           = "Tree",
-        ["tree item"]      = "TreeItem",  // non-standard, common in practice
+        ["tree item"]      = "TreeItem",
         ["tool bar"]       = "ToolBar",
         ["tool tip"]       = "ToolTip",
         ["option pane"]    = "Pane",
@@ -62,7 +64,6 @@ internal sealed class JabService : IDisposable
         ["unknown"]        = "Custom",
     };
 
-    // UIA ControlType name → JAB role_en_US list (one-to-many)
     private static readonly Dictionary<string, string[]> ControlTypeToRoles =
         RoleToControlType
             .GroupBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
@@ -70,22 +71,30 @@ internal sealed class JabService : IDisposable
 
     public bool IsAvailable => _available;
 
-    /// <summary>Loads and initializes the Java Access Bridge DLL.</summary>
+    // ── Initialization ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Starts the dedicated JAB message-pump thread and initializes the Windows Access Bridge.
+    /// Must be called once before any other method.
+    /// </summary>
     public bool TryInitialize()
     {
         if (_initialized) return _available;
         _initialized = true;
         try
         {
-            JabNative.Windows_run();
+            _jabThread = new JabMessageThread();
+            _jabThread.Start(); // calls Windows_run() on STA thread with message pump
             _available = true;
         }
         catch (DllNotFoundException)
         {
+            _jabThread = null;
             _available = false;
         }
         catch
         {
+            _jabThread = null;
             _available = false;
         }
         return _available;
@@ -98,49 +107,81 @@ internal sealed class JabService : IDisposable
                 "Java Access Bridge is not available. Ensure a 64-bit JRE is installed and 'jabswitch -enable' has been run.");
     }
 
+    // ── Window detection ───────────────────────────────────────────────────────
+
     public bool IsJavaWindow(IntPtr hwnd)
     {
-        if (!_available) return false;
-        try { return JabNative.IsJavaWindow(hwnd); }
+        if (!_available || _jabThread == null) return false;
+        try { return _jabThread.Invoke(() => JabNative.IsJavaWindow(hwnd)); }
         catch { return false; }
     }
+
+    // ── Element retrieval ──────────────────────────────────────────────────────
 
     /// <summary>Gets the JAB root element for a Java window HWND.</summary>
     public JabElement? GetWindowRoot(IntPtr hwnd)
     {
         ThrowIfUnavailable();
+        return _jabThread!.Invoke(() => GetWindowRootOnThread(hwnd));
+    }
+
+    private JabElement? GetWindowRootOnThread(IntPtr hwnd)
+    {
         if (!JabNative.GetAccessibleContextFromHWND(hwnd, out var vmid, out var ac))
             return null;
-        return GetOrFetch(vmid, ac);
+        return GetOrFetchOnThread(vmid, ac);
     }
 
     public JabElement? GetOrFetch(int vmid, long ac)
     {
         if (ac == 0) return null;
         var id = JabElement.MakeId(vmid, ac);
-        if (_elements.TryGetValue(id, out var cached)) return cached;
+        lock (_elementsLock)
+        {
+            if (_elements.TryGetValue(id, out var cached)) return cached;
+        }
+        return _jabThread!.Invoke(() => GetOrFetchOnThread(vmid, ac));
+    }
+
+    private JabElement? GetOrFetchOnThread(int vmid, long ac)
+    {
+        if (ac == 0) return null;
+        var id = JabElement.MakeId(vmid, ac);
+        lock (_elementsLock)
+        {
+            if (_elements.TryGetValue(id, out var cached)) return cached;
+        }
 
         var info = new JabNative.AccessibleContextInfo();
         if (!JabNative.GetAccessibleContextInfo(vmid, ac, info)) return null;
 
         var el = new JabElement(vmid, ac, info);
-        _elements[id] = el;
+        lock (_elementsLock)
+        {
+            _elements[id] = el;
+        }
         return el;
     }
 
     public JabElement GetById(string id)
     {
-        if (_elements.TryGetValue(id, out var el)) return el;
+        lock (_elementsLock)
+        {
+            if (_elements.TryGetValue(id, out var el)) return el;
+        }
         if (!JabElement.TryParseId(id, out var vmid, out var ac))
             throw new KeyNotFoundException($"JAB element not found: {id}");
-        var fetched = GetOrFetch(vmid, ac)
+        var fetched = _jabThread!.Invoke(() => GetOrFetchOnThread(vmid, ac))
             ?? throw new KeyNotFoundException($"JAB element could not be fetched: {id}");
         return fetched;
     }
 
     public string Save(JabElement el)
     {
-        _elements[el.Id] = el;
+        lock (_elementsLock)
+        {
+            _elements[el.Id] = el;
+        }
         return el.Id;
     }
 
@@ -149,88 +190,98 @@ internal sealed class JabService : IDisposable
     public string? FindFirst(JabElement root, ConditionDto condition, string scope)
     {
         var predicate = BuildPredicate(condition);
-        return scope.ToLowerInvariant() switch
-        {
-            "element" => predicate(root) ? Save(root) : null,
-            "children" => FindFirstChildren(root, predicate),
-            "descendants" or "subtree" => FindFirstRecursive(root, predicate, scope == "subtree", 0),
-            _ => null,
-        };
+        return _jabThread!.Invoke(() => FindFirstOnThread(root, predicate, scope));
     }
 
     public string[] FindAll(JabElement root, ConditionDto condition, string scope)
     {
         var predicate = BuildPredicate(condition);
+        return _jabThread!.Invoke(() => FindAllOnThread(root, predicate, scope));
+    }
+
+    private string? FindFirstOnThread(JabElement root, Func<JabElement, bool> predicate, string scope)
+    {
+        return scope.ToLowerInvariant() switch
+        {
+            "element" => predicate(root) ? Save(root) : null,
+            "children" => FindFirstChildrenOnThread(root, predicate),
+            "descendants" or "subtree" => FindFirstRecursiveOnThread(root, predicate, scope == "subtree", 0),
+            _ => null,
+        };
+    }
+
+    private string[] FindAllOnThread(JabElement root, Func<JabElement, bool> predicate, string scope)
+    {
         return scope.ToLowerInvariant() switch
         {
             "element" => predicate(root) ? new[] { Save(root) } : Array.Empty<string>(),
-            "children" => FindAllChildren(root, predicate),
-            "descendants" or "subtree" => FindAllRecursive(root, predicate, scope == "subtree", 0),
+            "children" => FindAllChildrenOnThread(root, predicate),
+            "descendants" or "subtree" => FindAllRecursiveOnThread(root, predicate, scope == "subtree", 0),
             _ => Array.Empty<string>(),
         };
     }
 
-    private string? FindFirstChildren(JabElement node, Func<JabElement, bool> predicate)
+    private string? FindFirstChildrenOnThread(JabElement node, Func<JabElement, bool> predicate)
     {
-        var count = Math.Min(node.Info.childrenCount, 256);
+        var count = node.Info.childrenCount;
         for (var i = 0; i < count; i++)
         {
             var childAc = JabNative.GetAccessibleChildFromContext(node.VmId, node.Ac, i);
             if (childAc == 0) continue;
-            var child = GetOrFetch(node.VmId, childAc);
+            var child = GetOrFetchOnThread(node.VmId, childAc);
             if (child != null && predicate(child)) return Save(child);
         }
         return null;
     }
 
-    private string[] FindAllChildren(JabElement node, Func<JabElement, bool> predicate)
+    private string[] FindAllChildrenOnThread(JabElement node, Func<JabElement, bool> predicate)
     {
         var results = new List<string>();
-        var count = Math.Min(node.Info.childrenCount, 256);
+        var count = node.Info.childrenCount;
         for (var i = 0; i < count; i++)
         {
             var childAc = JabNative.GetAccessibleChildFromContext(node.VmId, node.Ac, i);
             if (childAc == 0) continue;
-            var child = GetOrFetch(node.VmId, childAc);
+            var child = GetOrFetchOnThread(node.VmId, childAc);
             if (child != null && predicate(child)) results.Add(Save(child));
         }
         return results.ToArray();
     }
 
-    private string? FindFirstRecursive(JabElement node, Func<JabElement, bool> predicate, bool includeSelf, int depth)
+    private string? FindFirstRecursiveOnThread(JabElement node, Func<JabElement, bool> predicate, bool includeSelf, int depth)
     {
         if (depth > 100) return null;
         if (includeSelf && predicate(node)) return Save(node);
 
-        var count = Math.Min(node.Info.childrenCount, 256);
+        var count = node.Info.childrenCount;
         for (var i = 0; i < count; i++)
         {
             var childAc = JabNative.GetAccessibleChildFromContext(node.VmId, node.Ac, i);
             if (childAc == 0) continue;
-            var child = GetOrFetch(node.VmId, childAc);
+            var child = GetOrFetchOnThread(node.VmId, childAc);
             if (child == null) continue;
             if (predicate(child)) return Save(child);
-            var found = FindFirstRecursive(child, predicate, false, depth + 1);
+            var found = FindFirstRecursiveOnThread(child, predicate, false, depth + 1);
             if (found != null) return found;
         }
         return null;
     }
 
-    private string[] FindAllRecursive(JabElement node, Func<JabElement, bool> predicate, bool includeSelf, int depth)
+    private string[] FindAllRecursiveOnThread(JabElement node, Func<JabElement, bool> predicate, bool includeSelf, int depth)
     {
         if (depth > 100) return Array.Empty<string>();
         var results = new List<string>();
         if (includeSelf && predicate(node)) results.Add(Save(node));
 
-        var count = Math.Min(node.Info.childrenCount, 256);
+        var count = node.Info.childrenCount;
         for (var i = 0; i < count; i++)
         {
             var childAc = JabNative.GetAccessibleChildFromContext(node.VmId, node.Ac, i);
             if (childAc == 0) continue;
-            var child = GetOrFetch(node.VmId, childAc);
+            var child = GetOrFetchOnThread(node.VmId, childAc);
             if (child == null) continue;
             if (predicate(child)) results.Add(Save(child));
-            results.AddRange(FindAllRecursive(child, predicate, false, depth + 1));
+            results.AddRange(FindAllRecursiveOnThread(child, predicate, false, depth + 1));
         }
         return results.ToArray();
     }
@@ -268,7 +319,8 @@ internal sealed class JabService : IDisposable
             "automationid" => el => string.Equals(el.Info.name, value, StringComparison.Ordinal),
             "classname" =>
                 el => string.Equals(el.Info.role_en_US, value, StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(el.Info.role, value, StringComparison.OrdinalIgnoreCase),
+                   || string.Equals(el.Info.role, value, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(NormalizeTagName(el.Info.role_en_US ?? ""), value, StringComparison.OrdinalIgnoreCase),
             "controltype" => BuildControlTypePredicate(value),
             "localizedcontroltype" =>
                 el => string.Equals(el.Info.role, value, StringComparison.OrdinalIgnoreCase)
@@ -285,13 +337,10 @@ internal sealed class JabService : IDisposable
 
     private Func<JabElement, bool> BuildControlTypePredicate(string controlTypeName)
     {
-        // value may be the UIA integer ID or the programmatic name (e.g. "Button" or "50000")
-        // Try to map from ControlType name to JAB roles
         if (ControlTypeToRoles.TryGetValue(controlTypeName, out var roles))
         {
             return el => roles.Any(r => string.Equals(el.Info.role_en_US, r, StringComparison.OrdinalIgnoreCase));
         }
-        // Fallback: compare directly against role_en_US / role
         return el => string.Equals(el.Info.role_en_US, controlTypeName, StringComparison.OrdinalIgnoreCase)
                   || string.Equals(el.Info.role, controlTypeName, StringComparison.OrdinalIgnoreCase);
     }
@@ -299,15 +348,15 @@ internal sealed class JabService : IDisposable
     private static bool ParseBool(string value) =>
         value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1";
 
-    private static string ExtractStringValue(System.Text.Json.JsonElement? element)
+    private static string ExtractStringValue(JsonElement? element)
     {
         if (element == null) return "";
         return element.Value.ValueKind switch
         {
-            System.Text.Json.JsonValueKind.String => element.Value.GetString() ?? "",
-            System.Text.Json.JsonValueKind.True => "true",
-            System.Text.Json.JsonValueKind.False => "false",
-            System.Text.Json.JsonValueKind.Number => element.Value.GetRawText(),
+            JsonValueKind.String => element.Value.GetString() ?? "",
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Number => element.Value.GetRawText(),
             _ => element.Value.GetRawText(),
         };
     }
@@ -371,6 +420,11 @@ internal sealed class JabService : IDisposable
     public void Invoke(JabElement el)
     {
         ThrowIfUnavailable();
+        _jabThread!.Invoke(() => InvokeOnThread(el));
+    }
+
+    private void InvokeOnThread(JabElement el)
+    {
         var actions = new JabNative.AccessibleActions();
         if (!JabNative.GetAccessibleActions(el.VmId, el.Ac, actions) || actions.actionsCount == 0)
             throw new InvalidOperationException("JAB element has no accessible actions.");
@@ -389,6 +443,11 @@ internal sealed class JabService : IDisposable
     public void SetValue(JabElement el, string value)
     {
         ThrowIfUnavailable();
+        _jabThread!.Invoke(() => SetValueOnThread(el, value));
+    }
+
+    private void SetValueOnThread(JabElement el, string value)
+    {
         if (el.Info.accessibleText == 0)
             throw new InvalidOperationException("JAB element does not support text input (accessibleText=0).");
         if (!JabNative.SetTextContents(el.VmId, el.Ac, value))
@@ -398,6 +457,11 @@ internal sealed class JabService : IDisposable
     // ── Page source XML ────────────────────────────────────────────────────────
 
     public void BuildXml(JabElement node, XmlDocument doc, XmlElement? parent, int depth = 0)
+    {
+        _jabThread!.Invoke(() => BuildXmlOnThread(node, doc, parent, depth));
+    }
+
+    private void BuildXmlOnThread(JabElement node, XmlDocument doc, XmlElement? parent, int depth = 0)
     {
         if (depth > 100) return;
         try
@@ -424,16 +488,19 @@ internal sealed class JabService : IDisposable
             if (parent == null) doc.AppendChild(el);
             else parent.AppendChild(el);
 
-            var count = Math.Min(node.Info.childrenCount, 256);
+            var count = node.Info.childrenCount;
             for (var i = 0; i < count; i++)
             {
                 var childAc = JabNative.GetAccessibleChildFromContext(node.VmId, node.Ac, i);
                 if (childAc == 0) continue;
-                var child = GetOrFetch(node.VmId, childAc);
-                if (child != null) BuildXml(child, doc, el, depth + 1);
+                var child = GetOrFetchOnThread(node.VmId, childAc);
+                if (child != null) BuildXmlOnThread(child, doc, el, depth + 1);
             }
         }
-        catch { /* swallow per-element errors */ }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[JAB] BuildXml error at depth {depth}: {ex.Message}");
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -453,14 +520,31 @@ internal sealed class JabService : IDisposable
 
     public void Dispose()
     {
-        if (_available)
+        if (_available && _jabThread != null)
         {
-            foreach (var el in _elements.Values)
+            try
             {
-                try { JabNative.ReleaseJavaObject(el.VmId, el.Ac); }
-                catch { /* best effort */ }
+                _jabThread.Invoke(() =>
+                {
+                    lock (_elementsLock)
+                    {
+                        foreach (var el in _elements.Values)
+                        {
+                            try { JabNative.ReleaseJavaObject(el.VmId, el.Ac); }
+                            catch { }
+                        }
+                    }
+                });
             }
+            catch { }
         }
-        _elements.Clear();
+
+        lock (_elementsLock)
+        {
+            _elements.Clear();
+        }
+
+        _jabThread?.Dispose();
+        _jabThread = null;
     }
 }

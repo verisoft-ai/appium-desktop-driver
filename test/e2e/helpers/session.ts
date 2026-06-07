@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { Browser } from 'webdriverio';
 import { remote } from 'webdriverio';
 
@@ -92,6 +92,25 @@ export async function createChromeWebviewSession(extraCaps?: Record<string, unkn
         } as Caps,
     });
     await driver.setTimeout({ implicit: 5000 });
+    return driver;
+}
+
+export const JAVAW_EXE_PATH = 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
+export const JAVA_SWING_FORM_CLASSPATH = resolve(process.cwd(), 'test-apps', 'java-swing-form');
+
+export async function createJavaSwingFormSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': JAVAW_EXE_PATH,
+            'appium:appArguments': `-cp ${JAVA_SWING_FORM_CLASSPATH} TestForm`,
+            'appium:javaSwing': true,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
     return driver;
 }
 

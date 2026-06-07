@@ -497,7 +497,13 @@ function convertNodeTestToCondition(nodeTest: NodeTestNode): Condition {
             if (nodeTest.name.toLowerCase() === 'appbar' || nodeTest.name.toLowerCase() === 'semanticzoom') {
                 return new PropertyCondition(Property.LOCALIZED_CONTROL_TYPE, new PSString(new PSControlType(nodeTest.name).toString()));
             }
-            return new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(nodeTest.name));
+            try {
+                return new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(nodeTest.name));
+            } catch {
+                // Unknown UIA ControlType (e.g. JAB roles: LayeredPane, PushButton, RootPane).
+                // Send as ClassName — C# normalizes JAB role_en_US to PascalCase for comparison.
+                return new PropertyCondition(Property.CLASS_NAME, new PSString(nodeTest.name));
+            }
         case NODE_TYPE_TEST:
             if (nodeTest.name === NODE) {
                 return new TrueCondition();

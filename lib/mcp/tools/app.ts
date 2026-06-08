@@ -6,7 +6,7 @@ export function registerAppTools(server: McpServer, session: AppiumSession): voi
     server.registerTool(
         'get_window_element',
         {
-            description: 'Get the root UI element of the current app window. Returns an element ID that represents the top-level window.',
+            description: 'Get the element ID of the current session\'s root window element.',
             annotations: { readOnlyHint: true },
         },
         async () => {
@@ -45,7 +45,7 @@ export function registerAppTools(server: McpServer, session: AppiumSession): voi
     server.registerTool(
         'close_app',
         {
-            description: 'Close the application under test without ending the session.',
+            description: 'Close the application under test without ending the Appium session. Only call when explicitly asked.',
             annotations: { destructiveHint: true },
         },
         async () => {

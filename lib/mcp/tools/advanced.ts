@@ -9,7 +9,7 @@ export function registerAdvancedTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'advanced_click',
         {
-            description: 'Perform an advanced click with modifier keys, multiple clicks, or custom duration. Use this for right-click, Ctrl+click, double-click, etc.',
+            description: 'Perform a click at an element or absolute screen coordinates, with optional modifier keys, multiple clicks, or custom duration. Use for right-click, double-click, Ctrl+click, or coordinate-based clicks.',
             annotations: { destructiveHint: false },
             inputSchema: {
                 elementId: z.string().optional().describe('Element to click (its center). Provide either elementId or x+y.'),

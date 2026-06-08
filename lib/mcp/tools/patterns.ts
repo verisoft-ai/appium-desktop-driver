@@ -10,7 +10,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'invoke_element',
         {
-            description: 'Invoke the default action of an element via the UIA Invoke pattern (e.g. click a button programmatically without mouse input).',
+            description: 'Invoke the default action of an element via the UIA Invoke pattern without simulating mouse input. Use for elements that do not respond to mouse clicks.',
             inputSchema: elementIdInput,
         },
         async ({ elementId }) => {

@@ -1,3 +1,9 @@
+## [2.1.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.1...v2.1.0-preview.2) (2026-06-08)
+
+### Miscellaneous Chores
+
+* untrack .claude and .vscode, add to .gitignore ([76e24dd](https://github.com/verisoft-ai/appium-desktop-driver/commit/76e24dd4738efa4a06bc09def3d5ffc5935e832a))
+
 ## [1.8.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.2-preview.1...v1.8.0-preview.1) (2026-06-07)
 
 ### Features

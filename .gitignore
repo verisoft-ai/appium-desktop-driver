@@ -154,3 +154,6 @@ test/fixtures/**/obj/
 chromedriver/
 edgedriver/
 ffmpeg/
+
+.claude/
+.vscode/

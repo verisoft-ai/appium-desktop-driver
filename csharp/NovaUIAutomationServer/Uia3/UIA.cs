@@ -534,6 +534,23 @@ public interface IUIAutomationInvokePattern
     void Invoke();
 }
 
+[ComImport, Guid("828055AD-355B-4435-86D5-3B51C14A9B1B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IUIAutomationLegacyIAccessiblePattern
+{
+    void Select(int flagsSelect);
+    void DoDefaultAction();
+    void SetValue([MarshalAs(UnmanagedType.LPWStr)] string szValue);
+    [return: MarshalAs(UnmanagedType.Interface)] object GetIAccessible();
+    int CurrentChildId { get; }
+    [return: MarshalAs(UnmanagedType.BStr)] string get_CurrentName();
+    [return: MarshalAs(UnmanagedType.BStr)] string get_CurrentValue();
+    int CurrentRole { get; }
+    int CurrentState { get; }
+    [return: MarshalAs(UnmanagedType.BStr)] string get_CurrentHelp();
+    [return: MarshalAs(UnmanagedType.BStr)] string get_CurrentKeyboardShortcut();
+    [return: MarshalAs(UnmanagedType.BStr)] string get_CurrentDefaultAction();
+}
+
 [ComImport, Guid("94CF8058-9B8D-4AB9-8BFD-4CD0A33C8C70"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IUIAutomationTogglePattern
 {

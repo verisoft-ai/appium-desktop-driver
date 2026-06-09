@@ -21,15 +21,6 @@ public static class PatternCommands
 
         var element = GetElement(state, parameters);
 
-        // Fallback chain: most callers treat "invoke" as "do the default action",
-        // not the strict UIAutomation InvokePattern. SelectionItemPattern covers
-        // ListItem/TabItem/RadioButton and is what the app uses for menu items
-        // the UIA provider chose not to mark as invokable.
-        //
-        // UIA3's IUIAutomationInvokePattern::Invoke is natively non-blocking —
-        // it posts the action and returns. No StaTaskRunner / FireAndForget
-        // wrapper is needed (unlike the managed UIA1 Invoke which could block
-        // 30–60s on WPF tree rebuilds).
         if (element.GetCurrentPattern(UIA.InvokePatternId) is IUIAutomationInvokePattern invoke)
         {
             invoke.Invoke();
@@ -38,10 +29,14 @@ public static class PatternCommands
         {
             sel.Select();
         }
+        else if (element.GetCurrentPattern(UIA.LegacyIAccessiblePatternId) is IUIAutomationLegacyIAccessiblePattern legacy)
+        {
+            legacy.DoDefaultAction();
+        }
         else
         {
             throw new InvalidOperationException(
-                "Element does not support InvokePattern or SelectionItemPattern.");
+                "Element does not support InvokePattern, SelectionItemPattern, or LegacyIAccessiblePattern.");
         }
 
         // Yield to let the target app's message pump process the event before

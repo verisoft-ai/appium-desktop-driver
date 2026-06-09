@@ -109,7 +109,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId, value }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: setValue', [{ elementId, value }]);
+                await driver.executeScript('windows: setValue', [{ [ELEMENT_KEY]: elementId }, value]);
                 return { content: [{ type: 'text' as const, text: 'value set' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };

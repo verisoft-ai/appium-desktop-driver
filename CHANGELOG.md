@@ -1,3 +1,9 @@
+## [2.1.0-preview.5](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.4...v2.1.0-preview.5) (2026-06-09)
+
+### Miscellaneous Chores
+
+* **release:** run release workflow on windows machine ([ca74226](https://github.com/verisoft-ai/appium-desktop-driver/commit/ca74226dd827acff8689ba819fec46ea23b34ed6))
+
 ## [2.1.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.3...v2.1.0-preview.4) (2026-06-09)
 
 ### Miscellaneous Chores

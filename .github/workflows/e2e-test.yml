@@ -30,13 +30,8 @@ jobs:
         run: appium driver install --source=local .
 
       - name: Start Appium server
-        shell: pwsh
-        run: |
-          Start-Process -NoNewWindow `
-            -FilePath "appium" `
-            -ArgumentList "--log-level", "info", "--allow-insecure", "modify_fs" `
-            -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
-            -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log"
+        shell: bash
+        run: npx appium --log-level info --allow-insecure modify_fs > appium.log 2>&1 &
 
       - name: Wait for Appium to be ready
         shell: pwsh
@@ -68,6 +63,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: appium-logs
-          path: |
-            appium.log
-            appium-err.log
+          path: appium.log

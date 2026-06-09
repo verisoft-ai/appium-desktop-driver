@@ -1,3 +1,9 @@
+## [2.1.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.3...v2.1.0-preview.4) (2026-06-09)
+
+### Miscellaneous Chores
+
+* SKIP_CI remove unused release-lite and claude workflows ([03b244e](https://github.com/verisoft-ai/appium-desktop-driver/commit/03b244e83f3cfeab463a4382a2cafd3c35013a35))
+
 ## [2.1.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.2...v2.1.0-preview.3) (2026-06-09)
 
 ### Bug Fixes

@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment: Release
     steps:
     - uses: actions/checkout@v5
@@ -24,15 +24,20 @@ jobs:
       with:
         node-version: 24.x
         registry-url: 'https://registry.npmjs.org'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
     - run: npm install --no-package-lock
       name: Install dependencies
+    - run: npm run build:native
+      name: Build native server
     - run: npm run build
       name: Run NPM Build
     - run: npm run lint
       name: Run NPM Lint
     - run: |
-        rm -rf package-lock.json node_modules
-        # Remove dev and peer dependencies from node_modules
+        Remove-Item -Recurse -Force package-lock.json, node_modules -ErrorAction SilentlyContinue
         npm prune --omit=dev --omit=peer --no-package-lock
       name: Remove dev dependencies and appium peer dependencies
     - run: npm shrinkwrap --omit=dev --omit=peer

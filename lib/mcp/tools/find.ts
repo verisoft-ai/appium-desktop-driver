@@ -38,7 +38,7 @@ export function registerFindTools(server: McpServer, session: AppiumSession): vo
     server.registerTool(
         'find_element',
         {
-            description: `Find a single UI element in the current app window. Returns an element ID string to pass to other tools. Returns an error if not found. ${FIND_STRATEGY_PRIORITY}`,
+            description: `Find a single UI element in the current app window. Returns an element ID string. Returns an error if not found. ${FIND_STRATEGY_PRIORITY}`,
             inputSchema: {
                 strategy: StrategyEnum.describe(
                     'Locator strategy. ' +
@@ -87,7 +87,7 @@ export function registerFindTools(server: McpServer, session: AppiumSession): vo
     server.registerTool(
         'find_child_element',
         {
-            description: `Find a child element within a parent element. Returns an element ID string. ${FIND_STRATEGY_PRIORITY}`,
+            description: `Find a child element scoped to a known parent element's subtree. Use when the same selector exists in multiple parts of the UI and you need to narrow the search. ${FIND_STRATEGY_PRIORITY}`,
             inputSchema: {
                 parentElementId: z.string().min(1).describe('Element ID of the parent to search within'),
                 strategy: StrategyEnum.describe(

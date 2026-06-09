@@ -161,6 +161,7 @@ export async function createTodoTask(driver: Browser, content: string): Promise<
     const textArea = await driver.$('//Custom/Group/Edit');
     await textArea.setValue(content);
     await driver.keys(['Enter']);
+    await driver.pause(500);
 }
 
 export async function deleteTasks(driver: Browser): Promise<void> {
@@ -172,15 +173,17 @@ export async function deleteTasks(driver: Browser): Promise<void> {
         const elementId: string = await tasks[0].elementId;
 
         // Right-click the first task to open the context menu
-        driver.executeScript('windows: click', [{
+        await driver.executeScript('windows: click', [{
             elementId,
             button: 'right',
         }]);
+        await driver.pause(500);
 
-        // Click "Delete" in the context menu
-        await driver.$('//MenuItem[@Name="Delete task"]').click();
+        // Navigate context menu with keyboard — avoids UIA traversal dismissing the popup
+        await driver.keys(['Delete']);
 
         // Confirm the deletion in the popup dialog
         await driver.$('~PrimaryButton').click();
+        await driver.pause(500);
     }
 }

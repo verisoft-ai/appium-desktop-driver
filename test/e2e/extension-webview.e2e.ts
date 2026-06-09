@@ -134,10 +134,10 @@ describe('Chrome WebView context support', () => {
         expect(time.length).toBeGreaterThan(0);
     });
 
-    it('powerShell execute works in webview context', async () => {
+    it('powerShell script still works in webview context', async () => {
         await switchToFirstWebview(driver);
 
-        const result = await driver.execute('powerShell', [{ script: 'Write-Output "hello"' }]) as string;
+        const result = await driver.executeScript('powerShell', [{ script: 'Write-Output "hello"' }]) as string;
         expect(result.trim()).toBe('hello');
     });
 

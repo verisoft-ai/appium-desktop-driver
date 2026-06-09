@@ -8,26 +8,12 @@ const elementIdInput = { elementId: elementIdSchema };
 
 export function registerWindowTools(server: McpServer, session: AppiumSession): void {
     server.registerTool(
-        'take_screenshot',
-        {
-            description: 'Capture a screenshot of the current app window as a PNG image.',
-            annotations: { readOnlyHint: true },
-        },
-        async () => {
-            try {
-                const driver = session.getDriver();
-                const base64 = await driver.takeScreenshot();
-                return { content: [{ type: 'image' as const, data: base64, mimeType: 'image/png' }] };
-            } catch (err) {
-                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
-            }
-        }
-    );
-
-    server.registerTool(
         'get_page_source',
         {
-            description: 'Get the XML representation of the current UI element tree. Useful for understanding the app structure before deciding what to interact with.',
+            description:
+                'Get the XML representation of the current UIA element tree. ' +
+                'Use as the source of truth for current UI state — call whenever you are unsure what is on screen or after a UI change (navigation, dialog, window switch). ' +
+                'Inspect the result to discover element Names and AutomationIds.',
             annotations: { readOnlyHint: true },
         },
         async () => {
@@ -61,7 +47,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
     server.registerTool(
         'get_window_handles',
         {
-            description: 'Get all available window handles for the current session.',
+            description: 'Get all available window handles for the current session. Use when the app has multiple windows.',
             annotations: { readOnlyHint: true },
         },
         async () => {
@@ -78,7 +64,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
     server.registerTool(
         'switch_to_window',
         {
-            description: 'Switch focus to a different window by its handle.',
+            description: 'Switch focus to a different window by its handle (from get_window_handles).',
             inputSchema: {
                 handle: z.string().min(1).describe('Window handle to switch to (from get_window_handles)'),
             },

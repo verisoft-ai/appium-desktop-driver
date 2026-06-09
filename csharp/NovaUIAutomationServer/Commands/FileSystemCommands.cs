@@ -11,6 +11,9 @@ public static class FileSystemCommands
         var path = p.GetProperty("path").GetString()
             ?? throw new ArgumentException("path is required.");
 
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"File not found: {path}");
+
         File.Delete(path);
         return null;
     }

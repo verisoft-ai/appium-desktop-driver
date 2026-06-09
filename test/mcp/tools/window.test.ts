@@ -4,35 +4,6 @@ import { createMockServer } from '../fixtures/server.js';
 import { createMockSession } from '../fixtures/session.js';
 
 describe('window tools', () => {
-    describe('take_screenshot', () => {
-        it('calls driver.takeScreenshot() and returns image content', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue('base64encodedpng');
-            registerWindowTools(server, session);
-
-            const result = await server.call('take_screenshot') as any;
-
-            expect(mockBrowser.takeScreenshot).toHaveBeenCalled();
-            expect(result.content[0].type).toBe('image');
-            expect(result.content[0].data).toBe('base64encodedpng');
-            expect(result.content[0].mimeType).toBe('image/png');
-            expect(result.isError).toBeUndefined();
-        });
-
-        it('returns isError on failure', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.takeScreenshot = vi.fn().mockRejectedValue(new Error('screenshot failed'));
-            registerWindowTools(server, session);
-
-            const result = await server.call('take_screenshot') as any;
-
-            expect(result.isError).toBe(true);
-            expect(result.content[0].text).toContain('screenshot failed');
-        });
-    });
-
     describe('get_page_source', () => {
         it('calls driver.getPageSource() and returns XML string', async () => {
             const server = createMockServer();

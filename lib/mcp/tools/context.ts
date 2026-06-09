@@ -7,7 +7,7 @@ export function registerContextTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'get_current_context',
         {
-            description: 'Get the current context name ("NATIVE_APP" or "WEBVIEW_<id>").',
+            description: 'Get the current active context. Returns "NATIVE_APP" (UIA element tree, find_element works here) or "WEBVIEW_<id>" (web DOM, standard web selectors apply). Call this if unsure which context is active before interacting.',
             annotations: { readOnlyHint: true },
         },
         async () => {
@@ -24,7 +24,7 @@ export function registerContextTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'get_contexts',
         {
-            description: 'Get all available context names, including NATIVE_APP and any WEBVIEW_* contexts.',
+            description: 'List all available contexts. Returns "NATIVE_APP" for the UIA element tree, and any embedded webview contexts as "WEBVIEW_<id>".',
             annotations: { readOnlyHint: true },
         },
         async () => {
@@ -41,7 +41,7 @@ export function registerContextTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'set_context',
         {
-            description: 'Switch to a context by name ("NATIVE_APP" or "WEBVIEW_<id>").',
+            description: 'Switch the active context. Pass "NATIVE_APP" to return to the UIA element tree, or a "WEBVIEW_<id>" from get_contexts to switch into an embedded webview.',
             inputSchema: z.object({
                 name: z.string().describe('Context name to switch to'),
             }),

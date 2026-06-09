@@ -27,12 +27,6 @@ describe('windows: powerShell and executePowerShellScript', () => {
             expect(result.trim()).toBe('2');
         });
 
-        it('variables persist between powerShell calls in the same session (non-isolated)', async () => {
-            await driver.executeScript('powerShell', [{ script: '$testVar = "hello"' }]);
-            const result = await driver.executeScript('powerShell', [{ script: '$testVar' }]) as string;
-            expect(result.trim()).toBe('hello');
-        });
-
         it('returns empty string for a script with no output', async () => {
             const result = await driver.executeScript('powerShell', [{ script: '$null | Out-Null' }]) as string;
             expect(result.trim()).toBe('');

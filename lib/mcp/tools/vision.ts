@@ -48,10 +48,8 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
         'analyze_screen',
         {
             description:
-                'Take a screenshot and return it to the calling agent for visual analysis — no external API key needed. ' +
-                'Automatically computes a DPI-aware coordinate mapping: when the agent identifies an element, ' +
-                'it receives the conversion formula (img_x/img_y → screen_x/screen_y) so returned coordinates ' +
-                'are ready to pass directly to click tools.',
+                'Take a screenshot and return it to the calling agent for visual analysis. No external API key required. ' +
+                'Includes a DPI-aware coordinate mapping so any coordinates identified are ready for click interactions.',
             inputSchema: {
                 prompt: z.string().min(1).describe(
                     'Question or instruction about the screenshot. ' +
@@ -94,13 +92,10 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
         'find_by_vision',
         {
             description:
-                'Take a screenshot and analyze it with a vision model, returning the result directly. ' +
-                'For "coordinates" format, locates a UI element and returns {x,y,label} with actual screen ' +
-                'coordinates (DPI-corrected) ready to pass to click tools. ' +
-                'For "text" format, answers a general question about the screen in plain text. ' +
-                'Requires ANTHROPIC_API_KEY (Claude), OPENAI_API_KEY (GPT-4o / o-series), ' +
-                'GEMINI_API_KEY (Gemini), or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (Amazon Nova via Bedrock) ' +
-                'depending on the chosen model.',
+                'Take a screenshot and delegate visual analysis to an external vision model, returning the result. ' +
+                'Use when visual analysis should be performed by a separate model rather than by the calling agent. ' +
+                'Requires an external API key: ANTHROPIC_API_KEY (claude-*), OPENAI_API_KEY (gpt-*/o-series), ' +
+                'GEMINI_API_KEY (gemini-*), or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (amazon.nova-*).',
             inputSchema: {
                 prompt: z.string().min(1).describe('Question or instruction about the screenshot'),
                 responseFormat: z.enum(['coordinates', 'text']).default('coordinates').describe(

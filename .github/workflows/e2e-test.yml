@@ -1,0 +1,73 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      - name: Build driver
+        run: npm run build
+
+      - name: Install Appium
+        run: npm install -g appium@next
+
+      - name: Install driver into Appium
+        run: appium driver install --source=local .
+
+      - name: Start Appium server
+        shell: pwsh
+        run: |
+          Start-Process -NoNewWindow `
+            -FilePath "appium" `
+            -ArgumentList "--log-level", "info", "--allow-insecure", "modify_fs" `
+            -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
+            -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log"
+
+      - name: Wait for Appium to be ready
+        shell: pwsh
+        run: |
+          $timeout = 30
+          $elapsed = 0
+          do {
+            Start-Sleep -Seconds 1
+            $elapsed++
+            try {
+              $response = Invoke-WebRequest -Uri "http://127.0.0.1:4723/status" -UseBasicParsing -ErrorAction Stop
+              if ($response.StatusCode -eq 200) {
+                Write-Host "Appium ready after ${elapsed}s"
+                break
+              }
+            } catch {}
+          } while ($elapsed -lt $timeout)
+          if ($elapsed -ge $timeout) {
+            Write-Error "Appium did not start within ${timeout}s"
+            Get-Content "$env:GITHUB_WORKSPACE\appium.log" -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+      - name: Run E2E tests
+        run: npx vitest run --config vitest.e2e.config.ts --exclude "test/e2e/extension-vision.e2e.ts"
+
+      - name: Upload Appium logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-logs
+          path: |
+            appium.log
+            appium-err.log

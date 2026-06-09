@@ -80,6 +80,7 @@ const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
 
 export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
     serverClient?: NovaUIAutomationClient;
+    mouseButtonsDown: Set<number> = new Set();
     keyboardState: KeyboardState = {
         pressed: new Set(),
         alt: false,

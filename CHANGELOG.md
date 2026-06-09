@@ -1,3 +1,11 @@
+## [2.1.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.2...v2.1.0-preview.3) (2026-06-09)
+
+### Bug Fixes
+
+* **invoke:** fall back to LegacyIIAccessiblePattern when InvokePattern QI fails ([31c1a0e](https://github.com/verisoft-ai/appium-desktop-driver/commit/31c1a0ed92288e4158eb1aa12af06f3825762c45))
+* **mcp:** introduce system prompt in mcp and clarify descriptions ([db645f8](https://github.com/verisoft-ai/appium-desktop-driver/commit/db645f863d7a083b9db956589363d614837a2c1b))
+* throw error when deleting unexisting file/folder ([7258d85](https://github.com/verisoft-ai/appium-desktop-driver/commit/7258d8508e955b257a7134ce23adebe6a3fe3847))
+
 ## [2.1.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.1...v2.1.0-preview.2) (2026-06-08)
 
 ### Miscellaneous Chores

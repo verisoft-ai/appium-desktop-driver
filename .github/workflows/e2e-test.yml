@@ -31,42 +31,44 @@ jobs:
         run: appium driver install --source=local $PWD
 
       - name: Start Appium server
-        shell: pwsh
+        shell: cmd
+        # Using cmd with start /B prevents GitHub Actions from killing the process on step exit
         run: |
-          $env:RUNNER_TRACKING_ID = ""
-          $appiumPath = (Get-Command appium.cmd).Source
-          Start-Process -FilePath $appiumPath `
-            -ArgumentList "--log-level","info" `
-            -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
-            -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log" `
-            -WindowStyle Hidden
+          set RUNNER_TRACKING_ID=dontKillMe
+          start /B appium --log-level info > appium.log 2> appium-err.log
 
       - name: Wait for Appium to be ready
         shell: pwsh
         run: |
           $timeout = 60
           $elapsed = 0
+          # Ensure Appium path is clear and poll the correct Appium 2.x/3.x base path
           do {
-            Start-Sleep -Seconds 1
-            $elapsed++
+            Start-Sleep -Seconds 2
+            $elapsed += 2
             try {
+              # Appium 2+ status endpoint responds natively without a prefix path
               $response = Invoke-WebRequest -Uri "http://127.0.0.1:4723/status" -UseBasicParsing -ErrorAction Stop
               if ($response.StatusCode -eq 200) {
                 Write-Host "Appium ready after ${elapsed}s"
+                $json = $response.Content | ConvertFrom-Json
+                Write-Host "Appium Status: $($json.value)"
                 break
               }
-            } catch {}
+            } catch {
+              # Silently catch network errors during warmup
+            }
           } while ($elapsed -lt $timeout)
+
           if ($elapsed -ge $timeout) {
-            $appiumProc = Get-Process -Name "node" -ErrorAction SilentlyContinue
-            Write-Host "Appium process alive: $($null -ne $appiumProc)"
             Write-Error "Appium did not start within ${timeout}s"
             Write-Host "=== appium.log ==="
-            Get-Content "$env:GITHUB_WORKSPACE\appium.log" -ErrorAction SilentlyContinue
+            if (Test-Path "appium.log") { Get-Content "appium.log" }
             Write-Host "=== appium-err.log ==="
-            Get-Content "$env:GITHUB_WORKSPACE\appium-err.log" -ErrorAction SilentlyContinue
+            if (Test-Path "appium-err.log") { Get-Content "appium-err.log" }
             exit 1
           }
+
 
       - name: Run E2E tests
         run: |

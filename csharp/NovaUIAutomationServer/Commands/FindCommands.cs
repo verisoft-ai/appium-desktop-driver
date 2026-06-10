@@ -161,6 +161,17 @@ public static class FindCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
+        if (JabElement.IsJabId(elementId))
+        {
+            if (state.Jab == null) return false;
+            try
+            {
+                var jabEl = state.Jab.GetById(elementId);
+                return state.Jab.GetFreshInfo(jabEl) != null;
+            }
+            catch { return false; }
+        }
+
         return state.ElementTable.ContainsKey(elementId);
     }
 

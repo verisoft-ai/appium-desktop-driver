@@ -62,15 +62,40 @@ public static class PatternCommands
 
     public static object? Toggle(SessionState state, JsonElement? parameters)
     {
-        var p = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
-        p.Toggle();
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var elementId = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        // JAB has no TogglePattern — fire the default accessible action (toggles checkboxes, buttons).
+        if (JabElement.IsJabId(elementId))
+        {
+            state.Jab!.Invoke(state.Jab.GetById(elementId));
+            Thread.Sleep(50); // match UIA Invoke settle delay so the next state-read isn't stale
+            return null;
+        }
+
+        var pattern = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
+        pattern.Toggle();
         return null;
     }
 
     public static object? GetToggleState(SessionState state, JsonElement? parameters)
     {
-        var p = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
-        return p.CurrentToggleState.ToString();
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var id = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        // JAB: re-fetch info live — cached Info.states is stale after interaction.
+        if (JabElement.IsJabId(id))
+        {
+            var states = GetJabStates(state, state.Jab!.GetById(id));
+            if (states.Contains("indeterminate", StringComparison.OrdinalIgnoreCase))
+                return "Indeterminate";
+            return states.Contains("checked", StringComparison.OrdinalIgnoreCase) ? "On" : "Off";
+        }
+
+        var pattern = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
+        return pattern.CurrentToggleState.ToString();
     }
 
     public static object? SetRangeValue(SessionState state, JsonElement? parameters)
@@ -119,8 +144,20 @@ public static class PatternCommands
 
     public static object? IsSelected(SessionState state, JsonElement? parameters)
     {
-        var p = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");
-        return p.CurrentIsSelected != 0;
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var id = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        // JAB: re-fetch info live — cached Info.states is stale after interaction.
+        if (JabElement.IsJabId(id))
+        {
+            var states = GetJabStates(state, state.Jab!.GetById(id));
+            return states.Contains("checked", StringComparison.OrdinalIgnoreCase)
+                || states.Contains("selected", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var pattern = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");
+        return pattern.CurrentIsSelected != 0;
     }
 
     public static object? IsMultipleSelect(SessionState state, JsonElement? parameters)
@@ -199,6 +236,9 @@ public static class PatternCommands
         }
         throw new InvalidOperationException("Element does not support TransformPattern.");
     }
+
+    private static string GetJabStates(SessionState state, JabElement jabEl)
+        => (state.Jab!.GetFreshInfo(jabEl) ?? jabEl.Info).states ?? "";
 
     private static IUIAutomationElement GetElement(SessionState state, JsonElement? parameters)
     {

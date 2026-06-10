@@ -32,8 +32,9 @@ jobs:
       - name: Start Appium server
         shell: pwsh
         run: |
-          Start-Process -FilePath "appium" `
-            -ArgumentList "--log-level","info","--allow-insecure","modify_fs" `
+          $appiumPath = (Get-Command appium.cmd).Source
+          Start-Process -FilePath $appiumPath `
+            -ArgumentList "--log-level","info" `
             -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
             -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log" `
             -NoNewWindow

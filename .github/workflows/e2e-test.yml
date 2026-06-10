@@ -36,8 +36,6 @@ jobs:
           $appiumPath = (Get-Command appium.cmd).Source
           Start-Process -FilePath $appiumPath `
             -ArgumentList "--log-level","info" `
-            -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
-            -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log" `
             -NoNewWindow
 
       - name: Wait for Appium to be ready

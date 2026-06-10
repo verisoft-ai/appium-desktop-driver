@@ -33,6 +33,7 @@ jobs:
       - name: Start Appium server
         shell: pwsh
         run: |
+          $env:RUNNER_TRACKING_ID = ""
           $appiumPath = (Get-Command appium.cmd).Source
           Start-Process -FilePath $appiumPath `
             -ArgumentList "--log-level","info" `

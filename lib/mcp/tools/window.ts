@@ -1,3 +1,4 @@
+import { W3C_ELEMENT_KEY } from '@appium/base-driver';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AppiumSession } from '../session.js';
@@ -92,7 +93,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: maximize', [{ elementId }]);
+                await driver.executeScript('windows: maximize', [{ [W3C_ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'maximized' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -110,7 +111,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: minimize', [{ elementId }]);
+                await driver.executeScript('windows: minimize', [{ [W3C_ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'minimized' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -128,7 +129,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: restore', [{ elementId }]);
+                await driver.executeScript('windows: restore', [{ [W3C_ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'restored' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -146,7 +147,7 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: close', [{ elementId }]);
+                await driver.executeScript('windows: close', [{ [W3C_ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'closed' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };

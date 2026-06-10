@@ -27,7 +27,8 @@ jobs:
         run: npm install -g appium@3.5.0
 
       - name: Install driver into Appium
-        run: appium driver install --source=local .
+        shell: pwsh
+        run: appium driver install --source=local $PWD
 
       - name: Start Appium server
         shell: pwsh

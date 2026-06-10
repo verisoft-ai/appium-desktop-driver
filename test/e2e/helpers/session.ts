@@ -143,13 +143,13 @@ async function calcEl(driver: Browser, automationId: string, fallback: string) {
     return driver.$(fallback);
 }
 
-export const calcClearBtn = (d: Browser) => calcEl(d, 'clearButton', '//Button[@Name="Clear"]');
-export const calcResults = (d: Browser) => calcEl(d, 'CalculatorResults', '//Text[contains(@AutomationId,"Results")]');
-export const calcNumBtn = (d: Browser, n: number) => calcEl(d, `num${n}Button`, `//Button[@Name="${n}"]`);
-export const calcEqualBtn = (d: Browser) => calcEl(d, 'equalButton', '//Button[@Name="Equals"]');
-export const calcPlusBtn = (d: Browser) => calcEl(d, 'plusButton', '//Button[@Name="Plus"]');
-export const calcTogglePane = (d: Browser) => calcEl(d, 'TogglePaneButton', '//Button[@Name="Open Navigation"]');
-export const calcStandardMode = (d: Browser) => calcEl(d, 'Standard', '//ListItem[@Name="Standard"]');
+export const calcClearBtn = (d: Browser) => calcEl(d, 'clearButton', '//*[@AutomationId="81"]');
+export const calcResults = (d: Browser) => calcEl(d, 'CalculatorResults', '//*[@AutomationId="150"]');
+export const calcNumBtn = (d: Browser, n: number) => calcEl(d, `num${n}Button`, `//*[@AutomationId="${130 + n}"]`);
+export const calcEqualBtn = (d: Browser) => calcEl(d, 'equalButton', '//*[@AutomationId="121"]');
+export const calcPlusBtn = (d: Browser) => calcEl(d, 'plusButton', '//*[@AutomationId="93"]');
+export const calcTogglePane = (d: Browser) => calcEl(d, 'TogglePaneButton', '//*[@AutomationId="TogglePaneButton"]');
+export const calcStandardMode = (d: Browser) => calcEl(d, 'Standard', '//*[@AutomationId="Standard"]');
 
 /** Click the Calculator clear button to reset the display to 0 */
 export async function resetCalculator(driver: Browser): Promise<void> {

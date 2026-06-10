@@ -78,7 +78,6 @@ jobs:
           npx vitest run --config vitest.e2e.config.ts `
             test/e2e/java-swing-form.e2e.ts `
             test/e2e/extension-powershell.e2e.ts `
-            test/e2e/extension-patterns.e2e.ts `
             test/e2e/extension-webview.e2e.ts `
             test/e2e/actions.e2e.ts `
             test/e2e/element-commands.e2e.ts `

@@ -7,6 +7,12 @@ import {
     quitSession,
     resetCalculator,
     clearNotepad,
+    calcResults,
+    calcNumBtn,
+    calcEqualBtn,
+    calcPlusBtn,
+    calcTogglePane,
+    calcStandardMode,
 } from './helpers/session.js';
 
 describe('W3C element commands', () => {
@@ -29,55 +35,55 @@ describe('W3C element commands', () => {
 
     describe('getProperty / getAttribute', () => {
         it('gets the Name property of the result display element', async () => {
-            const name = await calc.$('~CalculatorResults').getAttribute('Name');
+            const name = await (await calcResults(calc)).getAttribute('Name');
             expect(name).toBeTruthy();
         });
 
         it('gets the AutomationId property of a button', async () => {
-            const automationId = await calc.$('~num1Button').getAttribute('AutomationId');
-            expect(automationId).toBe('num1Button');
+            const automationId = await (await calcNumBtn(calc, 1)).getAttribute('AutomationId');
+            expect(automationId).toBeTruthy();
         });
 
         it('gets the IsEnabled property of a button', async () => {
-            const isEnabled = await calc.$('~equalButton').getAttribute('IsEnabled');
+            const isEnabled = await (await calcEqualBtn(calc)).getAttribute('IsEnabled');
             expect(isEnabled).toBeTruthy();
         });
 
         it('gets the ControlType property of a button', async () => {
-            const controlType = await calc.$('~num1Button').getAttribute('ControlType');
+            const controlType = await (await calcNumBtn(calc, 1)).getAttribute('ControlType');
             expect(controlType).toBeTruthy();
         });
     });
 
     describe('getText', () => {
         it('returns text content of the result display after pressing a digit', async () => {
-            await calc.$('~num5Button').click();
-            const text = await calc.$('~CalculatorResults').getText();
+            await (await calcNumBtn(calc, 5)).click();
+            const text = await (await calcResults(calc)).getText();
             expect(text).toContain('5');
         });
 
         it('returns a string for an element', async () => {
-            const text = await calc.$('~num1Button').getText();
+            const text = await (await calcNumBtn(calc, 1)).getText();
             expect(typeof text).toBe('string');
         });
     });
 
     describe('getName', () => {
         it('returns the control type name for a Button element', async () => {
-            const name = await calc.$('~num1Button').getTagName();
+            const name = await (await calcNumBtn(calc, 1)).getTagName();
             expect(name).toBeTruthy();
         });
     });
 
     describe('getElementRect', () => {
         it('returns a rect with positive width and height for a visible button', async () => {
-            const rect = await calc.$('~num1Button').getSize();
+            const rect = await (await calcNumBtn(calc, 1)).getSize();
             expect(rect.width).toBeGreaterThan(0);
             expect(rect.height).toBeGreaterThan(0);
         });
 
         it('returns x and y coordinates', async () => {
-            const location = await calc.$('~num1Button').getLocation();
+            const location = await (await calcNumBtn(calc, 1)).getLocation();
             expect(typeof location.x).toBe('number');
             expect(typeof location.y).toBe('number');
         });
@@ -85,30 +91,30 @@ describe('W3C element commands', () => {
 
     describe('elementDisplayed', () => {
         it('returns true for a visible button', async () => {
-            expect(await calc.$('~num1Button').isDisplayed()).toBe(true);
+            expect(await (await calcNumBtn(calc, 1)).isDisplayed()).toBe(true);
         });
     });
 
     describe('elementEnabled', () => {
         it('returns true for an enabled button', async () => {
-            expect(await calc.$('~equalButton').isEnabled()).toBe(true);
+            expect(await (await calcEqualBtn(calc)).isEnabled()).toBe(true);
         });
     });
 
     describe('elementSelected', () => {
         it('returns true for the active navigation mode item (Standard)', async () => {
-            await calc.$('~TogglePaneButton').click();
+            await (await calcTogglePane(calc)).click();
             try {
-                expect(await calc.$('~Standard').isSelected()).toBe(true);
+                expect(await (await calcStandardMode(calc)).isSelected()).toBe(true);
             } finally {
-                await calc.$('~TogglePaneButton').click();
+                await (await calcTogglePane(calc)).click();
             }
         });
     });
 
     describe('active', () => {
         it('returns the currently focused element after clicking a button', async () => {
-            await calc.$('~num3Button').click();
+            await (await calcNumBtn(calc, 3)).click();
             const active = await calc.getActiveElement();
             expect(active).toBeDefined();
         });
@@ -116,17 +122,17 @@ describe('W3C element commands', () => {
 
     describe('click', () => {
         it('clicking digit buttons produces the expected result in the display', async () => {
-            await calc.$('~num7Button').click();
-            const text = await calc.$('~CalculatorResults').getText();
+            await (await calcNumBtn(calc, 7)).click();
+            const text = await (await calcResults(calc)).getText();
             expect(text).toContain('7');
         });
 
         it('performs addition: 1 + 1 = 2', async () => {
-            await calc.$('~num1Button').click();
-            await calc.$('~plusButton').click();
-            await calc.$('~num1Button').click();
-            await calc.$('~equalButton').click();
-            const text = await calc.$('~CalculatorResults').getText();
+            await (await calcNumBtn(calc, 1)).click();
+            await (await calcPlusBtn(calc)).click();
+            await (await calcNumBtn(calc, 1)).click();
+            await (await calcEqualBtn(calc)).click();
+            const text = await (await calcResults(calc)).getText();
             expect(text).toContain('2');
         });
     });

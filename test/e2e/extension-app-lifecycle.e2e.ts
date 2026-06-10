@@ -7,6 +7,7 @@ import {
     quitSession,
     CALCULATOR_APP_ID,
     closeAllTestApps,
+    calcResults,
 } from './helpers/session.js';
 
 // Each test creates its own session because app lifecycle commands mutate session state.
@@ -20,7 +21,7 @@ describe('App lifecycle commands', () => {
             const driver = await createCalculatorSession();
             try {
                 await driver.executeScript('windows: launchApp', []);
-                const display = await driver.$('~CalculatorResults');
+                const display = await calcResults(driver);
                 const text = await display.getText();
                 expect(text).toContain('0');
             } finally {
@@ -45,7 +46,7 @@ describe('App lifecycle commands', () => {
             try {
                 await driver.executeScript('windows: closeApp', []);
                 await driver.executeScript('windows: launchApp', []);
-                const display = await driver.$('~CalculatorResults');
+                const display = await calcResults(driver);
                 expect(await display.isExisting()).toBe(true);
             } finally {
                 await quitSession(driver);

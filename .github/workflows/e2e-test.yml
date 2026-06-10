@@ -30,13 +30,18 @@ jobs:
         run: appium driver install --source=local .
 
       - name: Start Appium server
-        shell: bash
-        run: npx appium --log-level info --allow-insecure modify_fs > appium.log 2>&1 &
+        shell: pwsh
+        run: |
+          Start-Process -FilePath "appium" `
+            -ArgumentList "--log-level","info","--allow-insecure","modify_fs" `
+            -RedirectStandardOutput "$env:GITHUB_WORKSPACE\appium.log" `
+            -RedirectStandardError "$env:GITHUB_WORKSPACE\appium-err.log" `
+            -NoNewWindow
 
       - name: Wait for Appium to be ready
         shell: pwsh
         run: |
-          $timeout = 30
+          $timeout = 60
           $elapsed = 0
           do {
             Start-Sleep -Seconds 1
@@ -52,15 +57,26 @@ jobs:
           if ($elapsed -ge $timeout) {
             Write-Error "Appium did not start within ${timeout}s"
             Get-Content "$env:GITHUB_WORKSPACE\appium.log" -ErrorAction SilentlyContinue
+            Get-Content "$env:GITHUB_WORKSPACE\appium-err.log" -ErrorAction SilentlyContinue
             exit 1
           }
 
       - name: Run E2E tests
-        run: npx vitest run --config vitest.e2e.config.ts --exclude "test/e2e/extension-vision.e2e.ts"
+        run: |
+          npx vitest run --config vitest.e2e.config.ts `
+            test/e2e/java-swing-form.e2e.ts `
+            test/e2e/extension-powershell.e2e.ts `
+            test/e2e/extension-patterns.e2e.ts `
+            test/e2e/extension-webview.e2e.ts `
+            test/e2e/actions.e2e.ts `
+            test/e2e/element-commands.e2e.ts `
+            test/e2e/extension-app-lifecycle.e2e.ts
 
       - name: Upload Appium logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: appium-logs
-          path: appium.log
+          path: |
+            appium.log
+            appium-err.log

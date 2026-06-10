@@ -34,6 +34,33 @@ jobs:
       - name: Install Appium
         run: npm install -g appium@3.5.0
 
+      - name: Dump Calculator UIA element tree
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Start-Process -FilePath "calc.exe" -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+          $cond = New-Object System.Windows.Automation.AndCondition(
+            (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)),
+            (New-Object System.Windows.Automation.OrCondition(
+              (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, "Calculator")),
+              (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, "ApplicationFrameWindow"))
+            ))
+          )
+          $win = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
+          if (-not $win) { Write-Error "Calculator window not found"; exit 1 }
+          function Print-Tree($el, $indent = 0) {
+            $n = $el.Current.Name; $id = $el.Current.AutomationId; $t = $el.Current.ControlType.ProgrammaticName
+            Write-Host ("  " * $indent + "[$t] Name='$n' AutomationId='$id'")
+            $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            $child = $walker.GetFirstChild($el)
+            while ($child -ne $null) { Print-Tree $child ($indent + 1); $child = $walker.GetNextSibling($child) }
+          }
+          Print-Tree $win
+          Get-Process -Name "Calculator*","calc*" -ErrorAction SilentlyContinue | Stop-Process -Force
+
       - name: Install driver into Appium
         shell: pwsh
         run: appium driver install --source=local $PWD

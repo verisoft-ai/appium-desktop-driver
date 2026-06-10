@@ -95,7 +95,9 @@ export async function createChromeWebviewSession(extraCaps?: Record<string, unkn
     return driver;
 }
 
-export const JAVAW_EXE_PATH = 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
+export const JAVAW_EXE_PATH = process.env.JAVA_HOME
+    ? `${process.env.JAVA_HOME}\\bin\\javaw.exe`
+    : 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
 export const JAVA_SWING_FORM_CLASSPATH = resolve(process.cwd(), 'test-apps', 'java-swing-form');
 
 export async function createJavaSwingFormSession(extraCaps?: Record<string, unknown>): Promise<Browser> {

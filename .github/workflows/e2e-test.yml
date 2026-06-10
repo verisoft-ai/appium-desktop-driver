@@ -17,6 +17,14 @@ jobs:
         with:
           node-version: '24.x'
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Enable Java Access Bridge
+        run: jabswitch -enable
+
       - name: Install dependencies
         run: npm install --no-package-lock
 
@@ -38,7 +46,7 @@ jobs:
             -ArgumentList "--log-level","info" `
             -RedirectStandardOutput "appium.log" `
             -RedirectStandardError "appium-err.log" `
-            -PassThru -NoNewWindow
+            -PassThru -WindowStyle Hidden
 
           $timeout = 60
           $elapsed = 0

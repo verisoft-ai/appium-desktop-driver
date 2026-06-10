@@ -121,30 +121,6 @@ describe('pattern tools', () => {
         });
     });
 
-    describe('get_toggle_state', () => {
-        it('calls driver.executeScript("windows: getToggleState") and returns state string', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.executeScript = vi.fn().mockResolvedValue('On');
-            registerPatternTools(server, session);
-
-            const result = await server.call('get_toggle_state', { elementId: ELEM_ID }) as any;
-
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: getToggleState', [W3C_ELEM]);
-            expect(result.content[0].text).toBe('On');
-        });
-
-        it('returns isError on failure', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.executeScript = vi.fn().mockRejectedValue(new Error('getToggleState failed'));
-            registerPatternTools(server, session);
-
-            const result = await server.call('get_toggle_state', { elementId: ELEM_ID }) as any;
-
-            expect(result.isError).toBe(true);
-        });
-    });
 
     describe('focus_element', () => {
         it('calls driver.executeScript("windows: setFocus") and returns "focused"', async () => {

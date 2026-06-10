@@ -57,8 +57,12 @@ jobs:
             } catch {}
           } while ($elapsed -lt $timeout)
           if ($elapsed -ge $timeout) {
+            $appiumProc = Get-Process -Name "node" -ErrorAction SilentlyContinue
+            Write-Host "Appium process alive: $($null -ne $appiumProc)"
             Write-Error "Appium did not start within ${timeout}s"
+            Write-Host "=== appium.log ==="
             Get-Content "$env:GITHUB_WORKSPACE\appium.log" -ErrorAction SilentlyContinue
+            Write-Host "=== appium-err.log ==="
             Get-Content "$env:GITHUB_WORKSPACE\appium-err.log" -ErrorAction SilentlyContinue
             exit 1
           }

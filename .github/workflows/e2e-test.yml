@@ -77,7 +77,7 @@ jobs:
 
           # Diagnostic: dump Calculator UIA tree via Appium then exit
           $caps = @{ platformName="Windows"; "appium:automationName"="DesktopDriver"; "appium:app"="Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" } | ConvertTo-Json
-          $session = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4723/session" -Body (@{ capabilities = @{ alwaysMatch = @{ platformName="Windows"; "appium:automationName"="DesktopDriver"; "appium:app"="Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" } } } | ConvertTo-Json -Depth 5) -ContentType "application/json"
+          $session = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4723/session" -Body (@{ capabilities = @{ alwaysMatch = @{ platformName="Windows"; "appium:automationName"="DesktopDriver"; "appium:app"="C:\Windows\System32\calc.exe" } } } | ConvertTo-Json -Depth 5) -ContentType "application/json"
           $sessionId = $session.value.sessionId
           Write-Host "Session: $sessionId"
           Start-Sleep -Seconds 2

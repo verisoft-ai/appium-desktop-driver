@@ -135,25 +135,10 @@ export async function quitSession(driver: Browser | null): Promise<void> {
     }
 }
 
-async function calcEl(driver: Browser, automationId: string, fallback: string) {
-    const el = driver.$(`~${automationId}`);
-    if (await el.isExisting()) {
-        return el;
-    }
-    return driver.$(fallback);
-}
-
-export const calcClearBtn = (d: Browser) => calcEl(d, 'clearButton', '//*[@AutomationId="81"]');
-export const calcResults = (d: Browser) => calcEl(d, 'CalculatorResults', '//*[@AutomationId="150"]');
-export const calcNumBtn = (d: Browser, n: number) => calcEl(d, `num${n}Button`, `//*[@AutomationId="${130 + n}"]`);
-export const calcEqualBtn = (d: Browser) => calcEl(d, 'equalButton', '//*[@AutomationId="121"]');
-export const calcPlusBtn = (d: Browser) => calcEl(d, 'plusButton', '//*[@AutomationId="93"]');
-export const calcTogglePane = (d: Browser) => calcEl(d, 'TogglePaneButton', '//*[@AutomationId="TogglePaneButton"]');
-export const calcStandardMode = (d: Browser) => calcEl(d, 'Standard', '//*[@AutomationId="Standard"]');
-
 /** Click the Calculator clear button to reset the display to 0 */
 export async function resetCalculator(driver: Browser): Promise<void> {
-    await (await calcClearBtn(driver)).click();
+    const clearBtn = await driver.$('~clearButton');
+    await clearBtn.click();
 }
 
 /** Returns the Notepad text area element (modern Win11 uses Document, classic Win10 uses Edit). */

@@ -7,8 +7,6 @@ import {
     quitSession,
     resetCalculator,
     clearNotepad,
-    calcResults,
-    calcNumBtn,
 } from './helpers/session.js';
 
 describe('W3C Actions API', () => {
@@ -33,7 +31,7 @@ describe('W3C Actions API', () => {
                 .down('6')
                 .up('6')
                 .perform();
-            const display = await calcResults(calc);
+            const display = await calc.$('~CalculatorResults');
             expect(await display.getText()).toContain('6');
         });
 
@@ -76,7 +74,7 @@ describe('W3C Actions API', () => {
 
     describe('pointer actions (mouse)', () => {
         it('moves to a button center and clicks via pointer sequence', async () => {
-            const btn = await calcNumBtn(calc, 4);
+            const btn = await calc.$('~num4Button');
             const loc = await btn.getLocation();
             const size = await btn.getSize();
             const cx = Math.round(loc.x + size.width / 2);
@@ -88,12 +86,12 @@ describe('W3C Actions API', () => {
                 .up()
                 .perform();
 
-            const display = await calcResults(calc);
+            const display = await calc.$('~CalculatorResults');
             expect(await display.getText()).toContain('4');
         });
 
         it('performs a double-click via two down/up cycles', async () => {
-            const btn = await calcNumBtn(calc, 5);
+            const btn = await calc.$('~num5Button');
             await calc.action('pointer')
                 .move({ origin: btn })
                 .down()
@@ -102,13 +100,13 @@ describe('W3C Actions API', () => {
                 .up()
                 .perform();
 
-            const display = await calcResults(calc);
+            const display = await calc.$('~CalculatorResults');
             expect(await display.getText()).toContain('55');
 
         });
 
         it('right-click using button: 2 in pointer down', async () => {
-            const btn = await calcNumBtn(calc, 1);
+            const btn = await calc.$('~num1Button');
             await expect(
                 calc.action('pointer')
                     .move({ origin: btn })
@@ -119,8 +117,8 @@ describe('W3C Actions API', () => {
         });
 
         it('drags from one button to another via pointerDown, pointerMove, pointerUp', async () => {
-            const startBtn = await calcNumBtn(calc, 1);
-            const endBtn = await calcNumBtn(calc, 2);
+            const startBtn = await calc.$('~num1Button');
+            const endBtn = await calc.$('~num2Button');
             await expect(
                 calc.action('pointer')
                     .move({ origin: startBtn })

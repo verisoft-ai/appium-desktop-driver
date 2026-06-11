@@ -361,6 +361,21 @@ internal sealed class JabService : IDisposable
         };
     }
 
+    // ── Live info refresh ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Re-fetches AccessibleContextInfo for the element via JAB, bypassing the cached Info.
+    /// Used for state-dependent reads (checked, selected, focused) that change after interaction.
+    /// </summary>
+    public JabNative.AccessibleContextInfo? GetFreshInfo(JabElement el)
+    {
+        return _jabThread!.Invoke(() =>
+        {
+            var info = new JabNative.AccessibleContextInfo();
+            return JabNative.GetAccessibleContextInfo(el.VmId, el.Ac, info) ? info : null;
+        });
+    }
+
     // ── Property access ────────────────────────────────────────────────────────
 
     public object? GetProperty(JabElement el, string property)
@@ -382,6 +397,11 @@ internal sealed class JabService : IDisposable
             "runtimeid" => el.Id,
             "nativewindowhandle" => 0,
             "processid" => 0,
+            "clickablepoint" => new
+            {
+                x = el.Info.x + el.Info.width / 2.0,
+                y = el.Info.y + el.Info.height / 2.0,
+            },
             "boundingRectangle" or "boundingrectangle" => new
             {
                 x = (double)el.Info.x,
@@ -410,9 +430,34 @@ internal sealed class JabService : IDisposable
 
     public string GetText(JabElement el)
     {
+        // For editable text elements always return AccessibleText content (empty string on JNI
+        // failure) — never fall through to Info.name, which is the field's label, not its value.
+        if (el.Info.accessibleText != 0)
+            return GetTextContent(el) ?? "";
         if (!string.IsNullOrEmpty(el.Info.name)) return el.Info.name;
         if (!string.IsNullOrEmpty(el.Info.description)) return el.Info.description;
         return "";
+    }
+
+    public string? GetTextContent(JabElement el)
+    {
+        if (el.Info.accessibleText == 0) return null;
+        return _jabThread!.Invoke(() => GetTextContentOnThread(el));
+    }
+
+    private string? GetTextContentOnThread(JabElement el)
+    {
+        if (!JabNative.GetAccessibleTextInfo(el.VmId, el.Ac, out var info, 0, 0))
+            return null;
+        if (info.charCount <= 0)
+            return "";
+        var len = (short)Math.Min(info.charCount + 1, 4096);
+        var sb = new System.Text.StringBuilder(len);
+        // Cap end so that end-start+1 <= len-1 (len includes null terminator slot).
+        var end = Math.Min(info.charCount - 1, len - 2);
+        if (!JabNative.GetAccessibleTextRange(el.VmId, el.Ac, 0, end, sb, len))
+            return null;
+        return sb.ToString();
     }
 
     // ── Interaction ────────────────────────────────────────────────────────────

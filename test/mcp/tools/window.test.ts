@@ -115,7 +115,7 @@ describe('window tools', () => {
 
             const result = await server.call('maximize_window', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: maximize', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: maximize', [{ 'element-6066-11e4-a52e-4f735466cecf': ELEM_ID }]);
             expect(result.content[0].text).toBe('maximized');
         });
     });
@@ -128,7 +128,7 @@ describe('window tools', () => {
 
             const result = await server.call('minimize_window', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: minimize', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: minimize', [{ 'element-6066-11e4-a52e-4f735466cecf': ELEM_ID }]);
             expect(result.content[0].text).toBe('minimized');
         });
     });
@@ -141,7 +141,7 @@ describe('window tools', () => {
 
             const result = await server.call('restore_window', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: restore', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: restore', [{ 'element-6066-11e4-a52e-4f735466cecf': ELEM_ID }]);
             expect(result.content[0].text).toBe('restored');
         });
     });
@@ -154,7 +154,7 @@ describe('window tools', () => {
 
             const result = await server.call('close_window', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: close', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: close', [{ 'element-6066-11e4-a52e-4f735466cecf': ELEM_ID }]);
             expect(result.content[0].text).toBe('closed');
         });
 

@@ -17,6 +17,14 @@ jobs:
         with:
           node-version: '24.x'
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Enable Java Access Bridge
+        run: jabswitch -enable
+
       - name: Install dependencies
         run: npm install --no-package-lock
 
@@ -24,23 +32,45 @@ jobs:
         run: npm run build
 
       - name: Install Appium
-        run: npm install -g appium@next
+        run: npm install -g appium@3.5.0
 
       - name: Install driver into Appium
-        run: appium driver install --source=local .
+        shell: pwsh
+        run: appium driver install --source=local $PWD
 
-      - name: Start Appium server
-        shell: bash
-        run: npx appium --log-level info --allow-insecure modify_fs > appium.log 2>&1 &
+      - name: Install Windows Calculator
+        shell: pwsh
+        run: winget install --id 9WZDNCRFHVN5 --source msstore --accept-source-agreements --accept-package-agreements --silent
 
-      - name: Wait for Appium to be ready
+      - name: Install Windows Notepad
+        shell: pwsh
+        run: winget install --id 9MSMLRH6LZF3 --source msstore --accept-source-agreements --accept-package-agreements --silent
+
+      - name: Install Google Chrome
+        shell: pwsh
+        run: winget install --id Google.Chrome --accept-source-agreements --accept-package-agreements --silent
+
+      - name: Start Appium and run E2E tests
         shell: pwsh
         run: |
-          $timeout = 30
+          $appiumPath = (Get-Command appium.cmd).Source
+          $proc = Start-Process -FilePath $appiumPath `
+            -ArgumentList "--log-level","info" `
+            -RedirectStandardOutput "appium.log" `
+            -RedirectStandardError "appium-err.log" `
+            -PassThru -WindowStyle Hidden
+
+          $timeout = 60
           $elapsed = 0
           do {
-            Start-Sleep -Seconds 1
-            $elapsed++
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+            if ($proc.HasExited) {
+              Write-Error "Appium exited early (code $($proc.ExitCode))"
+              Get-Content "appium.log" -ErrorAction SilentlyContinue
+              Get-Content "appium-err.log" -ErrorAction SilentlyContinue
+              exit 1
+            }
             try {
               $response = Invoke-WebRequest -Uri "http://127.0.0.1:4723/status" -UseBasicParsing -ErrorAction Stop
               if ($response.StatusCode -eq 200) {
@@ -49,18 +79,27 @@ jobs:
               }
             } catch {}
           } while ($elapsed -lt $timeout)
+
           if ($elapsed -ge $timeout) {
             Write-Error "Appium did not start within ${timeout}s"
-            Get-Content "$env:GITHUB_WORKSPACE\appium.log" -ErrorAction SilentlyContinue
+            Get-Content "appium.log" -ErrorAction SilentlyContinue
+            Get-Content "appium-err.log" -ErrorAction SilentlyContinue
             exit 1
           }
 
-      - name: Run E2E tests
-        run: npx vitest run --config vitest.e2e.config.ts --exclude "test/e2e/extension-vision.e2e.ts"
+          npx vitest run --config vitest.e2e.config.ts `
+            test/e2e/java-swing-form.e2e.ts `
+            test/e2e/extension-powershell.e2e.ts `
+            test/e2e/extension-webview.e2e.ts `
+            test/e2e/actions.e2e.ts `
+            test/e2e/element-commands.e2e.ts `
+            test/e2e/extension-app-lifecycle.e2e.ts
 
       - name: Upload Appium logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: appium-logs
-          path: appium.log
+          path: |
+            appium.log
+            appium-err.log

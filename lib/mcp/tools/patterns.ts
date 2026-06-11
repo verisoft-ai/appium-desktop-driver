@@ -64,7 +64,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'toggle_element',
         {
-            description: 'Toggle a checkbox or toggle button via the UIA Toggle pattern. To confirm the resulting state, call get_toggle_state after this.',
+            description: 'Toggle a checkbox or toggle button via the UIA Toggle pattern. To confirm the resulting state, call is_element_selected after this.',
             inputSchema: elementIdInput,
         },
         async ({ elementId }) => {
@@ -72,24 +72,6 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
                 const driver = session.getDriver();
                 await driver.executeScript('windows: toggle', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'toggled' }] };
-            } catch (err) {
-                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
-            }
-        }
-    );
-
-    server.registerTool(
-        'get_toggle_state',
-        {
-            description: 'Get the toggle state of a checkbox or toggle button via the UIA Toggle pattern. Returns "On", "Off", or "Indeterminate".',
-            inputSchema: elementIdInput,
-            annotations: { readOnlyHint: true },
-        },
-        async ({ elementId }) => {
-            try {
-                const driver = session.getDriver();
-                const result = await driver.executeScript('windows: getToggleState', [{ [ELEMENT_KEY]: elementId }]);
-                return { content: [{ type: 'text' as const, text: String(result) }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }

@@ -19,6 +19,17 @@ public static class ElementCommands
         if (JabElement.IsJabId(elementId))
         {
             var jabEl = state.Jab!.GetById(elementId);
+            // Only re-fetch live info for state-dependent properties; static ones never change.
+            var lowerProp = propertyName.ToLowerInvariant();
+            if (lowerProp is "isenabled" or "isoffscreen" or "haskeyboardfocus" or "iskeyboardfocusable" or "clickablepoint")
+            {
+                var freshInfo = state.Jab.GetFreshInfo(jabEl);
+                if (freshInfo != null)
+                {
+                    jabEl = new Jab.JabElement(jabEl.VmId, jabEl.Ac, freshInfo);
+                    state.Jab.Save(jabEl);
+                }
+            }
             return state.Jab.GetProperty(jabEl, propertyName);
         }
 

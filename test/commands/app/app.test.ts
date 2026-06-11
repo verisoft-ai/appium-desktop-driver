@@ -73,6 +73,7 @@ describe('getWindowHandles', () => {
         const result = await getWindowHandles.call(driver);
         expect(result).toEqual([]);
     });
+
 });
 
 describe('getWindowRect', () => {
@@ -90,17 +91,15 @@ describe('getWindowRect', () => {
 describe('setWindow', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('sets root element by numeric handle', async () => {
+    it('sets root element by numeric handle via setRootElementFromHandle (no tree search)', async () => {
         const driver = createMockDriver() as any;
         const { trySetForegroundWindow } = await import('../../../lib/winapi/user32');
 
-        driver.sendCommand
-            .mockResolvedValueOnce('1.2.3')
-            .mockResolvedValueOnce(undefined);
+        driver.sendCommand.mockResolvedValueOnce('1.2.3');
 
         await setWindow.call(driver, '12345');
 
-        expect(driver.sendCommand).toHaveBeenCalledWith('setRootElementFromElementId', { elementId: '1.2.3' });
+        expect(driver.sendCommand).toHaveBeenCalledWith('setRootElementFromHandle', { handle: 12345 });
         expect(trySetForegroundWindow).toHaveBeenCalledWith(12345);
     });
 

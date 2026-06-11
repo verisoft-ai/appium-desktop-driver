@@ -91,7 +91,6 @@ export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string
 }
 
 export async function getWindowHandles(this: AppiumDesktopDriver): Promise<string[]> {
-    // Search from desktop root (RootElement), not the session root
     const elIds = await this.sendCommand('findElements', {
         scope: 'children',
         condition: trueCondition(),
@@ -112,34 +111,33 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
     const handle = Number(nameOrHandle);
     for (let i = 1; i <= SET_WINDOW_MAX_POLL_ATTEMPTS; i++) {
         if (!isNaN(handle)) {
+            // Use ElementFromHandle directly — bypasses live-root tree search so
+            // sequential switchToWindow calls work regardless of prior switches.
+            try {
+                const elementId = await this.sendCommand('setRootElementFromHandle', { handle }) as string | null;
+                if (elementId && elementId.trim() !== '') {
+                    trySetForegroundWindow(handle);
+                    return;
+                }
+            } catch {
+                // fall through to retry
+            }
+        } else {
+            const name = nameOrHandle;
             const elementId = await this.sendCommand('findElement', {
-                scope: 'child-or-self',
-                condition: propertyCondition('NativeWindowHandle', handle),
+                scope: 'children',
+                condition: propertyCondition('Name', name),
                 contextElementId: null,
             }) as string | null;
 
             if (elementId && elementId.trim() !== '') {
+                this.log.info(`Found window with name '${name}'. Setting it as the root element.`);
                 await this.sendCommand('setRootElementFromElementId', { elementId });
-                trySetForegroundWindow(handle);
                 return;
             }
         }
 
-        const name = nameOrHandle;
-        const elementId = await this.sendCommand('findElement', {
-            scope: 'children',
-            condition: propertyCondition('Name', name),
-            contextElementId: null,
-        }) as string | null;
-
-        if (elementId && elementId.trim() !== '') {
-            this.log.info(`Found window with name '${name}'. Setting it as the root element.`);
-            await this.sendCommand('setRootElementFromElementId', { elementId });
-            trySetForegroundWindow(handle);
-            return;
-        }
-
-        this.log.info(`Failed to locate window with name '${name}'. Sleeping for ${POLL_INTERVAL_MS}ms and retrying... (${i}/${SET_WINDOW_MAX_POLL_ATTEMPTS})`);
+        this.log.info(`Failed to locate window with name or handle '${nameOrHandle}'. Sleeping for ${POLL_INTERVAL_MS}ms and retrying... (${i}/${SET_WINDOW_MAX_POLL_ATTEMPTS})`);
         await sleep(POLL_INTERVAL_MS);
     }
 

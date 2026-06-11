@@ -98,6 +98,22 @@ internal static class JabNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetVirtualAccessibleName(int vmid, long ac, StringBuilder name, int len);
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct AccessibleTextInfo
+    {
+        public int charCount;
+        public int caretIndex;
+        public int indexAtPoint;
+    }
+
+    [DllImport(Dll, EntryPoint = "getAccessibleTextInfo", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetAccessibleTextInfo(int vmid, long ac, out AccessibleTextInfo info, int x, int y);
+
+    [DllImport(Dll, EntryPoint = "getAccessibleTextRange", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetAccessibleTextRange(int vmid, long ac, int start, int end, StringBuilder text, short len);
+
     [DllImport(Dll, EntryPoint = "releaseJavaObject", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void ReleaseJavaObject(int vmid, long javaObject);
 }

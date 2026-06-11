@@ -35,6 +35,13 @@ export async function clear(this: AppiumDesktopDriver, elementId: string): Promi
 }
 
 export async function setValue(this: AppiumDesktopDriver, value: string | string[], elementId: string): Promise<void> {
+    // JAB elements: setFocus is a no-op and sendKeys goes to the OS-focused field.
+    // Use SetTextContents via setElementValue which targets the element directly.
+    if (elementId.startsWith('jab:')) {
+        const text = Array.isArray(value) ? value.join('') : value;
+        await this.sendCommand('setElementValue', { elementId, value: text });
+        return;
+    }
     await this.sendCommand('setFocus', { elementId });
     const metaKeyStates = {
         shift: false,
@@ -235,8 +242,12 @@ export async function click(this: AppiumDesktopDriver, elementId: string): Promi
 
     try {
         const clickablePoint = await this.sendCommand('getProperty', { elementId, property: 'ClickablePoint' }) as { x: number; y: number };
-        coordinates.x = clickablePoint.x;
-        coordinates.y = clickablePoint.y;
+        if (clickablePoint && typeof clickablePoint === 'object' && typeof clickablePoint.x === 'number' && typeof clickablePoint.y === 'number') {
+            coordinates.x = clickablePoint.x;
+            coordinates.y = clickablePoint.y;
+        } else {
+            throw new Error('Invalid clickable point');
+        }
     } catch {
         const rect = await this.sendCommand('getRect', { elementId }) as RectResult;
         coordinates.x = rect.x + rect.width / 2;

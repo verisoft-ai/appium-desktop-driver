@@ -40,7 +40,7 @@ jobs:
 
       - name: Install Windows Calculator
         shell: pwsh
-        run: winget install --id Microsoft.WindowsCalculator --accept-source-agreements --accept-package-agreements --silent
+        run: winget install --id 9WZDNCRFHVN5 --source msstore --accept-source-agreements --accept-package-agreements --silent
 
       - name: Start Appium and run E2E tests
         shell: pwsh

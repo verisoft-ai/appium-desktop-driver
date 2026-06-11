@@ -42,6 +42,14 @@ jobs:
         shell: pwsh
         run: winget install --id 9WZDNCRFHVN5 --source msstore --accept-source-agreements --accept-package-agreements --silent
 
+      - name: Install Windows Notepad
+        shell: pwsh
+        run: winget install --id 9MSMLRH6LZF3 --source msstore --accept-source-agreements --accept-package-agreements --silent
+
+      - name: Install Google Chrome
+        shell: pwsh
+        run: winget install --id Google.Chrome --accept-source-agreements --accept-package-agreements --silent
+
       - name: Start Appium and run E2E tests
         shell: pwsh
         run: |

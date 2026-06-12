@@ -22,9 +22,6 @@ jobs:
           distribution: 'temurin'
           java-version: '8'
 
-      - name: Enable Java Access Bridge
-        run: jabswitch -enable
-
       - name: Install dependencies
         run: npm install --no-package-lock
 

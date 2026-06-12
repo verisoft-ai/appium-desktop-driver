@@ -3,6 +3,27 @@
 Full reference for Appium Desktop Driver. See [README.md](README.md)
 for installation, capabilities, and usage examples.
 
+## Table of Contents
+
+- [Locator Strategies](#locator-strategies)
+- [Extension Commands](#extension-commands)
+  - [windows: click](#windows-click)
+  - [windows: hover](#windows-hover)
+  - [windows: scroll](#windows-scroll)
+  - [windows: clickAndDrag](#windows-clickanddrag)
+  - [windows: keys](#windows-keys)
+  - [UI Pattern Commands](#ui-pattern-commands)
+  - [App and Window Control](#app-and-window-control)
+  - [Clipboard](#clipboard)
+  - [File System](#file-system)
+  - [Screen Recording](#screen-recording)
+  - [Vision-Based Finding](#vision-based-finding)
+  - [PowerShell Execution](#powershell-execution)
+  - [Cache Requests](#cache-requests)
+- [W3C Actions](#w3c-actions)
+- [WebView and CDP](#webview-and-cdp)
+- [Java Swing Automation](#java-swing-automation)
+
 ## Locator Strategies
 
 | Strategy | WebdriverIO selector | Maps to UIA property |

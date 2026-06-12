@@ -149,7 +149,7 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'is_element_selected',
         {
-            description: 'Check whether a checkbox, radio button, or toggle is checked/selected. Works for both UIA and Java Swing (JAB) elements. Returns "true" or "false". Note: tri-state (indeterminate) checkboxes return "false" — indeterminate cannot be distinguished from unchecked via this tool.',
+            description: 'Check whether a checkbox, radio button, or toggle is checked/selected. Works for both UIA and Java Swing elements. Returns "true" or "false". Note: tri-state (indeterminate) checkboxes return "false" — indeterminate cannot be distinguished from unchecked via this tool.',
             inputSchema: { elementId: elementIdSchema },
             annotations: { readOnlyHint: true },
         },

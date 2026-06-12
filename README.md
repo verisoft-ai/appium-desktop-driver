@@ -1,851 +1,237 @@
-Appium Desktop Driver
-===================
+﻿# Appium Desktop Driver
 
-Appium Desktop Driver is a custom Appium driver designed to tackle the limitations of existing Windows automation solutions like WinAppDriver. Appium Desktop Driver supports testing Universal Windows Platform (UWP), Windows Forms (WinForms), Windows Presentation Foundation (WPF), and Classic Windows (Win32) apps on Windows 10 PCs. Built to improve performance and reliability for traditional desktop applications, it offers:
+Appium Desktop Driver is a Windows UI automation driver for
+[Appium 3](https://appium.io). It automates UWP, WinForms, WPF, Win32,
+and Java Swing applications via Windows UI Automation (UIA3).
 
-Faster XPath locator performance — Reduces element lookup times, even in complex UIs.
-RawView element support — Access elements typically hidden from the default ControlView/ContentView.
-Enhanced text input handling — Solves keyboard layout issues while improving input speed.
-Platform-specific commands — Supports direct window manipulation, advanced UI interactions, and more.
-It’s designed to handle real-world scenarios where traditional drivers fall short — from tricky dropdowns to missing elements and unreliable clicks — making it an ideal choice for automating legacy Windows apps.
+Key advantages over WinAppDriver:
 
-> **Note**
->
-> This driver is built for Appium 2/3 and is not compatible with Appium 1. To install
-> the driver, simply run:
-> `appium driver install --source=npm appium-desktop-driver`
+- Faster XPath evaluation against the live UIA tree
+- RawView element support (elements hidden from ContentView/ControlView)
+- Reliable text input independent of the active keyboard layout
+- Java Swing / AWT automation via injected JVM agent (no JAB required)
+- WebView2, Chrome, and Edge embedded content via CDP
+- Built-in screen recording, clipboard API, and vision-based finding
+- MCP server for direct use with AI coding agents
 
+## Installation
 
-## Usage
-
-Beside of standard Appium requirements Appium Desktop Driver adds the following prerequisites:
-
-- Appium Windows Driver only supports Windows 10 and later as the host.
-
-> **Note**
->
-> The driver currently uses a PowerShell session as a back-end, and
-> should not require Developer Mode to be on, or any other software.
-> There's a plan to update to a better, .NET-based backend for improved
-> realiability and better code and error management, as well as supporting
-> more features, that are currently not possible using PowerShell alone.
-> It is unlikely for the prerequisites to change, as this is one of the
-> main goals of Appium Desktop driver – seamless setup on any PC.
-
-Appium Desktop Driver supports the following capabilities:
-
-Capability Name | Description
---- | ---
-platformName | Must be set to `Windows` (case-insensitive).
-automationName | Must be set to `DesktopDriver` (case-insensitive).
-smoothPointerMove | CSS-like easing function (including valid Bezier curve). This controls the smooth movement of the mouse for `delayBeforeClick` ms. Example: `ease-in`, `cubic-bezier(0.42, 0, 0.58, 1)`.
-delayBeforeClick | Time in milliseconds before a click is performed.
-delayAfterClick | Time in milliseconds after a click is performed.
-appTopLevelWindow | The handle of an existing application top-level window to attach to. It can be a number or string (not necessarily hexadecimal). Example: `12345`, `0x12345`.
-shouldCloseApp | Whether to close the window of the application in test after the session finishes. Default is `true`.
-appArguments | Optional string of arguments to pass to the app on launch.
-appWorkingDir | Optional working directory path for the application.
-prerun | An object containing either `script` or `command` key. The value of each key must be a valid PowerShell script or command to be executed prior to the WinAppDriver session startup. See [Power Shell commands execution](#power-shell-commands-execution) for more details. Example: `{script: 'Get-Process outlook -ErrorAction SilentlyContinue'}`
-postrun | An object containing either `script` or `command` key. The value of each key must be a valid PowerShell script or command to be executed after WinAppDriver session is stopped. See [Power Shell commands execution](#power-shell-commands-execution) for more details.
-isolatedScriptExecution | Whether PowerShell scripts are executed in an isolated session. Default is `false`.
-appEnvironment | Optional object of custom environment variables to inject into the PowerShell session. The variables are only available for the lifetime of the session and do not affect the system environment. Example: `{"MY_VAR": "hello", "API_URL": "http://localhost:3000"}`.
-ms:waitForAppLaunch | Time in seconds to wait for the app window to appear after launch. Default is `0` (falls back to 10 000 ms internal timeout).
-
-Please note that more capabilities will be added as the development of this driver progresses. Since it is still in its early stages, some features may be missing or subject to change. If you need a specific capability or encounter any issues, please feel free to open an issue.
-
-## Example
-
-```python
-# Python3 + PyTest
-import pytest
-
-from appium import webdriver
-from appium.options.windows import WindowsOptions
-
-def generate_options():
-    uwp_options = WindowsOptions()
-    # How to get the app ID for Universal Windows Apps (UWP):
-    # https://www.securitylearningacademy.com/mod/book/view.php?id=13829&chapterid=678
-    uwp_options.app = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
-    uwp_options.automation_name = 'DesktopDriver'
-
-    classic_options = WindowsOptions()
-    classic_options.app = 'C:\\Windows\\System32\\notepad.exe'
-    classic_options.automation_name = 'DesktopDriver'
-
-    use_existing_app_options = WindowsOptions()
-    # Active window handles could be retrieved from any compatible UI inspector app:
-    # https://docs.microsoft.com/en-us/windows/win32/winauto/inspect-objects
-    # or https://accessibilityinsights.io/.
-    # Also, it is possible to use the corresponding WinApi calls for this purpose:
-    # https://referencesource.microsoft.com/#System/services/monitoring/system/diagnosticts/ProcessManager.cs,db7ac68b7cb40db1
-    #
-    # This capability could be used to create a workaround for UWP apps startup:
-    # https://github.com/microsoft/WinAppDriver/blob/master/Samples/C%23/StickyNotesTest/StickyNotesSession.cs
-    use_existing_app_options.app_top_level_window = hex(12345)
-    use_existing_app_options.automation_name = 'DesktopDriver'
-
-    return [uwp_options, classic_options, use_existing_app_options]
-
-
-@pytest.fixture(params=generate_options())
-def driver(request):
-    drv = webdriver.Remote('http://127.0.0.1:4723', options=request.param)
-    yield drv
-    drv.quit()
-
-
-def test_app_source_could_be_retrieved(driver):
-    assert len(driver.page_source) > 0
+```bash
+appium driver install --source=npm appium-desktop-driver
 ```
 
+Requires Appium 3 and Windows 10 or later.
 
-## Power Shell commands execution
+## Capabilities
 
-Just like in Appium Windows Driver (version 1.15.0 and above) there is a possibility to
-run custom Power Shell scriptsfrom your client code. This feature is potentially insecure
-and thus needs to beexplicitly enabled when executing the server by providing `power_shell`
-key to the listof enabled insecure features. Refer to [Appium Security document](https://github.com/appium/appium/blob/master/docs/en/writing-running-appium/security.md) for more details.
-It is possible to ether execute a single Power Shell command or a whole script
-and get its stdout in response. If the script execution returns non-zero exit code then an exception
-is going to be thrown. The exception message will contain the actual stderr. Unlike, Appium Windows Driver,
-there is no difference if you paste the script with `command` or `script` argument. For ease of use, you can pass the script as a string when executing a PowerShell command directly via the driver. Note: This shorthand does not work when using the prerun or postrun capabilities, which require full object syntax.
-Here's an example code of how to control the Notepad process:
+All capabilities use the `appium:` prefix in W3C format
+(except `platformName`).
 
-```java
-// java
-String psScript =
-  "$sig = '[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'\n" +
-  "Add-Type -MemberDefinition $sig -name NativeMethods -namespace Win32\n" +
-  "Start-Process Notepad\n" +
-  "$hwnd = @(Get-Process Notepad)[0].MainWindowHandle\n" +
-  "[Win32.NativeMethods]::ShowWindowAsync($hwnd, 2)\n" +
-  "[Win32.NativeMethods]::ShowWindowAsync($hwnd, 4)\n" +
-  "Stop-Process -Name Notepad";
-driver.executeScript("powerShell", psScript);
-```
+| Capability | Type | Description |
+| --- | --- | --- |
+| `platformName` | string | **Required.** Must be `Windows` |
+| `appium:automationName` | string | **Required.** Must be `DesktopDriver` |
+| `appium:app` | string | Exe path, UWP AUMID, or `Root` for the desktop |
+| `appium:appTopLevelWindow` | string | Hex/decimal handle to attach to existing window |
+| `appium:appArguments` | string | CLI arguments for the launched process |
+| `appium:appWorkingDir` | string | Working directory for the process |
+| `appium:appEnvironment` | object | Env vars injected for the session lifetime |
+| `appium:ms:waitForAppLaunch` | number | Seconds (<=120) or ms (>120) to wait for window |
+| `appium:shouldCloseApp` | boolean | Close the window at session end. Default: `true` |
+| `appium:prerun` | object | `{ script }` or `{ command }` — PowerShell before start |
+| `appium:postrun` | object | `{ script }` or `{ command }` — PowerShell after end |
+| `appium:isolatedScriptExecution` | boolean | Isolated PS for pre/postrun. Default: `false` |
+| `appium:smoothPointerMove` | string | CSS easing for mouse (e.g. `ease-in`) |
+| `appium:delayBeforeClick` | number | Milliseconds before each click |
+| `appium:delayAfterClick` | number | Milliseconds after each click |
+| `appium:javaSwing` | boolean | Enable JVM agent for Java Swing/AWT apps |
+| `appium:webviewEnabled` | boolean | Enable WebView2 / Chrome / Edge CDP |
+| `appium:webviewDevtoolsPort` | number | CDP port (auto-selected when omitted) |
+| `appium:chromedriverExecutablePath` | string | Local Chromedriver binary |
+| `appium:edgedriverExecutablePath` | string | Local msedgedriver binary |
+| `appium:chromedriverCdnUrl` | string | Custom CDN for Chromedriver downloads |
+| `appium:edgedriverCdnUrl` | string | Custom CDN for EdgeDriver downloads |
+| `appium:ffmpegExecutablePath` | string | Local ffmpeg binary for screen recording |
+| `appium:ms:forcequit` | boolean | Force-kill process on session close |
+| `appium:ms:experimental-webdriver` | boolean | Experimental WebDriver features |
+| `appium:logFile` | string | Path to write session logs |
 
-Another example, which demonstrates how to use the command output:
+## Examples
 
-```python
-# python
-cmd = 'Get-Process outlook -ErrorAction SilentlyContinue'
-proc_info = driver.execute_script('powerShell', cmd)
-if proc_info:
-    print('Outlook is running')
-else:
-    print('Outlook is not running')
-```
+### Java Swing via JVM agent
 
-> **Note**
->
-> Appium Desktop Driver runs on a single PowerShell session,
-> therefore you may share variables between executed PowerShell
-> scripts. Unless the PowerShell session exits or crashes for some
-> reason, you should be able to reuse the variables that you create.
-
-
-## Element Location
-
-Appium Windows Driver supports the same location strategies [the WinAppDriver supports](https://github.com/microsoft/WinAppDriver/blob/master/Docs/AuthoringTestScripts.md#supported-locators-to-find-ui-elements), but also includes Windows UIAutomation conditoons:
-
-Name | Description | Example
---- | --- | ---
-accessibility id | This strategy is AutomationId attribute in inspect.exe | AppNameTitle
-class name | This strategy is ClassName attribute in inspect.exe | TextBlock
-id | This strategy is RuntimeId (decimal) attribute in inspect.exe | 42.333896.3.1
-name | This strategy is Name attribute in inspect.exe | Calculator
-tag name | This strategy is LocalizedControlType (upper camel case) attribute in inspect.exe since Appium Windows Driver 2.1.1 | Text
-xpath | This strategy allows to create custom XPath queries on any attribute exposed by inspect.exe. Only XPath 1.0 is supported | (//Button)[2]
-windows uiautomation | This strategy allows to create custom Windows UIAutomation conditions on any attribute exposed by inspect.exe. Both C# and PowerShell syntax is supported | new PropertyCondition(AutomationElement.HelpTextProperty, "Info")
-
-## Platform-Specific Extensions
-
-Beside of standard W3C APIs the driver provides the below custom command extensions to execute platform specific scenarios. Use the following source code examples in order to invoke them from your client code:
-
-> **Note**
->
-> In most cases, commands implemented in Appium Desktop driver can be used
-> more intuitively by just the element as a second argument and the value
-> (if such is needed) as the thrid argument and so on. For example:
-> `driver.executeScript("windows: setValue", element, "valueToSet")` or
-> `driver.executeScript("windows: invoke", element)`. Commands that are created
-> as fallbacks to Appium Windows Driver should work as is. Open an issue if some
-> command that you need is missing or is not behaving as it should.
-
-```java
-// Java 11+
-var result = driver.executeScript("windows: <methodName>", Map.of(
-    "arg1", "value1",
-    "arg2", "value2"
-    // you may add more pairs if needed or skip providing the map completely
-    // if all arguments are defined as optional
-));
-```
+No system setup required. Set `appium:javaSwing: true` and the driver
+automatically injects a JVM agent into the target process at startup.
+The agent communicates over loopback TCP — no `jabswitch`, no JAB DLL.
 
 ```js
-// WebdriverIO
-const result = await driver.executeScript('windows: <methodName>', [{
-    arg1: "value1",
-    arg2: "value2",
-}]);
-```
+import { remote } from 'webdriverio';
 
-```python
-# Python
-result = driver.execute_script('windows: <methodName>', {
-    'arg1': 'value1',
-    'arg2': 'value2',
-})
-```
-
-```ruby
-# Ruby
-result = @driver.execute_script 'windows: <methodName>', {
-    arg1: 'value1',
-    arg2: 'value2',
-}
-```
-
-```csharp
-// Dotnet
-object result = driver.ExecuteScript("windows: <methodName>", new Dictionary<string, object>() {
-    {"arg1", "value1"},
-    {"arg2", "value2"}
-});
-```
-
-### windows: click
-
-This is a shortcut for a single mouse click gesture.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-elementId | string | no | Hexadecimal identifier of the element to click on. If this parameter is missing then given coordinates will be parsed as absolute ones. Otherwise they are parsed as relative to the top left corner of this element. | 123e4567-e89b-12d3-a456-426614174000
-x | number | no | Integer horizontal coordinate of the click point. Both x and y coordinates must be provided or none of them if elementId is present. In such case the gesture will be performed at the center point of the given element. The screen scale (if customized) is **not** taken into consideration while calculating the coordinate. The coordinate is always calculated for the [virtual screen](https://learn.microsoft.com/en-us/windows/win32/gdi/the-virtual-screen). | 100
-y | number | no | Integer vertical coordinate of the click point. Both x and y coordinates must be provided or none of them if elementId is present. In such case the gesture will be performed at the center point of the given element. The screen scale (if customized) is **not** taken into consideration while calculating the coordinate. The coordinate is always calculated for the [virtual screen](https://learn.microsoft.com/en-us/windows/win32/gdi/the-virtual-screen). | 100
-button | string | no | Name of the mouse button to be clicked. An exception is thrown if an unknown button name is provided. Supported button names are: left, middle, right, back, forward. The default value is `left` | right
-modifierKeys | string[] or string | no | List of possible keys or a single key name to depress while the click is being performed. Supported key names are: Shift, Ctrl, Alt, Win. For example, in order to keep Ctrl+Alt depressed while clicking, provide the value of ['ctrl', 'alt'] | win
-durationMs | number | no | The number of milliseconds to wait between pressing and releasing the mouse button. By default no delay is applied, which simulates a regular click. | 500
-times | number | no | How many times the click must be performed. One by default. | 2
-interClickDelayMs | number | no | Duration of the pause between each click gesture. Only makes sense if `times` is greater than one. 100ms by default. | 10
-
-### windows: scroll
-
-This is a shortcut for a mouse wheel scroll gesture. The API is a thin wrapper over the [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput#:~:text=The%20SendInput%20function%20inserts%20the,or%20other%20calls%20to%20SendInput.)
-WinApi call. It emulates the mouse cursor movement and/or horizontal/vertical rotation of the mouse wheel.
-Thus make sure the target control is ready to receive mouse wheel events (e.g. is focused) before invoking it.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-elementId | string | no | Same as in [windows: click](#windows-click) | 123e4567-e89b-12d3-a456-426614174000
-x | number | no | Same as in [windows: click](#windows-click) | 100
-y | number | no | Same as in [windows: click](#windows-click) | 100
-deltaX | number | no | The amount of horizontal wheel movement measured in wheel clicks. A positive value indicates that the wheel was rotated to the right; a negative value indicates that the wheel was rotated to the left. Either this value or deltaY must be provided, but not both. | -5
-deltaY | number | no | The amount of vertical wheel movement measured in wheel clicks. A positive value indicates that the wheel was rotated forward, away from the user; a negative value indicates that the wheel was rotated backward, toward the user. Either this value or deltaX must be provided, but not both. | 5
-modifierKeys | string[] or string | no | Same as in [windows: click](#windows-click) | win
-
-### windows: hover
-
-This is a shortcut for a hover gesture.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-startElementId | string | no | Same as in [windows: click](#windows-click) | 123e4567-e89b-12d3-a456-426614174000
-startX | number | no | Same as in [windows: click](#windows-click) | 100
-startY | number | no | Same as in [windows: click](#windows-click) | 100
-endElementId | string | no | Same as in [windows: click](#windows-click) | 123e4567-e89b-12d3-a456-426614174000
-endX | number | no | Same as in [windows: click](#windows-click) | 100
-endY | number | no | Same as in [windows: click](#windows-click) | 100
-modifierKeys | string[] or string | no | Same as in [windows: click](#windows-click) | win
-durationMs | number | no | The number of milliseconds between moving the cursor from the starting to the ending hover point. 500ms by default. | 700
-
-### windows: keys
-
-This is a shortcut for a customized keyboard input. Selenium keys should also work as modifier keys, unless forceUnicode option is set to true.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-actions | KeyAction[] or KeyAction | yes | One or more [KeyAction](#keyaction) dictionaries | ```json [{"virtualKeyCode": 0x10, "down": true}, {'text': "appium likes you"}, {"virtualKeyCode": 0x10, "down": false}]```
-forceUnicode | boolean | no | Forces the characters to be sent as unicode characters. Note that they won't work in keyboard shortcut combinations, but it makes them keyboard-layout independent. | true
-
-##### KeyAction
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-pause | number | no | Allows to set a delay in milliseconds between key input series. Either this property or `text` or `virtualKeyCode` must be provided. | 100
-text | string | no | Non-empty string of Unicode text to type (surrogate characters like smileys are not supported). Either this property or `pause` or `virtualKeyCode` must be provided. | Привіт Світ!
-virtualKeyCode | number | no | Valid virtual key code. The list of supported key codes is available at [Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes) page. Either this property or `pause` or `text` must be provided. | 0x10
-down | boolean | no | This property only makes sense in combination with `virtualKeyCode`. If set to `true` then the corresponding key will be depressed, `false` - released. By default the key is just pressed once. ! Do not forget to release depressed keys in your automated tests. | true
-
-### windows: setClipboard
-
-Sets Windows clipboard content to the given text or a PNG image.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-b64Content | string | yes | Base64-encoded content of the clipboard to be set | `QXBwaXVt`
-contentType | 'plaintext' or 'image' | no | Set to 'plaintext' in order to set the given text to the clipboard (the default value). Set to 'image' if `b64Content` contains a base64-encoded payload of a PNG image. | image
-
-### windows: getClipboard
-
-Retrieves Windows clipboard content.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-contentType | 'plaintext' or 'image' | no | Set to 'plaintext' in order to set the given text to the clipboard (the default value). Set to 'image' to retrieve a base64-encoded payload of a PNG image. | image
-
-#### Returns
-
-Base-64 encoded content of the Windows clipboard.
-
-### windows: pushCacheRequest
-
-This is an asynchronous function that sends cache requests based on specific conditions. This is useful for revealing RawView elements in the element tree. Note that cached elements aren't supported by Appium Desktop driver yet.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-treeFilter | string | yes | Defines the filter that is applied when walking the automation tree. You can use any UI Automation conditions. For simplicity, you can omit the namespace and/or the Condition word at the end. | `RawView`
-treeScope | string | no | Defines the scope of the automation tree to be cached. It determines how far to search for elements, such as just the element itself, its children, descendants or the entire subtree. | `SubTree`
-automationElementMode | string | no | Specifies the mode of automation element (e.g., None, Full). Determines whether the UI element is fully cached or only partially cached. | `Full`
-
-### windows: invoke
-
-Invokes a UI element pattern, simulating an interaction like clicking or activating the element.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element on which the `InvokePattern` is called to simulate activation. | `element`
-
-### windows: expand
-
-Expands a UI element that supports the `ExpandPattern`, typically used for elements that can be expanded (like trees or combo boxes).
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element on which the `ExpandPattern` is called to expand the element. | `element`
-
-### windows: collapse
-
-Collapses a UI element that supports the `CollapsePattern`, typically used for collapsible elements (like tree nodes).
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element on which the `CollapsePattern` is called to collapse the element. | `element`
-
-### windows: scrollIntoView
-
-Scrolls the UI element into view using the `ScrollItemPattern`, ensuring that the element is visible within its container.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element on which the `ScrollItemPattern` is called to bring the element into view. | `element`
-
-### windows: isMultiple
-
-Checks if a UI element supports multiple selection using the `SelectionPattern`. Returns `true` if the element supports multiple selections, otherwise `false`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element to check for multiple selection support. | `element`
-
-#### Returns
-
-- `boolean`: `true` if the element supports multiple selection, otherwise `false`.
-
-### windows: selectedItem
-
-Gets the selected item from a UI element that supports the `SelectionPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element from which to retrieve the selected item. | `element`
-
-#### Returns
-
-- `Element`: The selected item of the element as an Appium element.
-
-### windows: allSelectedItems
-
-Gets all selected items from a UI element that supports the `SelectionPattern`, useful for lists or combo boxes.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element from which to retrieve all selected items. | `element`
-
-#### Returns
-
-- `Element[]`: An array of selected items as Appium elements.
-
-### windows: addToSelection
-
-Adds an element to the current selection on a UI element that supports the `SelectionPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element to add to the selection. | `element`
-
-### windows: removeFromSelection
-
-Removes an element from the current selection on a UI element that supports the `SelectionPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element to remove from the selection. | `element`
-
-### windows: select
-
-Selects a UI element using the `SelectionPattern`, simulating the action of choosing the element in a selection context.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element`   | The UI element to select. | `element`
-
-### windows: toggle
-
-Toggles a UI element’s state using the `TogglePattern`, typically used for elements like checkboxes or radio buttons.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element`   | The UI element to toggle. | `element`
-
-### windows: setValue
-
-Sets the value of a UI element using the `ValuePattern` (for elements like text boxes, sliders, etc.).
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element whose value will be set. | `element`
-2 | `string` | The value to be set on the element. | `"new value"`
-
-### windows: getValue
-
-Gets the current value of a UI element that supports the `ValuePattern` (e.g., a text box).
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element from which to retrieve the value. | `element`
-
-### windows: maximize
-
-Maximizes a window or UI element using the `WindowPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The window or UI element to maximize. | `element`
-
-### windows: minimize
-
-Minimizes a window or UI element using the `WindowPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The window or UI element to minimize. | `element`
-
-### windows: restore
-
-Restores a window or UI element to its normal state (if it was maximized or minimized) using the `WindowPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The window or UI element to restore. | `element`
-
-### windows: close
-
-Closes a window or UI element using the `WindowPattern`.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The window or UI element to close. | `element`
-
-### windows: setFocus
-
-Sets focus to the specified UI element using UIAutomationElement's `SetFocus` method.
-
-#### Arguments
-
-Position | Type | Description | Example
-| --- | --- | --- | --- |
-1 | `Element` | The UI element to set focus on. | `element`
-
-### windows: startRecordingScreen
-
-Starts screen recording using the **bundled ffmpeg** included with the driver. There is no system PATH fallback: if the bundle is not present (e.g. driver was not installed via npm with dependencies), screen recording is not available and the driver reports a clear error.
-
-### windows: stopRecordingScreen
-
-Stops the current screen recording and returns the video (base64 or uploads to a remote path if specified).
-
-### windows: deleteFile
-
-Deletes a file on the Windows machine. Uses PowerShell `Remove-Item -Path ... -Force`. Paths containing `[`, `]`, or `?` use `-LiteralPath` for correct interpretation.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-path | string | yes | Absolute or relative path to the file to delete. | `C:\Temp\file.txt`
-
-### windows: deleteFolder
-
-Deletes a folder on the Windows machine. Uses PowerShell `Remove-Item -Path ... -Force` with optional `-Recurse`. Paths containing `[`, `]`, or `?` use `-LiteralPath`.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-path | string | yes | Absolute or relative path to the folder to delete. | `C:\Temp\MyFolder`
-recursive | boolean | no | If true (default), delete contents recursively. If false, only remove the folder when empty. | `true`
-
-### windows: launchApp
-
-Re-launches the application configured in the `app` session capability. The app path or App User Model ID (AUMID) must have been set when the session was created. Typically used to reopen an app after it has been closed with `windows: closeApp`.
-
-This command takes no arguments.
-
-#### Example
-
-```javascript
-// Re-launch the app set in the session capability
-await driver.executeScript('windows: launchApp', []);
-```
-
-### windows: closeApp
-
-Closes the current root application window by sending a close command via the Windows UI Automation WindowPattern. Clears the root element reference in the session afterward. Throws a `NoSuchWindowError` if no active window is found.
-
-This command takes no arguments.
-
-#### Example
-
-```javascript
-// Close the current app window
-await driver.executeScript('windows: closeApp', []);
-```
-
-### windows: clickAndDrag
-
-Performs a click-and-drag: move to the start position, press the mouse button, move to the end position over the given duration, then release. Start and end can be specified by element (center or offset) or by screen coordinates. Uses the same Windows input APIs as other pointer actions.
-
-#### Arguments
-
-Name | Type | Required | Description | Example
---- | --- | --- | --- | ---
-startElementId | string | no* | Element ID for drag start. Use *or* startX/startY. | `1.2.3.4.5`
-startX | number | no* | X coordinate for drag start (with startY). | `100`
-startY | number | no* | Y coordinate for drag start (with startX). | `200`
-endElementId | string | no* | Element ID for drag end. Use *or* endX/endY. | `1.2.3.4.6`
-endX | number | no* | X coordinate for drag end (with endY). | `300`
-endY | number | no* | Y coordinate for drag end (with endX). | `400`
-modifierKeys | string or string[] | no | Keys to hold during drag: `shift`, `ctrl`, `alt`, `win`. | `["ctrl"]`
-durationMs | number | no | Duration of the move from start to end (default: 500). | `300`
-button | string | no | Mouse button: `left` (default), `middle`, `right`, `back`, `forward`. | `left`
-
-\* Provide either startElementId or both startX and startY; and either endElementId or both endX and endY.
-
-### windows: getMonitors
-
-Returns information about all connected display monitors, including their screen coordinates in the [virtual screen](https://learn.microsoft.com/en-us/windows/win32/gdi/the-virtual-screen) coordinate space, working area, device name, and which monitor is the primary display.
-
-This command takes no arguments.
-
-#### Returns
-
-An array of monitor objects, one per connected display:
-
-Name | Type | Description
---- | --- | ---
-index | number | Zero-based index of the monitor in the `AllScreens` array.
-deviceName | string | System device name, e.g. `\\.\DISPLAY1`.
-primary | boolean | `true` if this is the primary display.
-bounds | object | Full monitor rectangle: `{ x, y, width, height }` in virtual screen coordinates.
-workingArea | object | Usable area excluding taskbars and docked toolbars: `{ x, y, width, height }`.
-
-#### Example
-
-```javascript
-// WebdriverIO — move app window to the secondary monitor
-const monitors = await driver.executeScript('windows: getMonitors', []);
-const secondary = monitors.find(m => !m.primary);
-if (secondary) {
-    await driver.setWindowRect(secondary.bounds.x, secondary.bounds.y, null, null);
-}
-```
-
-```python
-# Python — click at the center of the secondary monitor
-monitors = driver.execute_script('windows: getMonitors', {})
-secondary = next((m for m in monitors if not m['primary']), None)
-if secondary:
-    cx = secondary['bounds']['x'] + secondary['bounds']['width'] // 2
-    cy = secondary['bounds']['y'] + secondary['bounds']['height'] // 2
-    driver.execute_script('windows: click', {'x': cx, 'y': cy})
-```
-
-### windows: findByVision
-
-Uses a vision-capable LLM to locate a UI element by natural language
-description. Takes a screenshot of the current window, sends it to the
-configured LLM, and returns the screen coordinates of the described element.
-
-The `model` argument controls which LLM provider is used. The corresponding
-API key must be set as an environment variable before starting the Appium
-server.
-
-#### Supported Models
-
-| Provider | Model prefix | Environment variable(s) | Example models |
-| --- | --- | --- | --- |
-| Anthropic | `claude-` | `ANTHROPIC_API_KEY` | `claude-opus-4-6`, `claude-sonnet-4-6` |
-| OpenAI | `gpt-`, `o1`, `o3`, `o4` | `OPENAI_API_KEY` | `gpt-4o`, `o3` |
-| Google | `gemini-` | `GEMINI_API_KEY` | `gemini-1.5-pro`, `gemini-2.0-flash` |
-| Amazon (Bedrock) | `amazon.nova-`, `us.amazon.nova-`, `eu.amazon.nova-`, `ap.amazon.nova-` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0` |
-
-For Amazon Bedrock, set `AWS_REGION` (or `AWS_DEFAULT_REGION`) to select the deployment region (defaults to `us-east-1`). IAM roles and AWS credential profiles are also supported via the standard AWS credential chain.
-
-#### Arguments
-
-| Name | Type | Required | Description | Example |
-| --- | --- | --- | --- | --- |
-| prompt | string | yes | Natural language description of the element to find | `"Submit button"` |
-| model | string | yes | LLM model identifier | `"claude-opus-4-6"`, `"gpt-4o"`, `"amazon.nova-pro-v1:0"` |
-
-#### Returns
-
-| Name | Type | Description |
-| --- | --- | --- |
-| x | number | Horizontal screen coordinate of the element center |
-| y | number | Vertical screen coordinate of the element center |
-| label | string | Brief description of the element as identified by the LLM |
-
-#### Example
-
-```javascript
-// WebdriverIO — locate and click an element using Claude
-const result = await driver.executeScript('windows: findByVision', [{
-    prompt: 'Save button in the toolbar',
-    model: 'claude-opus-4-6',
-}]);
-await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
-```
-
-```javascript
-// WebdriverIO — use GPT-4o instead
-const result = await driver.executeScript('windows: findByVision', [{
-    prompt: 'Save button in the toolbar',
-    model: 'gpt-4o',
-}]);
-await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
-```
-
-```javascript
-// WebdriverIO — use Amazon Nova via Bedrock
-const result = await driver.executeScript('windows: findByVision', [{
-    prompt: 'Save button in the toolbar',
-    model: 'amazon.nova-pro-v1:0',
-}]);
-await driver.executeScript('windows: click', [{ x: result.x, y: result.y }]);
-```
-
-```python
-# Python — locate and click using Gemini
-result = driver.execute_script('windows: findByVision', {
-    'prompt': 'Save button in the toolbar',
-    'model': 'gemini-1.5-pro',
-})
-driver.execute_script('windows: click', {
-    'x': result['x'],
-    'y': result['y'],
-})
-```
-
-## WebView / Chrome CDP Support
-
-The driver supports automating embedded web content (WebView2 controls, Electron apps, or standalone Chrome/Edge) by connecting to a Chrome DevTools Protocol (CDP) endpoint and proxying commands through Chromedriver.
-
-### How it works
-
-1. Your app (or browser) exposes a CDP endpoint via `--remote-debugging-port`
-2. The driver connects to that endpoint to discover available pages
-3. You call `mobile: getContexts` to list all contexts (native + web)
-4. You switch to a web context — the driver auto-downloads the matching Chromedriver/EdgeDriver and proxies all WebDriver commands to it
-5. You switch back to `NATIVE_APP` to resume UIA automation
-
-### Required capabilities
-
-| Capability | Type | Required | Description |
-|---|---|---|---|
-| `appium:webviewEnabled` | boolean | yes | Enable CDP/WebView support |
-| `appium:webviewDevtoolsPort` | number | no | CDP port. Auto-selected if omitted (WebView2 only) |
-| `appium:chromedriverExecutablePath` | string | no | Path to local chromedriver binary (skips auto-download) |
-| `appium:edgedriverExecutablePath` | string | no | Path to local msedgedriver binary (skips auto-download) |
-| `appium:chromedriverCdnUrl` | string | no | Custom CDN base URL for Chromedriver downloads |
-| `appium:edgedriverCdnUrl` | string | no | Custom CDN base URL for EdgeDriver downloads |
-
-### Automating a standalone Chrome or Edge browser
-
-Launch the browser with `--remote-debugging-port` in `appium:appArguments` and set `appium:webviewDevtoolsPort` to the same port.
-
-```javascript
 const driver = await remote({
-    hostname: '127.0.0.1',
-    port: 4723,
-    capabilities: {
-        platformName: 'Windows',
-        'appium:automationName': 'DesktopDriver',
-        'appium:app': 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'appium:appArguments': '--remote-debugging-port=9222 --user-data-dir=C:\\Temp\\chrome-test --no-first-run https://example.com',
-        'appium:webviewEnabled': true,
-        'appium:webviewDevtoolsPort': 9222,
-    },
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:app': 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe',
+    'appium:appArguments': '-cp C:\\MyApp\\classes MainClass',
+    'appium:javaSwing': true,
+  },
 });
+
+// Find by accessible name (set via setAccessibleName() in Java code)
+const username = await driver.$('~usernameField');
+await username.setValue('admin');
+
+// Find by Java class name — unique even in legacy apps with no accessible names
+const passwordField = await driver.$('//*[@JavaSimpleClass="JPasswordField"]');
+await passwordField.setValue('secret');
+
+const loginBtn = await driver.$('~loginButton');
+await loginBtn.click();
+
+await driver.deleteSession();
 ```
 
-### Automating a WebView2 app
+### Desktop root: click an icon and switch windows
 
-For apps that embed a WebView2 control, omit `appArguments` — the driver injects the debug port automatically via the `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` environment variable. You can also omit `webviewDevtoolsPort` and the driver will pick a free port automatically.
+```js
+import { remote } from 'webdriverio';
 
-```javascript
 const driver = await remote({
-    hostname: '127.0.0.1',
-    port: 4723,
-    capabilities: {
-        platformName: 'Windows',
-        'appium:automationName': 'DesktopDriver',
-        'appium:app': 'C:\\Path\\To\\YourApp.exe',
-        'appium:webviewEnabled': true,
-        // webviewDevtoolsPort is optional — auto-selected when omitted
-    },
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:app': 'Root', // attach to the Windows desktop shell
+  },
 });
+
+// Double-click a desktop shortcut by its accessible name
+const icon = await driver.$('~Notepad');
+await driver.executeScript('windows: click', [{
+  elementId: icon.elementId,
+  times: 2,
+  interClickDelayMs: 100,
+}]);
+
+// Give the app time to open, then switch to the new window
+await driver.pause(2000);
+const allHandles = await driver.getWindowHandles();
+await driver.switchToWindow(allHandles[allHandles.length - 1]);
+
+const titleBar = await driver.$('//TitleBar');
+console.log(await titleBar.getText());
+
+await driver.deleteSession();
 ```
 
-### Listing available contexts
+### Windows Calculator: invoke pattern
 
-Use `mobile: getContexts` to get all available contexts with page metadata:
+`windows: invoke` fires the UIA InvokePattern. Prefer it over `.click()`
+for controls that do not respond reliably to pointer events.
 
-```javascript
-const contexts = await driver.execute('mobile: getContexts', [{}]);
-// Returns:
-// [
-//   { id: 'NATIVE_APP' },
-//   { id: 'WEBVIEW_4F81DBA83CD27B1868B4193151C76A92', title: 'Example Domain', url: 'https://example.com/', type: 'page', ... },
-// ]
+```js
+import { remote } from 'webdriverio';
+
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:app': 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+  },
+});
+
+async function invoke(el) {
+  await driver.executeScript('windows: invoke', [el]);
+}
+
+// 5 + 3 =
+await invoke(await driver.$('~num5Button'));
+await invoke(await driver.$('~plusButton'));
+await invoke(await driver.$('~num3Button'));
+await invoke(await driver.$('~equalButton'));
+
+const display = await driver.$('~CalculatorResults');
+console.log(await display.getText()); // "Display is 8"
+
+await driver.deleteSession();
 ```
 
-To wait for the WebView to finish loading before querying, pass `waitForWebviewMs`:
+### Ctrl+drag via W3C Actions
 
-```javascript
-const contexts = await driver.execute('mobile: getContexts', [{ waitForWebviewMs: 3000 }]);
+Actions are processed tick by tick. All actions at the same tick index
+across input sources run simultaneously. Ticks advance sequentially.
+Use `pause` entries to keep sources aligned when mixing keyboard and
+pointer inputs.
+
+```js
+import { remote } from 'webdriverio';
+
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:app': 'C:\\MyApp\\app.exe',
+  },
+});
+
+const source = await driver.$('~dragSource');
+const target = await driver.$('~dropTarget');
+
+await driver.performActions([
+  {
+    type: 'key',
+    id: 'keyboard',
+    actions: [
+      { type: 'pause' },                    // tick 0 — wait for mouse move
+      { type: 'keyDown', value: '\uE009' }, // tick 1 — Ctrl key (W3C key value)
+      { type: 'pause' },                    // tick 2 — hold
+      { type: 'pause' },                    // tick 3 — hold during drag
+      { type: 'keyUp', value: '\uE009' },   // tick 4 — Ctrl up
+    ],
+  },
+  {
+    type: 'pointer',
+    id: 'mouse',
+    parameters: { pointerType: 'mouse' },
+    actions: [
+      { type: 'pointerMove', duration: 0, origin: source },   // tick 0
+      { type: 'pointerDown', button: 0 },                      // tick 1
+      { type: 'pause', duration: 300 },                        // tick 2
+      { type: 'pointerMove', duration: 600, origin: target },  // tick 3
+      { type: 'pointerUp', button: 0 },                        // tick 4
+    ],
+  },
+]);
+
+await driver.releaseActions();
+await driver.deleteSession();
 ```
 
-The standard `driver.getContexts()` command also works but returns only IDs without metadata.
+## API Reference
 
-### Switching to a web context
-
-```javascript
-const contexts = await driver.execute('mobile: getContexts', [{}]);
-const webviewId = contexts.find(c => c.id.startsWith('WEBVIEW_')).id;
-
-await driver.switchContext(webviewId);
-
-// Now all commands are proxied through Chromedriver
-const title = await driver.getTitle();
-const url = await driver.getUrl();
-
-const h1 = await driver.$('h1');               // CSS selector
-const heading = await driver.$('//h1');         // XPath
-console.log(await h1.getText());
-
-const docTitle = await driver.execute('return document.title');
-```
-
-### Switching back to native UIA
-
-```javascript
-await driver.switchContext('NATIVE_APP');
-
-// UIA automation resumes — find native elements normally
-const btn = await driver.$('~myButton');
-await btn.click();
-```
-
-### Running UIA commands while in a web context
-
-`windows:` extension commands and `powerShell` are always routed to the native UIA layer regardless of the active context:
-
-```javascript
-await driver.switchContext(webviewId);
-
-// These still hit UIA, not Chromedriver
-const deviceTime = await driver.execute('windows: getDeviceTime', [{}]);
-const result = await driver.execute('powerShell', [{ script: 'Get-Date' }]);
-```
-
-### Notes
-
-- The driver auto-downloads the correct Chromedriver or EdgeDriver version to match the browser. Internet access is required unless you provide `chromedriverExecutablePath` / `edgedriverExecutablePath`.
-- Only one web context can be active at a time. Switching to a second web context tears down the previous Chromedriver instance and starts a new one.
-- Use `--user-data-dir` when launching Chrome/Edge to ensure the debug port is respected even if another Chrome instance is already running.
-- Background pages, service workers, and extension pages appear in `mobile: getContexts` results. Filter by `type === 'page'` to target only real tab pages.
+Full reference for all locator strategies, `windows:` extension
+commands, WebView/CDP automation, screen recording, and vision-based
+finding: [API.md](API.md).
 
 ## Development
 
-it is recommended to use Matt Bierner's [Comment tagged templates](https://marketplace.visualstudio.com/items?itemName=bierner.comment-tagged-templates)
-Visual Studio Code plugin so it highlights the powershell and C code used throughout the project.
-
 ```bash
-# Checkout the current repository and run
 npm install
-# Run linting to check for code quality
 npm run lint
-# Transpile TypeScript files to build the project
 npm run build
+npm run test
 ```
+
+Uses [Comment Tagged Templates](https://marketplace.visualstudio.com/items?itemName=bierner.comment-tagged-templates)
+for PowerShell/C syntax highlighting in VS Code.

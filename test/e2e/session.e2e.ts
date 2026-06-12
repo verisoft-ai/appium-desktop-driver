@@ -23,7 +23,7 @@ describe('Session creation and capabilities', () => {
             expect(sessionId.length).toBeGreaterThan(0);
             // Display should be accessible
             const display = await driver.$('~CalculatorResults');
-            expect(await display.isExisting()).toBe(true);
+            await display.waitForExist({ timeout: 1000 });
         } finally {
             await quitSession(driver);
         }

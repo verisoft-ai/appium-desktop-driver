@@ -187,11 +187,10 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         this.log.debug('Detected app path to be in the UWP format.');
 
         // Snapshot all visible windows before launch so we can detect new ones.
-        // WinUI 3 packaged apps (e.g. Windows 11 Calculator) run in their own
-        // process rather than being hosted inside ApplicationFrameHost like
-        // legacy UWP apps. The snapshot lets us tell apart the new app window
-        // from pre-existing windows that belong to other apps or to
-        // ApplicationFrameHost itself.
+        // Most UWP apps are hosted in ApplicationFrameHost (Strategy 2 below),
+        // but standalone WinUI 3 apps spawn their own top-level window outside
+        // ApplicationFrameHost. The snapshot lets us detect that new window
+        // without misidentifying pre-existing windows from other apps.
         const handlesBeforeLaunch = new Set(getAllWindowHandles());
 
         await this.sendCommand('startProcess', {
@@ -204,8 +203,10 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         // POLL_INTERVAL_MS tick — no blind sleep up front.
         for (let i = 1; deadline ? Date.now() < deadline : i <= 10; i++) {
             // Strategy 1: new window detection.
-            // Works for WinUI 3 / standalone packaged apps that spawn a new
-            // top-level window in their own process.
+            // For standalone WinUI 3 packaged apps that run in their own process
+            // and don't use ApplicationFrameHost. CoreWindow handles are skipped
+            // (see attachToWindowHandles) — they are inner UWP content windows
+            // that don't support WindowPattern or TransformPattern.
             const newHandles = getAllWindowHandles().filter((h) => !handlesBeforeLaunch.has(h));
             if (newHandles.length > 0) {
                 this.log.debug(`Found ${newHandles.length} new window(s) since launch: ${newHandles.map((h) => `0x${h.toString(16).padStart(8, '0')}`).join(', ')}`);
@@ -221,10 +222,9 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
             }
 
             // Strategy 2: ApplicationFrameHost.
-            // Works for legacy hosted UWP apps. Prefer newly appeared
-            // ApplicationFrameHost windows (i.e. the frame that opened for
-            // this specific launch) to avoid accidentally attaching to a
-            // pre-existing frame that belongs to another UWP app.
+            // Covers the majority of UWP apps hosted in ApplicationFrameWindow.
+            // Prefer newly appeared AFH windows to avoid attaching to a
+            // pre-existing frame that belongs to a different app.
             const processIds = await this.sendCommand('getProcessIds', { processName: 'ApplicationFrameHost' }) as number[];
             if (processIds.length > 0) {
                 const afhHandles = getWindowAllHandlesForProcessIds(processIds);
@@ -408,6 +408,15 @@ export async function attachToWindowHandles(
             continue;
         }
         if (!candidateId) { continue; }
+
+        // Skip inner UWP content windows (Windows.UI.Core.CoreWindow) — these are
+        // hosted inside an outer ApplicationFrameWindow and should not be the session root.
+        const className = await this.sendCommand('getProperty', { elementId: candidateId, property: 'ClassName' }) as string;
+        if (className === 'Windows.UI.Core.CoreWindow') {
+            this.log.debug(`Skipping CoreWindow handle 0x${hwnd.toString(16).padStart(8, '0')}.`);
+            continue;
+        }
+
         if (!fallbackElementId) { fallbackElementId = candidateId; }
 
         const focusables = await this.sendCommand('findElements', {
@@ -425,6 +434,21 @@ export async function attachToWindowHandles(
                 const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
                 trySetForegroundWindow(nwh);
             }
+            return true;
+        }
+    }
+
+    // No window passed the focusability threshold (e.g. click-only or
+    // custom-drawn apps with no keyboard-focusable elements). Attach to
+    // the first valid non-CoreWindow handle found.
+    if (fallbackElementId) {
+        this.log.info(`No window with focusable descendants found — attaching to fallback element.`);
+        await this.sendCommand('setRootElementFromElementId', { elementId: fallbackElementId });
+        const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
+        if (isNotNull) {
+            const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
+            const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
+            trySetForegroundWindow(nwh);
             return true;
         }
     }

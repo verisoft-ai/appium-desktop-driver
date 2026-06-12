@@ -62,6 +62,8 @@ await driver.executeScript('windows: invoke', [btn]);
 
 ### windows: click
 
+Simulates a mouse click at a screen coordinate or on a UI element.
+
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
 | `elementId` | string | no | Click element center; coords become relative |
@@ -171,43 +173,51 @@ only argument:
 | `windows: scrollIntoView` | ScrollItemPattern | Scroll into view |
 | `windows: setFocus` | — | Set keyboard focus |
 
-Additional pattern commands:
+#### windows: setValue
 
-**`windows: setValue`** — sets the element value via ValuePattern.
-Arg 0: element. Arg 1: value string.
+Sets the element value via ValuePattern. Arg 0: element. Arg 1: value string.
 
-**`windows: getValue`** — returns the element's current value string.
-Arg 0: element.
+#### windows: getValue
 
-**`windows: selectedItem`** — returns the selected element from a
-selection container. Arg 0: container element.
+Returns the element's current value string. Arg 0: element.
 
-**`windows: allSelectedItems`** — returns all selected elements as
-an array. Arg 0: container element.
+#### windows: selectedItem
 
-**`windows: isMultiple`** — returns `true` if the container supports
-multi-select. Arg 0: container element.
+Returns the selected element from a selection container. Arg 0: container element.
 
-**`windows: maximize`** / **`windows: minimize`** /
-**`windows: restore`** / **`windows: close`** — window state control
-via WindowPattern. Arg 0: window element.
+#### windows: allSelectedItems
+
+Returns all selected elements as an array. Arg 0: container element.
+
+#### windows: isMultiple
+
+Returns `true` if the container supports multi-select. Arg 0: container element.
+
+#### windows: maximize / minimize / restore / close
+
+Window state control via WindowPattern. Arg 0: window element.
 
 ### App and Window Control
 
-**`windows: launchApp`** — re-launches the app from the `appium:app`
-capability. No arguments.
+#### windows: launchApp
 
-**`windows: closeApp`** — closes the current root application window.
-No arguments.
+Re-launches the app from the `appium:app` capability. No arguments.
 
-**`windows: getWindowElement`** — returns the automation element ID
-of the current root window. No arguments.
+#### windows: closeApp
 
-**`windows: getDeviceTime`** — returns the Windows system time as a
-string. No arguments.
+Closes the current root application window. No arguments.
 
-**`windows: getMonitors`** — returns an array of monitor descriptors.
-No arguments.
+#### windows: getWindowElement
+
+Returns the automation element ID of the current root window. No arguments.
+
+#### windows: getDeviceTime
+
+Returns the Windows system time as a string. No arguments.
+
+#### windows: getMonitors
+
+Returns an array of monitor descriptors. No arguments.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -229,15 +239,15 @@ if (secondary) {
 
 ### Clipboard
 
-**`windows: getClipboard`**
+#### windows: getClipboard
+
+Returns base64-encoded clipboard content.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
 | `contentType` | `'plaintext'` / `'image'` | no | Default: `'plaintext'` |
 
-Returns base64-encoded clipboard content.
-
-**`windows: setClipboard`**
+#### windows: setClipboard
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -246,13 +256,13 @@ Returns base64-encoded clipboard content.
 
 ### File System
 
-**`windows: deleteFile`**
+#### windows: deleteFile
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
 | `path` | string | yes | Absolute path to the file |
 
-**`windows: deleteFolder`**
+#### windows: deleteFolder
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -264,10 +274,13 @@ Returns base64-encoded clipboard content.
 Screen recording uses the bundled ffmpeg binary. It is not available
 if the driver was installed without its npm dependencies.
 
-**`windows: startRecordingScreen`** — begins recording.
+#### windows: startRecordingScreen
 
-**`windows: stopRecordingScreen`** — stops recording and returns a
-base64-encoded video string.
+Begins recording the screen.
+
+#### windows: stopRecordingScreen
+
+Stops recording and returns a base64-encoded video string.
 
 ```js
 await driver.executeScript('windows: startRecordingScreen', [{}]);
@@ -280,9 +293,10 @@ const video = await driver.executeScript(
 
 ### Vision-Based Finding
 
-**`windows: findByVision`** — takes a screenshot and sends it to a
-vision LLM to locate an element by description.
-Returns `{ x, y, label }`.
+#### windows: findByVision
+
+Takes a screenshot and sends it to a vision LLM to locate an element by
+natural language description. Returns `{ x, y, label }`.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -312,8 +326,10 @@ await driver.executeScript('windows: click', [{ x, y }]);
 
 ### PowerShell Execution
 
-**`windows: powerShell`** — executes a PowerShell script and returns
-stdout. Requires the `power_shell` insecure feature flag:
+#### windows: powerShell
+
+Executes a PowerShell script and returns stdout.
+Requires the `power_shell` insecure feature flag:
 
 ```bash
 appium --use-insecure-feature power_shell
@@ -331,8 +347,10 @@ const output = await driver.executeScript('windows: powerShell', [
 
 ### Cache Requests
 
-**`windows: pushCacheRequest`** — activates a UIA cache request to
-expose RawView elements in the element tree.
+#### windows: pushCacheRequest
+
+Activates a UIA cache request to expose RawView elements in the element
+tree.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -383,7 +401,9 @@ release any held keys or mouse buttons.
 
 ### Supported action types
 
-**Pointer actions** (`type: 'pointer'`, `pointerType: 'mouse'`):
+#### Pointer actions
+
+`type: 'pointer'`, `pointerType: 'mouse'`
 
 | Type | Description |
 | --- | --- |
@@ -392,7 +412,9 @@ release any held keys or mouse buttons.
 | `pointerUp` | Release button |
 | `pause` | Wait for `duration` ms |
 
-**Key actions** (`type: 'key'`):
+#### Key actions
+
+`type: 'key'`
 
 | Type | Description |
 | --- | --- |
@@ -400,7 +422,9 @@ release any held keys or mouse buttons.
 | `keyUp` | Release a key |
 | `pause` | Wait for `duration` ms |
 
-**Wheel actions** (`type: 'wheel'`):
+#### Wheel actions
+
+`type: 'wheel'`
 
 | Type | Description |
 | --- | --- |

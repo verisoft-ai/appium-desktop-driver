@@ -3,6 +3,7 @@ package io.verisoft.appium;
 import java.io.*;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -10,7 +11,7 @@ public class AppiumDesktopAgent {
 
     public static void premain(String agentArgs, Instrumentation inst) {
         try {
-            ServerSocket serverSocket = new ServerSocket(0);
+            ServerSocket serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
             int port = serverSocket.getLocalPort();
 
             String pid = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];

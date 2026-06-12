@@ -1,5 +1,5 @@
 using System.Text.Json;
-using NovaUIAutomationServer.Jab;
+using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
@@ -16,21 +16,15 @@ public static class ElementCommands
         var propertyName = p.GetProperty("property").GetString()
             ?? throw new ArgumentException("property is required.");
 
-        if (JabElement.IsJabId(elementId))
+        if (JavaAgentElement.IsJavaId(elementId))
         {
-            var jabEl = state.Jab!.GetById(elementId);
-            // Only re-fetch live info for state-dependent properties; static ones never change.
+            var javaEl = state.Java!.GetById(elementId);
             var lowerProp = propertyName.ToLowerInvariant();
             if (lowerProp is "isenabled" or "isoffscreen" or "haskeyboardfocus" or "iskeyboardfocusable" or "clickablepoint")
             {
-                var freshInfo = state.Jab.GetFreshInfo(jabEl);
-                if (freshInfo != null)
-                {
-                    jabEl = new Jab.JabElement(jabEl.VmId, jabEl.Ac, freshInfo);
-                    state.Jab.Save(jabEl);
-                }
+                state.Java.GetFreshInfo(javaEl);
             }
-            return state.Jab.GetProperty(jabEl, propertyName);
+            return state.Java.GetProperty(javaEl, propertyName);
         }
 
         var element = state.GetElement(elementId);
@@ -119,8 +113,8 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
-            return state.Jab!.GetTagName(state.Jab.GetById(elementId));
+        if (JavaAgentElement.IsJavaId(elementId))
+            return state.Java!.GetTagName(state.Java.GetById(elementId));
 
         var element = state.GetElement(elementId);
         var ctId = element.CurrentControlType;
@@ -133,8 +127,8 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
-            return state.Jab!.GetText(state.Jab.GetById(elementId));
+        if (JavaAgentElement.IsJavaId(elementId))
+            return state.Java!.GetText(state.Java.GetById(elementId));
 
         var element = state.GetElement(elementId);
 
@@ -171,8 +165,8 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
-            return state.Jab!.GetRect(state.Jab.GetById(elementId));
+        if (JavaAgentElement.IsJavaId(elementId))
+            return state.Java!.GetRect(state.Java.GetById(elementId));
 
         var element = state.GetElement(elementId);
         var rect = element.CurrentBoundingRectangle;
@@ -210,8 +204,8 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        // JAB: no direct focus API — skip silently
-        if (JabElement.IsJabId(elementId)) return null;
+        // Java agent: no direct focus API — skip silently
+        if (JavaAgentElement.IsJavaId(elementId)) return null;
 
         var element = state.GetElement(elementId);
         element.SetFocus();
@@ -225,9 +219,9 @@ public static class ElementCommands
             ?? throw new ArgumentException("elementId is required.");
         var value = p.GetProperty("value").GetString() ?? "";
 
-        if (JabElement.IsJabId(elementId))
+        if (JavaAgentElement.IsJavaId(elementId))
         {
-            state.Jab!.SetValue(state.Jab.GetById(elementId), value);
+            state.Java!.SetValue(state.Java.GetById(elementId), value);
             return null;
         }
 
@@ -246,8 +240,8 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
-            return state.Jab!.GetText(state.Jab.GetById(elementId));
+        if (JavaAgentElement.IsJavaId(elementId))
+            return state.Java!.GetText(state.Java.GetById(elementId));
 
         var element = state.GetElement(elementId);
         if (element.GetCurrentPattern(UIA.ValuePatternId) is IUIAutomationValuePattern vp)

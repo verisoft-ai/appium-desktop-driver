@@ -15,6 +15,7 @@
   "files": [
     "build/lib/**/*",
     "native/win-x64/NovaUIAutomationServer.exe",
+    "native/win-x64/appium-desktop-agent.jar",
     "scripts/postinstall.js",
     "LICENSE",
     "README.md",
@@ -26,7 +27,8 @@
   "scripts": {
     "build": "tsc -b",
     "build:native": "dotnet publish csharp/NovaUIAutomationServer/NovaUIAutomationServer.csproj -c Release -o native/win-x64/",
-    "build:all": "npm run build:native && npm run build",
+    "build:java-agent": "cd java-agent && build.bat",
+    "build:all": "npm run build:java-agent && npm run build:native && npm run build",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
     "test": "npx vitest run",

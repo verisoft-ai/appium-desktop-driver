@@ -61,6 +61,11 @@ public static class ProcessCommands
             }
         }
 
+        if (process != null)
+        {
+            state.LastStartedProcessId = process.Id;
+        }
+
         return process?.Id;
     }
 

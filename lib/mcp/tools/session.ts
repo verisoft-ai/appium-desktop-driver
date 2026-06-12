@@ -26,7 +26,8 @@ export function registerSessionTools(server: McpServer, session: AppiumSession):
                 smoothPointerMove: z.string().optional().describe('Easing function name for smooth pointer movement'),
                 webviewEnabled: z.boolean().optional().describe('Enable WebView/CDP support for hybrid apps (Edge/Chrome-based embedded webviews)'),
                 webviewDevtoolsPort: z.number().int().min(1).optional().describe('DevTools remote debugging port the embedded webview is listening on'),
-                javaSwing: z.boolean().optional().describe('Enable Java Access Bridge support for automating Java Swing applications'),
+                javaSwing: z.boolean().optional().describe('Enable Java agent support for automating Java Swing/AWT applications. Injects a JVM agent that exposes Java class names, accessible names, and roles for element finding.'),
+                newSessionCommandTimeout: z.number().int().min(0).optional().describe('Seconds of inactivity before Appium auto-closes the session (default: 3600)'),
             },
         },
         async (params) => {

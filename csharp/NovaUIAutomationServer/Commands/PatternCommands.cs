@@ -1,5 +1,5 @@
 using System.Text.Json;
-using NovaUIAutomationServer.Jab;
+using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
 
@@ -13,9 +13,9 @@ public static class PatternCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
+        if (JavaAgentElement.IsJavaId(elementId))
         {
-            state.Jab!.Invoke(state.Jab.GetById(elementId));
+            state.Java!.Invoke(state.Java.GetById(elementId));
             return null;
         }
 
@@ -66,10 +66,10 @@ public static class PatternCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        // JAB has no TogglePattern — fire the default accessible action (toggles checkboxes, buttons).
-        if (JabElement.IsJabId(elementId))
+        // Java agent has no TogglePattern — fire the default accessible action (toggles checkboxes, buttons).
+        if (JavaAgentElement.IsJavaId(elementId))
         {
-            state.Jab!.Invoke(state.Jab.GetById(elementId));
+            state.Java!.Invoke(state.Java.GetById(elementId));
             Thread.Sleep(50); // match UIA Invoke settle delay so the next state-read isn't stale
             return null;
         }
@@ -85,10 +85,10 @@ public static class PatternCommands
         var id = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        // JAB: re-fetch info live — cached Info.states is stale after interaction.
-        if (JabElement.IsJabId(id))
+        // Java agent: re-fetch info live — cached Info.states is stale after interaction.
+        if (JavaAgentElement.IsJavaId(id))
         {
-            var states = GetJabStates(state, state.Jab!.GetById(id));
+            var states = GetJavaStates(state, state.Java!.GetById(id));
             if (states.Contains("indeterminate", StringComparison.OrdinalIgnoreCase))
                 return "Indeterminate";
             return states.Contains("checked", StringComparison.OrdinalIgnoreCase) ? "On" : "Off";
@@ -148,10 +148,10 @@ public static class PatternCommands
         var id = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        // JAB: re-fetch info live — cached Info.states is stale after interaction.
-        if (JabElement.IsJabId(id))
+        // Java agent: re-fetch info live — cached Info.states is stale after interaction.
+        if (JavaAgentElement.IsJavaId(id))
         {
-            var states = GetJabStates(state, state.Jab!.GetById(id));
+            var states = GetJavaStates(state, state.Java!.GetById(id));
             return states.Contains("checked", StringComparison.OrdinalIgnoreCase)
                 || states.Contains("selected", StringComparison.OrdinalIgnoreCase);
         }
@@ -237,8 +237,11 @@ public static class PatternCommands
         throw new InvalidOperationException("Element does not support TransformPattern.");
     }
 
-    private static string GetJabStates(SessionState state, JabElement jabEl)
-        => (state.Jab!.GetFreshInfo(jabEl) ?? jabEl.Info).states ?? "";
+    private static string GetJavaStates(SessionState state, JavaAgentElement javaEl)
+    {
+        var info = state.Java!.GetFreshInfo(javaEl) ?? javaEl.Info;
+        return info.TryGetValue("States", out var s) ? s?.ToString() ?? "" : "";
+    }
 
     private static IUIAutomationElement GetElement(SessionState state, JsonElement? parameters)
     {

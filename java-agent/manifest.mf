@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Premain-Class: io.verisoft.appium.AppiumDesktopAgent
+Can-Redefine-Classes: false
+Can-Retransform-Classes: false
+

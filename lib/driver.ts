@@ -1,4 +1,5 @@
 import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
 import commands from './commands';
@@ -264,12 +265,23 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                 this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. NovaWindows uses stdin/stdout IPC.`);
             }
 
+            if (this.caps.javaSwing) {
+                // Inject the agent JAR before startServerSession so it lands in
+                // appArguments when the JVM process is spawned by startProcess.
+                const agentJar = join(__dirname, '..', '..', 'native', 'win-x64', 'appium-desktop-agent.jar');
+                const agentFlag = `-javaagent:"${agentJar}"`;
+                this.caps.appArguments = this.caps.appArguments
+                    ? `${agentFlag} ${this.caps.appArguments}`
+                    : agentFlag;
+                this.log.info(`Java Swing mode enabled — injecting agent: ${agentJar}`);
+            }
+
             await this.startServerSession();
 
             if (this.caps.javaSwing) {
-                this.log.info('Java Swing mode enabled — loading Java Access Bridge...');
+                this.log.info('Connecting to Java agent...');
                 await this.sendCommand('enableJavaSwing', {});
-                this.log.info('Java Access Bridge loaded successfully.');
+                this.log.info('Java agent connected successfully.');
             }
 
             if (this.caps.prerun) {

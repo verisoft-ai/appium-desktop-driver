@@ -35,9 +35,9 @@ export async function clear(this: AppiumDesktopDriver, elementId: string): Promi
 }
 
 export async function setValue(this: AppiumDesktopDriver, value: string | string[], elementId: string): Promise<void> {
-    // JAB elements: setFocus is a no-op and sendKeys goes to the OS-focused field.
-    // Use SetTextContents via setElementValue which targets the element directly.
-    if (elementId.startsWith('jab:')) {
+    // Java agent elements: sendKeys goes to the OS-focused field regardless of elementId.
+    // Use setElementValue which targets the element directly via AccessibleEditableText.
+    if (elementId.startsWith('java:')) {
         const text = Array.isArray(value) ? value.join('') : value;
         await this.sendCommand('setElementValue', { elementId, value: text });
         return;

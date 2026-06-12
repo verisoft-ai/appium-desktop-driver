@@ -1,4 +1,4 @@
-using NovaUIAutomationServer.Jab;
+using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Uia3;
 
 namespace NovaUIAutomationServer.State;
@@ -15,9 +15,10 @@ public class SessionState
     public IUIAutomationCacheRequest? CacheRequest { get; set; }
     public IUIAutomationTreeWalker? TreeWalker { get; set; }
 
-    // Java Access Bridge
-    internal JabService? Jab { get; private set; }
+    // Java agent
+    internal JavaAgentService? Java { get; private set; }
     public bool JavaSwingEnabled { get; private set; }
+    public int LastStartedProcessId { get; set; }
 
     // HWND of the attached top-level window (0 if the root is the desktop or
     // an element with no native handle). We re-resolve the root via
@@ -90,25 +91,32 @@ public class SessionState
         return RootElement ?? throw new InvalidOperationException("Root element is not set.");
     }
 
+    /// <summary>
+    /// Connects to the Java agent running in the target JVM.
+    /// The agent must have been injected via -javaagent: at app startup.
+    /// </summary>
     public void EnableJavaSwing()
     {
-        Jab ??= new JabService();
-        if (!Jab.TryInitialize())
+        if (LastStartedProcessId == 0)
             throw new InvalidOperationException(
-                "Java Access Bridge could not be loaded. Ensure a 64-bit JRE is installed and 'jabswitch -enable' has been run.");
+                "No process has been started in this session. Launch the app before enabling Java agent.");
+
+        Java ??= new JavaAgentService();
+        Java.Connect(LastStartedProcessId);
         JavaSwingEnabled = true;
     }
 
     /// <summary>
-    /// Returns true if the given UIA element's HWND is a Java window (requires JAB enabled).
+    /// Returns true if the given UIA element's HWND is a Java window.
+    /// Uses WinAPI GetClassName — no JAB DLL required.
     /// </summary>
     public bool IsJavaWindowElement(IUIAutomationElement element)
     {
-        if (!JavaSwingEnabled || Jab == null) return false;
+        if (!JavaSwingEnabled) return false;
         try
         {
             var hwnd = element.CurrentNativeWindowHandle;
-            return hwnd != IntPtr.Zero && Jab.IsJavaWindow(hwnd);
+            return hwnd != IntPtr.Zero && JavaWindowDetector.IsJavaWindow(hwnd);
         }
         catch { return false; }
     }
@@ -135,8 +143,9 @@ public class SessionState
         SetRoot(null);
         CacheRequest = null;
         TreeWalker = null;
-        Jab?.Dispose();
-        Jab = null;
+        Java?.Dispose();
+        Java = null;
         JavaSwingEnabled = false;
+        LastStartedProcessId = 0;
     }
 }

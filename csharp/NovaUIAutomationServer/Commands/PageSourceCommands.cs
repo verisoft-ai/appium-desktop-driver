@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Xml;
-using NovaUIAutomationServer.Jab;
+using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
@@ -18,17 +18,17 @@ public static class PageSourceCommands
         }
 
         // When Java Swing mode is active and the root is a Java window, build
-        // the page source from the JAB accessibility tree instead of UIA
+        // the page source from the Java agent accessibility tree instead of UIA
         // (which sees the Java window as an opaque pane with no children).
-        if (state.JavaSwingEnabled && state.Jab != null && state.IsJavaWindowElement(root))
+        if (state.JavaSwingEnabled && state.Java != null && state.IsJavaWindowElement(root))
         {
             var hwnd = root.CurrentNativeWindowHandle;
-            var jabRoot = state.Jab.GetWindowRoot(hwnd);
-            if (jabRoot != null)
+            var javaRoot = state.Java.GetWindowRoot(hwnd);
+            if (javaRoot != null)
             {
-                var jabDoc = new XmlDocument();
-                state.Jab.BuildXml(jabRoot, jabDoc, null);
-                return jabDoc.OuterXml;
+                var javaDoc = new XmlDocument();
+                state.Java.BuildXml(javaRoot, javaDoc, null);
+                return javaDoc.OuterXml;
             }
         }
 

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using NovaUIAutomationServer.Jab;
+using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Protocol;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
@@ -22,10 +22,10 @@ public static class FindCommands
             contextElementId = ctxProp.GetString();
         }
 
-        // Route to JAB when context is a JAB element or the UIA root is a Java window.
-        if (TryRouteToJab(state, contextElementId, out var jabRoot))
+        // Route to Java agent when context is a Java element or the UIA root is a Java window.
+        if (TryRouteToJava(state, contextElementId, out var javaRoot))
         {
-            return state.Jab!.FindFirst(jabRoot!, conditionDto, scope);
+            return state.Java!.FindFirst(javaRoot!, conditionDto, scope);
         }
 
         // When searching from the session root we re-resolve the attached HWND
@@ -92,10 +92,10 @@ public static class FindCommands
             contextElementId = ctxProp.GetString();
         }
 
-        // Route to JAB when context is a JAB element or the UIA root is a Java window.
-        if (TryRouteToJab(state, contextElementId, out var jabRoot))
+        // Route to Java agent when context is a Java element or the UIA root is a Java window.
+        if (TryRouteToJava(state, contextElementId, out var javaRoot))
         {
-            return state.Jab!.FindAll(jabRoot!, conditionDto, scope);
+            return state.Java!.FindAll(javaRoot!, conditionDto, scope);
         }
 
         // When searching from the session root we re-resolve the attached HWND
@@ -161,13 +161,12 @@ public static class FindCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        if (JabElement.IsJabId(elementId))
+        if (JavaAgentElement.IsJavaId(elementId))
         {
-            if (state.Jab == null) return false;
+            if (state.Java == null) return false;
             try
             {
-                var jabEl = state.Jab.GetById(elementId);
-                return state.Jab.GetFreshInfo(jabEl) != null;
+                return state.Java!.IsAlive(elementId);
             }
             catch { return false; }
         }
@@ -430,21 +429,21 @@ public static class FindCommands
         return results.ToArray();
     }
 
-    // ── JAB routing ─────────────────────────────────────────────────────────────
+    // ── Java agent routing ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns true when the find request should be routed to the Java Access Bridge.
-    /// Sets <paramref name="jabRoot"/> to the JAB element to search from.
+    /// Returns true when the find request should be routed to the Java agent.
+    /// Sets <paramref name="javaRoot"/> to the Java element to search from.
     /// </summary>
-    private static bool TryRouteToJab(SessionState state, string? contextElementId, out JabElement? jabRoot)
+    private static bool TryRouteToJava(SessionState state, string? contextElementId, out JavaAgentElement? javaRoot)
     {
-        jabRoot = null;
-        if (!state.JavaSwingEnabled || state.Jab == null) return false;
+        javaRoot = null;
+        if (!state.JavaSwingEnabled || state.Java == null) return false;
 
-        // Context is already a JAB element — search within JAB subtree directly.
-        if (contextElementId != null && JabElement.IsJabId(contextElementId))
+        // Context is already a Java element — search within Java subtree directly.
+        if (contextElementId != null && JavaAgentElement.IsJavaId(contextElementId))
         {
-            jabRoot = state.Jab.GetById(contextElementId);
+            javaRoot = state.Java.GetById(contextElementId);
             return true;
         }
 
@@ -465,10 +464,10 @@ public static class FindCommands
         // Check if the UIA element sits on a Java window.
         if (!state.IsJavaWindowElement(uiaRoot)) return false;
 
-        // Get the JAB root for this Java window HWND.
+        // Get the Java agent root for this Java window HWND.
         var hwnd = uiaRoot.CurrentNativeWindowHandle;
-        jabRoot = state.Jab.GetWindowRoot(hwnd);
-        return jabRoot != null;
+        javaRoot = state.Java.GetWindowRoot(hwnd);
+        return javaRoot != null;
     }
 
     // Native UIA3 descendant search first — sub-millisecond on typical apps.

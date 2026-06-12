@@ -30,12 +30,14 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.x'
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '8'
     - run: npm install --no-package-lock
       name: Install dependencies
-    - run: npm run build:native
-      name: Build native server
-    - run: npm run build
-      name: Run NPM Build
+    - run: npm run build:all
+      name: Build all (Java agent, native server, TypeScript)
     - run: npm run lint
       name: Run NPM Lint
     - run: |

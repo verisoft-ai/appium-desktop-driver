@@ -8,7 +8,7 @@ set JAR_OUT=%~dp0..\native\win-x64\appium-desktop-agent.jar
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
 echo Compiling Java agent...
-javac --release 8 -d "%OUT_DIR%" ^
+javac -source 8 -target 8 -d "%OUT_DIR%" ^
   "%SRC_DIR%\io\verisoft\appium\AppiumDesktopAgent.java" ^
   "%SRC_DIR%\io\verisoft\appium\ComponentRegistry.java" ^
   "%SRC_DIR%\io\verisoft\appium\CommandHandler.java" ^

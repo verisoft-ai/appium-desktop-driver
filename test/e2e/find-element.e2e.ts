@@ -75,6 +75,27 @@ describe('Element finding strategies', () => {
             const child = await parent.$('.//Button');
             expect(await child.isExisting()).toBe(true);
         });
+
+        it('finds element using contains() on Name attribute', async () => {
+            // "One" button Name contains "ne"
+            const el = await driver.$('//*[contains(@Name, "ne")]');
+            expect(await el.isExisting()).toBe(true);
+        });
+
+        it('finds element using starts-with() on Name attribute', async () => {
+            const el = await driver.$('//Button[starts-with(@Name, "On")]');
+            expect(await el.isExisting()).toBe(true);
+        });
+
+        it('finds elements using boolean AND predicate', async () => {
+            const els = await driver.$$('//Button[@Name="One" and @AutomationId="num1Button"]');
+            expect(els.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('returns empty array when contains() matches nothing', async () => {
+            const els = await driver.$$('//*[contains(@Name, "ZZZ_NONEXISTENT_ZZZ")]');
+            expect(els.length).toBe(0);
+        });
     });
 
     describe('by tag name (control type)', () => {

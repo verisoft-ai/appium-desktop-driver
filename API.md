@@ -44,6 +44,31 @@ await driver.$('//Button[1]')                                // nth button
 await driver.$('//*[@JavaSimpleClass="HrIDTextField"]')      // Java class name (javaSwing)
 ```
 
+### XPath substring matching
+
+Use XPath `contains()` or `starts-with()` to match elements by partial name:
+
+```js
+await driver.$('//*[contains(@Name, "Execute")]')
+await driver.$('//Button[starts-with(@Name, "OK")]')
+```
+
+`PropertyConditionFlags.MatchSubstring` is not supported in the `-windows uiautomation` strategy. Use XPath instead.
+
+### -windows uiautomation
+
+Accepts a C#/PowerShell-style UIA condition expression. Supports exact property matches and logical combinators:
+
+```js
+// exact match
+await driver.findElement('-windows uiautomation', "new PropertyCondition(AutomationElement.NameProperty, 'OK')")
+
+// logical AND
+await driver.findElement('-windows uiautomation', "new AndCondition(new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button), new PropertyCondition(AutomationElement.NameProperty, 'OK'))")
+```
+
+**Limitation:** `PropertyConditionFlags` (e.g. `MatchSubstring`, `IgnoreCase`) are not parsed. Use XPath `contains()` for substring matching.
+
 ## Extension Commands
 
 Invoke all extension commands via `executeScript`:

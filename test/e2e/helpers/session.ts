@@ -96,6 +96,22 @@ export async function createChromeWebviewSession(extraCaps?: Record<string, unkn
     return driver;
 }
 
+export const EXPLORER_APP_PATH = 'C:\\Windows\\explorer.exe';
+
+export async function createExplorerSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': EXPLORER_APP_PATH,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
+
 export const JAVAW_EXE_PATH = process.env.JAVA_HOME
     ? `${process.env.JAVA_HOME}\\bin\\javaw.exe`
     : 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';

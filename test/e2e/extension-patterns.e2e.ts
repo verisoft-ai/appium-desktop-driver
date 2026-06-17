@@ -4,6 +4,7 @@ import {
     createCalculatorSession,
     createNotepadSession,
     createTodoSession,
+    createExplorerSession,
     getNotepadTextArea,
     quitSession,
     resetCalculator,
@@ -159,6 +160,42 @@ describe('windows: pattern extension commands', () => {
             await notepad.executeScript('windows: setValue', [textArea, 'pattern value test']);
             const result = await notepad.executeScript('windows: getValue', [textArea]);
             expect(result).toContain('pattern value test');
+        });
+    });
+
+    describe('windows: expand / collapse', () => {
+        let explorer: Browser;
+
+        beforeAll(async () => {
+            explorer = await createExplorerSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(explorer);
+        });
+
+        it('expands This PC and child drives become visible', async () => {
+            const thisPC = await explorer.$('//TreeItem[@Name="This PC"]');
+            await explorer.executeScript('windows: collapse', [thisPC]);
+            await explorer.pause(300);
+
+            await explorer.executeScript('windows: expand', [thisPC]);
+            await explorer.pause(300);
+
+            const children = await explorer.$$('//TreeItem[@Name="This PC"]/TreeItem');
+            expect(children.length).toBeGreaterThan(0);
+        });
+
+        it('collapses This PC and child drives are no longer visible', async () => {
+            const thisPC = await explorer.$('//TreeItem[@Name="This PC"]');
+            await explorer.executeScript('windows: expand', [thisPC]);
+            await explorer.pause(300);
+
+            await explorer.executeScript('windows: collapse', [thisPC]);
+            await explorer.pause(300);
+
+            const children = await explorer.$$('//TreeItem[@Name="This PC"]/TreeItem');
+            expect(children.length).toBe(0);
         });
     });
 

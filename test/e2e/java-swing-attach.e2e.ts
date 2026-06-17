@@ -6,6 +6,7 @@ import {
     APPIUM_SERVER,
     JAVAW_EXE_PATH,
     JAVA_SWING_FORM_CLASSPATH,
+    NOTEPAD_APP_PATH,
     launchJavaSwingFormExternally,
     createJavaSwingAttachSession,
     quitSession,
@@ -183,7 +184,61 @@ describe('Java Swing — existing -javaagent launch path (regression)', () => {
     });
 });
 
-// ─── Path D: error cases ─────────────────────────────────────────────────────
+// ─── Path D: root session → launch external → switchToWindow → attachJavaSwing ─
+
+describe('Java Swing — root session, launch external, switchToWindow, then attachJavaSwing', () => {
+    let driver: Browser;
+    let javaProc: ChildProcess;
+
+    beforeAll(async () => {
+        // 1. Session starts at desktop root — no specific app or window
+        driver = await remote({
+            ...APPIUM_SERVER,
+            capabilities: {
+                platformName: 'Windows',
+                'appium:automationName': 'DesktopDriver',
+                'appium:app': 'Root',
+                'appium:shouldCloseApp': false,
+            } as WebdriverIO.Capabilities,
+        });
+        await driver.setTimeout({ implicit: 5000 });
+
+        // 2. Launch the Java app externally (simulates the user's workflow)
+        const launched = await launchJavaSwingFormExternally();
+        javaProc = launched.proc;
+
+        // 3. Switch session context to the Java window
+        const hexHwnd = `0x${parseInt(launched.hwnd, 10).toString(16).padStart(8, '0')}`;
+        await driver.switchToWindow(hexHwnd);
+
+        // 4. Inject Java agent post-session (the path the coworker used)
+        await driver.executeScript('windows: attachJavaSwing', []);
+    }, 45_000);
+
+    afterAll(async () => {
+        await quitSession(driver);
+        killProc(javaProc);
+    });
+
+    it('getPageSource contains Java element tree after root→switch→attach', async () => {
+        const source = await driver.getPageSource();
+        expect(source).toContain('submitButton');
+        expect(source).toContain('firstName');
+    });
+
+    it('finds lastName field by accessibility id', async () => {
+        const el = await driver.$('~lastName');
+        expect(await el.isExisting()).toBe(true);
+    });
+
+    it('fills in lastName and reads it back', async () => {
+        const field = await driver.$('~lastName');
+        await field.setValue('RootAttachTest');
+        expect(await field.getText()).toBe('RootAttachTest');
+    });
+});
+
+// ─── Path F: error cases ─────────────────────────────────────────────────────
 
 describe('Java Swing — error cases', () => {
     it('javaSwing:true with no appTopLevelWindow and no app throws', async () => {
@@ -198,5 +253,37 @@ describe('Java Swing — error cases', () => {
                 } as WebdriverIO.Capabilities,
             })
         ).rejects.toThrow();
+    });
+
+    it('attachJavaSwing on a non-Java window includes diagnostics in the error', async () => {
+        // Use Notepad — a native Win32 app with no JVM
+        const driver = await remote({
+            ...APPIUM_SERVER,
+            capabilities: {
+                platformName: 'Windows',
+                'appium:automationName': 'DesktopDriver',
+                'appium:app': NOTEPAD_APP_PATH,
+            } as WebdriverIO.Capabilities,
+        });
+
+        try {
+            await expect(
+                driver.executeScript('windows: attachJavaSwing', [])
+            ).rejects.toSatisfy((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                // Diagnostic block must be present
+                expect(msg).toContain('attachJavaSwing diagnostics');
+                // Must include window/process info
+                expect(msg).toMatch(/hwnd\s*:/i);
+                expect(msg).toMatch(/pid\s*:/i);
+                expect(msg).toMatch(/process\s*:/i);
+                // Must include JVM env vars section
+                expect(msg).toContain('JAVA_HOME');
+                expect(msg).toContain('JAVA_TOOL_OPTIONS');
+                return true;
+            });
+        } finally {
+            await quitSession(driver);
+        }
     });
 });

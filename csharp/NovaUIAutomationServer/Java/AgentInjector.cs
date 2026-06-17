@@ -37,6 +37,12 @@ internal static class AgentInjector
             CreateNoWindow = true,
         };
 
+        // Strip JVM env vars so third-party agents (e.g. UFT jvmhook) are not
+        // injected into the AgentLoader process. These vars are intended for the
+        // app under test, not for our tooling JVM.
+        foreach (var key in new[] { "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS" })
+            startInfo.EnvironmentVariables.Remove(key);
+
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start AgentLoader process.");
 

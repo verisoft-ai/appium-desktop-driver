@@ -184,6 +184,87 @@ For Java 8, `JAVA_HOME` must point to a JDK directory that contains
 `lib\tools.jar`. If `JAVA_HOME` points to a JRE, the driver searches
 common JDK directories alongside it automatically.
 
+#### Complete interaction example
+
+```js
+import { execSync, spawn } from 'node:child_process';
+import { remote } from 'webdriverio';
+
+// Launch the Java app externally
+const proc = spawn(`${process.env.JAVA_HOME}\\bin\\javaw.exe`, [
+  '-cp', 'C:\\MyApp\\classes', 'MainClass',
+], { detached: true, stdio: 'ignore' });
+
+// Poll for the window handle (the window may take a moment to open)
+const pid = proc.pid;
+let hwnd = '0';
+const deadline = Date.now() + 15_000;
+while (Date.now() < deadline) {
+  try {
+    hwnd = execSync(
+      `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    ).toString().trim();
+  } catch { hwnd = '0'; }
+  if (hwnd !== '0') break;
+  await new Promise(r => setTimeout(r, 500));
+}
+
+// Path B — attach at session time via appTopLevelWindow + javaSwing
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:appTopLevelWindow': hwnd,
+    'appium:javaSwing': true,
+    'appium:shouldCloseApp': false,
+  },
+});
+await driver.setTimeout({ implicit: 3000 });
+
+// Find by accessible name (setAccessibleName() in Java code)
+const firstName = await driver.$('~firstName');
+await firstName.setValue('Jane');
+console.log(await firstName.getText()); // "Jane"
+
+// Find by XPath role — all text fields
+const allFields = await driver.$$('//Edit');
+console.log(allFields.length); // 3 or more
+
+// Find by Java class name — reliable even without accessible names
+const passwordField = await driver.$('//*[@JavaSimpleClass="JPasswordField"]');
+await passwordField.setValue('secret');
+
+// Checkbox: read state, toggle, verify
+const agreeBox = await driver.$('~agreeCheckbox');
+const before = await agreeBox.isSelected(); // false
+await agreeBox.click();
+console.log(await agreeBox.isSelected()); // true
+
+// Button: check enabled state and dimensions
+const submitBtn = await driver.$('~submitButton');
+console.log(await submitBtn.isEnabled()); // true
+const size = await submitBtn.getSize();
+console.log(size.width, size.height);     // positive numbers
+
+// Click submit
+await submitBtn.click();
+
+// --- OR use Path C: start plain UIA, inject agent later ---
+// const driver2 = await remote({ ..., capabilities: {
+//   'appium:appTopLevelWindow': hwnd,
+//   'appium:shouldCloseApp': false,
+// }});
+// await driver2.executeScript('windows: attachJavaSwing', []);
+// const field = await driver2.$('~firstName'); // works after injection
+
+await driver.deleteSession();
+proc.kill();
+```
+
 ### Desktop root: click an icon and switch windows
 
 ```js

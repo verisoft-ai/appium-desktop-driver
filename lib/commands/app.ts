@@ -248,6 +248,12 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
     } else {
         this.log.debug('Detected app path to be in the classic format.');
         const normalizedPath = normalize(path);
+
+        // Snapshot all visible windows before launch so we can detect new ones
+        // as a fallback for singleton-delegator processes (e.g. explorer.exe)
+        // that exit immediately and transfer their window to an existing process.
+        const handlesBeforeLaunch = new Set(getAllWindowHandles());
+
         const launcherPid = await this.sendCommand('startProcess', {
             path: normalizedPath,
             arguments: this.caps.appArguments ?? null,
@@ -259,12 +265,32 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
             throw new errors.UnknownError('Process did not start (no PID returned).');
         }
 
-        const result = await this.attachToApplicationWindow(launcherPid, { deadline });
-        if (!result.focused && deadline && Date.now() < deadline) {
-            this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
-            await this.waitForMainWindow(result.knownPids, deadline);
+        try {
+            const result = await this.attachToApplicationWindow(launcherPid, { deadline });
+            if (!result.focused && deadline && Date.now() < deadline) {
+                this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
+                await this.waitForMainWindow(result.knownPids, deadline);
+            }
+            return;
+        } catch (err) {
+            // Launcher exited before a window appeared in its process tree (singleton
+            // delegator pattern — e.g. explorer.exe hands off to an existing process).
+            // Fall back to the new-window diff strategy used by the UWP path.
+            this.log.info(`PID-based window search failed (${err instanceof Error ? err.message : err}). Falling back to new-window detection.`);
         }
-        return;
+
+        const remainingMs = deadline ? Math.max(0, deadline - Date.now()) : POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS;
+        const fallbackDeadline = Date.now() + remainingMs;
+        while (Date.now() < fallbackDeadline) {
+            const newHandles = getAllWindowHandles().filter((h) => !handlesBeforeLaunch.has(h));
+            if (newHandles.length > 0) {
+                this.log.debug(`Singleton-delegator fallback: found ${newHandles.length} new window(s): ${newHandles.map((h) => `0x${h.toString(16).padStart(8, '0')}`).join(', ')}`);
+                if (await this.attachToWindowHandles(newHandles)) {
+                    return;
+                }
+            }
+            await sleep(POLL_INTERVAL_MS);
+        }
     }
 
     throw new errors.UnknownError('Failed to locate window of the app.');

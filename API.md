@@ -609,8 +609,14 @@ switching to Java mode.
 
 **Requires `JAVA_HOME`** — same JDK prerequisite as Path B.
 
+> **Important:** Before calling `windows: attachJavaSwing`, the session must
+> be switched to the Java window. The driver resolves the target JVM from
+> whichever window the session currently points to — regardless of where the
+> session started. Call `driver.switchToWindow(javaHwnd)` at any point before
+> invoking the command.
+
 ```js
-// 1. Create plain UIA session
+// 1. Create a plain UIA session — can start on any window
 const driver = await remote({ ..., capabilities: {
   platformName: 'Windows',
   'appium:automationName': 'DesktopDriver',
@@ -623,6 +629,15 @@ await driver.executeScript('windows: attachJavaSwing', []);
 
 // 3. All element queries now use the Java agent
 const field = await driver.$('~firstName');
+```
+
+If you started from `app: root`, switch to the Java window first:
+
+```js
+// root session — switch before attaching
+const hexHwnd = `0x${parseInt(decimalHwnd, 10).toString(16).padStart(8, '0')}`;
+await driver.switchToWindow(hexHwnd);
+await driver.executeScript('windows: attachJavaSwing', []);
 ```
 
 ### JAVA_HOME setup (required for Path B and C)

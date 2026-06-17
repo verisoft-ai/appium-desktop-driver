@@ -12,7 +12,8 @@ javac -source 8 -target 8 -d "%OUT_DIR%" ^
   "%SRC_DIR%\io\verisoft\appium\AppiumDesktopAgent.java" ^
   "%SRC_DIR%\io\verisoft\appium\ComponentRegistry.java" ^
   "%SRC_DIR%\io\verisoft\appium\CommandHandler.java" ^
-  "%SRC_DIR%\io\verisoft\appium\Json.java"
+  "%SRC_DIR%\io\verisoft\appium\Json.java" ^
+  "%SRC_DIR%\io\verisoft\appium\AgentLoader.java"
 
 if errorlevel 1 (
     echo Compilation failed.

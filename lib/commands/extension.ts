@@ -65,6 +65,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     getMonitors: 'windowsGetMonitors',
     getDpiScale: 'executeGetDpiScale',
     findByVision: 'executeFindByVision',
+    attachJavaSwing: 'executeAttachJavaSwing',
 } as const);
 
 const ContentType = Object.freeze({
@@ -757,4 +758,10 @@ export async function windowsGetMonitors(this: AppiumDesktopDriver): Promise<obj
 
 export function executeGetDpiScale(): number {
     return getResolutionScalingFactor();
+}
+
+export async function executeAttachJavaSwing(this: AppiumDesktopDriver): Promise<void> {
+    // Injects the Java agent into the JVM owning the current root window,
+    // then connects. The C# side resolves the PID from the root element's HWND.
+    await this.sendCommand('injectJavaAgent', {});
 }

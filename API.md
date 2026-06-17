@@ -20,6 +20,7 @@ for installation, capabilities, and usage examples.
   - [Vision-Based Finding](#vision-based-finding)
   - [PowerShell Execution](#powershell-execution)
   - [Cache Requests](#cache-requests)
+  - [Java Swing Agent](#java-swing-agent)
 - [W3C Actions](#w3c-actions)
 - [WebView and CDP](#webview-and-cdp)
 - [Java Swing Automation](#java-swing-automation)
@@ -532,35 +533,116 @@ capabilities: {
 }
 ```
 
+### Java Swing Agent
+
+#### windows: attachJavaSwing
+
+Injects the JVM agent into the running Java process that owns the
+current session window, then connects to it. Equivalent to creating the
+session with `appium:javaSwing: true` + `appium:appTopLevelWindow` but
+allows you to run plain UIA commands first and switch to Java mode later.
+
+No arguments.
+
+**Requires `JAVA_HOME`** — see [Java Swing Automation](#java-swing-automation).
+
+```js
+await driver.executeScript('windows: attachJavaSwing', []);
+```
+
+---
+
 ## Java Swing Automation
 
 The driver automates Java Swing and AWT applications by injecting a
-lightweight JVM agent at process startup. No `jabswitch`, no JAB DLL,
-no system configuration required.
+lightweight JVM agent. No `jabswitch`, no JAB DLL.
 
 ### How it works
 
-When `appium:javaSwing: true` is set, the driver prepends
-`-javaagent:appium-desktop-agent.jar` to the app arguments before
-launch. The agent starts a loopback TCP server, writes its port to
-`%TEMP%\appium-agent-{pid}.port`, and serves element queries from the
-C# server. All operations run on the Swing EDT via
+The agent starts a loopback TCP server inside the JVM, writes its port
+to `%TEMP%\appium-agent-{pid}.port`, and serves element queries from
+the C# server. All tree traversals run on the Swing EDT via
 `SwingUtilities.invokeAndWait`.
 
-### Session setup
+Three injection paths are available:
+
+### Path A — driver launches the JVM
+
+Set `appium:app` to `javaw.exe` and `appium:javaSwing: true`. The driver
+prepends `-javaagent:appium-desktop-agent.jar` to the JVM arguments.
+No `JAVA_HOME` required.
 
 ```js
 capabilities: {
   platformName: 'Windows',
   'appium:automationName': 'DesktopDriver',
-  'appium:app': 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe',
+  'appium:app': `${process.env.JAVA_HOME}\\bin\\javaw.exe`,
   'appium:appArguments': '-cp C:\\MyApp\\classes MainClass',
   'appium:javaSwing': true,
 }
 ```
 
-The app must be launched by the driver — `appium:javaSwing` cannot
-attach to an already-running JVM.
+### Path B — attach to already-running JVM at session time
+
+Set `appium:appTopLevelWindow` to the decimal HWND of the Java window
+and `appium:javaSwing: true`. The driver injects the agent at session
+creation via the Java Attach API.
+
+**Requires `JAVA_HOME`** pointing to a JDK. Java 8: `JAVA_HOME/lib/tools.jar`
+must exist. Java 9+: `JAVA_HOME/bin/java.exe` suffices.
+
+```js
+capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,   // decimal HWND string
+  'appium:javaSwing': true,
+  'appium:shouldCloseApp': false,
+}
+```
+
+### Path C — inject agent post-session (`windows: attachJavaSwing`)
+
+Create a plain UIA session first, then inject the Java agent at any
+point during the session. Useful when you need UIA commands before
+switching to Java mode.
+
+**Requires `JAVA_HOME`** — same JDK prerequisite as Path B.
+
+```js
+// 1. Create plain UIA session
+const driver = await remote({ ..., capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,
+  'appium:shouldCloseApp': false,
+}});
+
+// 2. Inject at any point
+await driver.executeScript('windows: attachJavaSwing', []);
+
+// 3. All element queries now use the Java agent
+const field = await driver.$('~firstName');
+```
+
+### JAVA_HOME setup (required for Path B and C)
+
+```powershell
+# Check current value
+[System.Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
+
+# Set permanently (run as Administrator)
+[System.Environment]::SetEnvironmentVariable(
+  "JAVA_HOME",
+  "C:\Program Files\Java\jdk1.8.0_xxx",
+  "Machine"
+)
+```
+
+For Java 8, `JAVA_HOME` must point to a JDK directory containing
+`lib\tools.jar`. If it points to a JRE, the driver scans common JDK
+sibling directories (`C:\Program Files\Java\jdk*`, Corretto, Zulu)
+automatically before failing.
 
 ### Locator strategies
 
@@ -612,8 +694,6 @@ routes each find call to the correct engine automatically.
 
 ### Limitations
 
-- **Java 8 only** — tested and supported on JRE 8. Java 9+ has module
-  system restrictions; `-javaagent:` at startup may still work but is
-  untested.
-- **Startup injection required** — the agent must be loaded at JVM
-  startup. Attaching to an already-running JVM is not supported.
+- **Java 8 and Java 9+** — tested on JDK 8 and JDK 25. All three
+  injection paths work on both. Java 9+ requires `JAVA_HOME/bin/java.exe`
+  (no `tools.jar` needed).

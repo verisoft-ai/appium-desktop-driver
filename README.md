@@ -60,9 +60,16 @@ All capabilities use the `appium:` prefix in W3C format
 
 ### Java Swing via JVM agent
 
-No system setup required. Set `appium:javaSwing: true` and the driver
-automatically injects a JVM agent into the target process at startup.
-The agent communicates over loopback TCP — no `jabswitch`, no JAB DLL.
+Set `appium:javaSwing: true` and the driver injects a JVM agent that
+exposes Swing/AWT elements over loopback TCP. No `jabswitch`, no JAB DLL.
+
+Three injection paths are available depending on whether you control the
+JVM launch.
+
+#### Path A — driver launches the JVM (`appium:app`)
+
+The driver prepends `-javaagent:` to the JVM arguments before launch.
+No `JAVA_HOME` required.
 
 ```js
 import { remote } from 'webdriverio';
@@ -74,7 +81,7 @@ const driver = await remote({
   capabilities: {
     platformName: 'Windows',
     'appium:automationName': 'DesktopDriver',
-    'appium:app': 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe',
+    'appium:app': `${process.env.JAVA_HOME}\\bin\\javaw.exe`,
     'appium:appArguments': '-cp C:\\MyApp\\classes MainClass',
     'appium:javaSwing': true,
   },
@@ -84,15 +91,98 @@ const driver = await remote({
 const username = await driver.$('~usernameField');
 await username.setValue('admin');
 
-// Find by Java class name — unique even in legacy apps with no accessible names
+// Find by Java class name — works even when no accessible name is set
 const passwordField = await driver.$('//*[@JavaSimpleClass="JPasswordField"]');
 await passwordField.setValue('secret');
 
-const loginBtn = await driver.$('~loginButton');
-await loginBtn.click();
-
+await driver.$('~loginButton').then(btn => btn.click());
 await driver.deleteSession();
 ```
+
+#### Path B — attach to already-running JVM at session time (`appTopLevelWindow` + `javaSwing`)
+
+Use when the Java app was launched externally. The driver injects the
+agent via the Java Attach API at session creation.
+
+**Requires:** `JAVA_HOME` pointing to a JDK (not just a JRE).
+Java 8: `JAVA_HOME/lib/tools.jar` must exist.
+Java 9+: `JAVA_HOME/bin/java.exe` must be reachable.
+
+```js
+import { remote } from 'webdriverio';
+
+// hwnd: decimal window handle string — obtain from Get-Process in PowerShell
+// or from launchJavaSwingFormExternally() in the e2e test helpers
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:appTopLevelWindow': hwnd,   // decimal HWND string
+    'appium:javaSwing': true,
+    'appium:shouldCloseApp': false,
+  },
+});
+await driver.setTimeout({ implicit: 3000 });
+
+const field = await driver.$('~lastName');
+await field.setValue('AttachTest');
+await driver.deleteSession();
+```
+
+#### Path C — inject agent into running JVM post-session (`windows: attachJavaSwing`)
+
+Use when you need to run UIA commands first and then switch to Java mode
+mid-session.
+
+**Requires:** same `JAVA_HOME` / JDK prerequisite as Path B.
+
+```js
+import { remote } from 'webdriverio';
+
+// 1. Create a plain UIA session (no javaSwing)
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:appTopLevelWindow': hwnd,
+    'appium:shouldCloseApp': false,
+  },
+});
+
+// 2. Inject the Java agent at any point during the session
+await driver.executeScript('windows: attachJavaSwing', []);
+
+// 3. Now all element queries use the Java agent
+const field = await driver.$('~firstName');
+await field.setValue('PostAttach');
+await driver.deleteSession();
+```
+
+#### JAVA_HOME setup (required for Path B and C)
+
+Attach paths use the Java Attach API and need a JDK installation:
+
+```powershell
+# Check current value
+[System.Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
+
+# Set permanently (run as Administrator)
+[System.Environment]::SetEnvironmentVariable(
+  "JAVA_HOME",
+  "C:\Program Files\Java\jdk1.8.0_xxx",
+  "Machine"
+)
+```
+
+For Java 8, `JAVA_HOME` must point to a JDK directory that contains
+`lib\tools.jar`. If `JAVA_HOME` points to a JRE, the driver searches
+common JDK directories alongside it automatically.
 
 ### Desktop root: click an icon and switch windows
 

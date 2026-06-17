@@ -1,6 +1,7 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import type { ChildProcess } from 'node:child_process';
 import type { Browser } from 'webdriverio';
 import { remote } from 'webdriverio';
 
@@ -99,6 +100,62 @@ export const JAVAW_EXE_PATH = process.env.JAVA_HOME
     ? `${process.env.JAVA_HOME}\\bin\\javaw.exe`
     : 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
 export const JAVA_SWING_FORM_CLASSPATH = resolve(process.cwd(), 'test-apps', 'java-swing-form');
+
+/**
+ * Launches the Java Swing test form as an external process (without Appium agent injection).
+ * Returns the child process and its main window handle (decimal HWND string).
+ * The caller is responsible for killing the process in afterAll.
+ */
+export async function launchJavaSwingFormExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const args = ['-cp', JAVA_SWING_FORM_CLASSPATH, 'TestForm'];
+    const proc = spawn(JAVAW_EXE_PATH, args, { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn Java process: ${JAVAW_EXE_PATH}`);
+    }
+
+    // Poll for MainWindowHandle to appear (window may take a moment to open)
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`Java Swing form window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export async function createJavaSwingAttachSession(hwnd: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:appTopLevelWindow': hwnd,
+            'appium:javaSwing': true,
+            'appium:shouldCloseApp': false,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
 
 export async function createJavaSwingFormSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({

@@ -265,9 +265,16 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                 this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. NovaWindows uses stdin/stdout IPC.`);
             }
 
-            if (this.caps.javaSwing) {
-                // Inject the agent JAR before startServerSession so it lands in
-                // appArguments when the JVM process is spawned by startProcess.
+            // Only inject -javaagent: when we are launching the app ourselves.
+            // When attaching to an already-running app via appTopLevelWindow, the Attach
+            // API path is used instead (post-session, via injectJavaAgent command).
+            const javaSwingLaunchPath = this.caps.javaSwing
+                && !!this.caps.app
+                && this.caps.app !== 'root'
+                && this.caps.app !== 'none'
+                && !this.caps.appTopLevelWindow;
+
+            if (javaSwingLaunchPath) {
                 const agentJar = join(__dirname, '..', '..', 'native', 'win-x64', 'appium-desktop-agent.jar');
                 const agentFlag = `-javaagent:"${agentJar}"`;
                 this.caps.appArguments = this.caps.appArguments
@@ -279,9 +286,21 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
             await this.startServerSession();
 
             if (this.caps.javaSwing) {
-                this.log.info('Connecting to Java agent...');
-                await this.sendCommand('enableJavaSwing', {});
-                this.log.info('Java agent connected successfully.');
+                if (javaSwingLaunchPath) {
+                    this.log.info('Connecting to Java agent...');
+                    await this.sendCommand('enableJavaSwing', {});
+                    this.log.info('Java agent connected successfully.');
+                } else {
+                    // Attach API path: inject agent into already-running JVM via the window handle.
+                    if (!this.caps.appTopLevelWindow) {
+                        throw new errors.InvalidArgumentError(
+                            'javaSwing:true with no app requires the appTopLevelWindow capability to identify the Java window.'
+                        );
+                    }
+                    this.log.info('Java Swing mode: injecting agent into running JVM via Java Attach API...');
+                    await this.sendCommand('injectJavaAgent', { hwnd: Number(this.caps.appTopLevelWindow) });
+                    this.log.info('Java agent injected and connected successfully.');
+                }
             }
 
             if (this.caps.prerun) {

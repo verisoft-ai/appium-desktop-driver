@@ -95,14 +95,15 @@ public class SessionState
     /// Connects to the Java agent running in the target JVM.
     /// The agent must have been injected via -javaagent: at app startup.
     /// </summary>
-    public void EnableJavaSwing()
+    public void EnableJavaSwing(int? pid = null)
     {
-        if (LastStartedProcessId == 0)
+        int targetPid = pid ?? LastStartedProcessId;
+        if (targetPid == 0)
             throw new InvalidOperationException(
-                "No process has been started in this session. Launch the app before enabling Java agent.");
+                "No process PID available. Use appTopLevelWindow with javaSwing:true, or launch the app via Appium.");
 
         Java ??= new JavaAgentService();
-        Java.Connect(LastStartedProcessId);
+        Java.Connect(targetPid);
         JavaSwingEnabled = true;
     }
 

@@ -9,6 +9,10 @@ import java.net.Socket;
 
 public class AppiumDesktopAgent {
 
+    public static void agentmain(String agentArgs, Instrumentation inst) {
+        premain(agentArgs, inst);
+    }
+
     public static void premain(String agentArgs, Instrumentation inst) {
         try {
             ServerSocket serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));

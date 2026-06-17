@@ -86,8 +86,9 @@ public class CommandDispatcher
             ["deleteFile"] = FileSystemCommands.DeleteFile,
             ["deleteFolder"] = FileSystemCommands.DeleteFolder,
 
-            // Java Access Bridge
+            // Java agent
             ["enableJavaSwing"] = JabCommands.EnableJavaSwing,
+            ["injectJavaAgent"] = JabCommands.InjectJavaAgent,
 
             // Diagnostics
             ["getMonitors"] = DiagnosticCommands.GetMonitors,

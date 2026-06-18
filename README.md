@@ -45,6 +45,7 @@ All capabilities use the `appium:` prefix in W3C format
 | `appium:delayBeforeClick` | number | Milliseconds before each click |
 | `appium:delayAfterClick` | number | Milliseconds after each click |
 | `appium:javaSwing` | boolean | Enable JVM agent for Java Swing/AWT apps |
+| `appium:jdkPath` | string | Path to JDK root (e.g. `C:\Program Files\Java\jdk1.8.0_xxx`). Overrides `JAVA_HOME` for agent injection. Required only for Path B/C. |
 | `appium:webviewEnabled` | boolean | Enable WebView2 / Chrome / Edge CDP |
 | `appium:webviewDevtoolsPort` | number | CDP port (auto-selected when omitted) |
 | `appium:chromedriverExecutablePath` | string | Local Chromedriver binary |
@@ -66,8 +67,8 @@ JVM agent — no `jabswitch`, no JAB DLL required.
 Three injection paths are available:
 
 - **Path A** — driver launches the JVM (`appium:app` + `appium:javaSwing: true`). No `JAVA_HOME` needed.
-- **Path B** — attach to an already-running JVM at session time (`appium:appTopLevelWindow` + `appium:javaSwing: true`). Requires `JAVA_HOME` pointing to a JDK.
-- **Path C** — inject agent mid-session via `windows: attachJavaSwing`. Start any session, switch to the Java window, then call the command. Requires `JAVA_HOME`.
+- **Path B** — attach to an already-running JVM at session time (`appium:appTopLevelWindow` + `appium:javaSwing: true`). Requires `JAVA_HOME` or `appium:jdkPath` pointing to a JDK.
+- **Path C** — inject agent mid-session via `windows: attachJavaSwing`. Start any session, switch to the Java window, then call the command. Requires `JAVA_HOME` or `appium:jdkPath` (or pass `jdkPath` as a script argument).
 
 See [API.md — Java Swing Automation](./API.md#java-swing-automation) for full examples, JAVA_HOME setup, and supported XPath attributes.
 

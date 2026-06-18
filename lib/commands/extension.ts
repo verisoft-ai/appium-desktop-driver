@@ -760,8 +760,9 @@ export function executeGetDpiScale(): number {
     return getResolutionScalingFactor();
 }
 
-export async function executeAttachJavaSwing(this: AppiumDesktopDriver): Promise<void> {
+export async function executeAttachJavaSwing(this: AppiumDesktopDriver, opts: { jdkPath?: string } = {}): Promise<void> {
     // Injects the Java agent into the JVM owning the current root window,
     // then connects. The C# side resolves the PID from the root element's HWND.
-    await this.sendCommand('injectJavaAgent', {});
+    const jdkPath = opts.jdkPath ?? this.caps.jdkPath;
+    await this.sendCommand('injectJavaAgent', { jdkPath });
 }

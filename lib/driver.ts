@@ -298,7 +298,7 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                         );
                     }
                     this.log.info('Java Swing mode: injecting agent into running JVM via Java Attach API...');
-                    await this.sendCommand('injectJavaAgent', { hwnd: Number(this.caps.appTopLevelWindow) });
+                    await this.sendCommand('injectJavaAgent', { hwnd: Number(this.caps.appTopLevelWindow), jdkPath: this.caps.jdkPath });
                     this.log.info('Java agent injected and connected successfully.');
                 }
             }

@@ -542,12 +542,18 @@ current session window, then connects to it. Equivalent to creating the
 session with `appium:javaSwing: true` + `appium:appTopLevelWindow` but
 allows you to run plain UIA commands first and switch to Java mode later.
 
-No arguments.
+| Argument | Type | Description |
+|----------|------|-------------|
+| `jdkPath` | string (optional) | Path to JDK root. Overrides `JAVA_HOME` and the `appium:jdkPath` capability for this call. |
 
-**Requires `JAVA_HOME`** — see [Java Swing Automation](#java-swing-automation).
+**Requires `JAVA_HOME`, `appium:jdkPath`, or a `jdkPath` argument** — see [Java Swing Automation](#java-swing-automation).
 
 ```js
+// Using JAVA_HOME / appium:jdkPath capability
 await driver.executeScript('windows: attachJavaSwing', []);
+
+// Overriding the JDK path for this call only
+await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program Files\\Java\\jdk1.8.0_xxx' }]);
 ```
 
 ---
@@ -588,8 +594,7 @@ Set `appium:appTopLevelWindow` to the decimal HWND of the Java window
 and `appium:javaSwing: true`. The driver injects the agent at session
 creation via the Java Attach API.
 
-**Requires `JAVA_HOME`** pointing to a JDK. Java 8: `JAVA_HOME/lib/tools.jar`
-must exist. Java 9+: `JAVA_HOME/bin/java.exe` suffices.
+**Requires `JAVA_HOME` or `appium:jdkPath`** pointing to a JDK. Java 8: the JDK must contain `lib\tools.jar`. Java 9+: `bin\java.exe` suffices.
 
 ```js
 capabilities: {
@@ -598,6 +603,8 @@ capabilities: {
   'appium:appTopLevelWindow': hwnd,   // decimal HWND string
   'appium:javaSwing': true,
   'appium:shouldCloseApp': false,
+  // optional — overrides JAVA_HOME:
+  'appium:jdkPath': 'C:\\Program Files\\Java\\jdk1.8.0_xxx',
 }
 ```
 
@@ -607,7 +614,7 @@ Create a plain UIA session first, then inject the Java agent at any
 point during the session. Useful when you need UIA commands before
 switching to Java mode.
 
-**Requires `JAVA_HOME`** — same JDK prerequisite as Path B.
+**Requires `JAVA_HOME`, `appium:jdkPath`, or a `jdkPath` script argument** — same JDK prerequisite as Path B.
 
 > **Important:** Before calling `windows: attachJavaSwing`, the session must
 > be switched to the Java window. The driver resolves the target JVM from
@@ -640,10 +647,28 @@ await driver.switchToWindow(hexHwnd);
 await driver.executeScript('windows: attachJavaSwing', []);
 ```
 
-### JAVA_HOME setup (required for Path B and C)
+### JDK setup (required for Path B and C)
+
+The driver needs a JDK to inject the agent into an already-running JVM.
+You can supply it in three ways, evaluated in this order:
+
+1. **`jdkPath` script argument** — passed directly to `windows: attachJavaSwing`. Takes priority over everything else.
+2. **`appium:jdkPath` capability** — set once per session, used for both session-start injection (Path B) and mid-session injection (Path C).
+3. **`JAVA_HOME` environment variable** — fallback when neither of the above is set.
+
+```js
+// Option 1 — per-call override
+await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program Files\\Java\\jdk1.8.0_xxx' }]);
+
+// Option 2 — session-level capability
+capabilities: {
+  'appium:jdkPath': 'C:\\Program Files\\Java\\jdk1.8.0_xxx',
+  ...
+}
+```
 
 ```powershell
-# Check current value
+# Option 3 — JAVA_HOME (check current value)
 [System.Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
 
 # Set permanently (run as Administrator)
@@ -654,9 +679,8 @@ await driver.executeScript('windows: attachJavaSwing', []);
 )
 ```
 
-For Java 8, `JAVA_HOME` must point to a JDK directory containing
-`lib\tools.jar`. If it points to a JRE, the driver scans common JDK
-sibling directories (`C:\Program Files\Java\jdk*`, Corretto, Zulu)
+For Java 8, the JDK must contain `lib\tools.jar`. If the path points to a JRE,
+the driver scans common JDK sibling directories (`C:\Program Files\Java\jdk*`, Corretto, Zulu)
 automatically before failing.
 
 ### Locator strategies

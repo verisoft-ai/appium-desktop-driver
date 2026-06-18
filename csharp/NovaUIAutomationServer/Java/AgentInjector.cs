@@ -12,19 +12,19 @@ internal static class AgentInjector
     [DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
-    public static void InjectFromHwnd(IntPtr hwnd, string agentJar)
+    public static void InjectFromHwnd(IntPtr hwnd, string agentJar, string? jdkPath = null)
     {
         GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == 0)
             throw new InvalidOperationException($"Could not resolve PID from window handle 0x{hwnd:X}.");
-        InjectFromPid((int)pid, agentJar);
+        InjectFromPid((int)pid, agentJar, jdkPath);
     }
 
-    public static void InjectFromPid(int pid, string agentJar)
+    public static void InjectFromPid(int pid, string agentJar, string? jdkPath = null)
     {
-        string javaExe = FindJavaExe();
+        string javaExe = FindJavaExe(jdkPath);
         bool isJava8 = DetectJava8(javaExe);
-        string classpath = BuildClasspath(agentJar, isJava8);
+        string classpath = BuildClasspath(agentJar, isJava8, jdkPath);
         string extraModules = isJava8 ? "" : "--add-modules jdk.attach ";
 
         var startInfo = new ProcessStartInfo
@@ -55,9 +55,10 @@ internal static class AgentInjector
                 $"AgentLoader failed (exit {process.ExitCode}): {stderr.Trim()}");
     }
 
-    private static string FindJavaExe()
+    private static string FindJavaExe(string? jdkPath = null)
     {
-        var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+        // Explicit jdkPath takes priority over JAVA_HOME
+        var javaHome = !string.IsNullOrEmpty(jdkPath) ? jdkPath : Environment.GetEnvironmentVariable("JAVA_HOME");
         if (!string.IsNullOrEmpty(javaHome))
         {
             var candidate = Path.Combine(javaHome, "bin", "java.exe");
@@ -98,22 +99,24 @@ internal static class AgentInjector
             foreach (var key in new[] { "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS" })
                 si.EnvironmentVariables.Remove(key);
             using var p = Process.Start(si);
-            // `java -version` writes to stderr
-            var line = p?.StandardError.ReadLine() ?? "";
-            return line.Contains("1.8.") || line.Contains("\"1.7.");
+            // `java -version` writes to stderr; scan all lines in case banners precede the version
+            string? line;
+            while ((line = p?.StandardError.ReadLine()) != null)
+                if (line.Contains("1.8.") || line.Contains("\"1.7.")) return true;
+            return false;
         }
         catch { return false; }
     }
 
-    private static string BuildClasspath(string agentJar, bool isJava8)
+    private static string BuildClasspath(string agentJar, bool isJava8, string? jdkPath = null)
     {
         if (!isJava8) return agentJar;
 
         // Java 8: tools.jar must be on classpath for com.sun.tools.attach.
-        // Search in order: JAVA_HOME, common JDK install roots alongside JAVA_HOME,
+        // Search in order: jdkPath/JAVA_HOME, common JDK install roots alongside JAVA_HOME,
         // then well-known vendor directories — so testers don't need to change JAVA_HOME
         // just because it points to a JRE co-installed with a JDK.
-        var toolsJar = FindToolsJar();
+        var toolsJar = FindToolsJar(jdkPath);
         if (toolsJar != null)
             return $"{toolsJar};{agentJar}";
 
@@ -123,10 +126,10 @@ internal static class AgentInjector
             "Install a JDK 8 (e.g. Amazon Corretto 8) or set JAVA_HOME to an existing JDK.");
     }
 
-    private static string? FindToolsJar()
+    private static string? FindToolsJar(string? jdkPath = null)
     {
-        // 1. JAVA_HOME/lib/tools.jar (JDK 8 pointed to directly)
-        var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+        // 1. jdkPath or JAVA_HOME/lib/tools.jar (JDK 8 pointed to directly)
+        var javaHome = !string.IsNullOrEmpty(jdkPath) ? jdkPath : Environment.GetEnvironmentVariable("JAVA_HOME");
         if (!string.IsNullOrEmpty(javaHome))
         {
             var candidate = Path.Combine(javaHome, "lib", "tools.jar");

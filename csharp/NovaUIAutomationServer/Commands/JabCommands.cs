@@ -36,17 +36,21 @@ public static class JabCommands
                     "Attach to a Java window first using appTopLevelWindow capability.");
         }
 
+        string? jdkPath = null;
+        if (parameters?.TryGetProperty("jdkPath", out var jdkPathEl) == true && jdkPathEl.ValueKind == JsonValueKind.String)
+            jdkPath = jdkPathEl.GetString();
+
         string agentJar = Path.Combine(AppContext.BaseDirectory, "appium-desktop-agent.jar");
         if (!File.Exists(agentJar))
             throw new FileNotFoundException($"Agent JAR not found at: {agentJar}");
 
         try
         {
-            AgentInjector.InjectFromHwnd(hwnd, agentJar);
+            AgentInjector.InjectFromHwnd(hwnd, agentJar, jdkPath);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd), ex);
+            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd, jdkPath), ex);
         }
 
         AgentInjector.GetWindowThreadProcessId(hwnd, out uint pid);
@@ -54,7 +58,7 @@ public static class JabCommands
         return null;
     }
 
-    private static string BuildDiagnosticMessage(Exception ex, IntPtr hwnd)
+    private static string BuildDiagnosticMessage(Exception ex, IntPtr hwnd, string? jdkPath = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(ex.Message);
@@ -100,6 +104,8 @@ public static class JabCommands
 
         // Java environment
         sb.AppendLine();
+        if (jdkPath != null)
+            sb.AppendLine("  jdkPath (explicit): " + jdkPath);
         sb.AppendLine("  JAVA_HOME:          " + (Environment.GetEnvironmentVariable("JAVA_HOME") ?? "(not set)"));
         sb.AppendLine("  JAVA_TOOL_OPTIONS:  " + (Environment.GetEnvironmentVariable("JAVA_TOOL_OPTIONS") ?? "(not set)"));
         sb.AppendLine("  _JAVA_OPTIONS:      " + (Environment.GetEnvironmentVariable("_JAVA_OPTIONS") ?? "(not set)"));

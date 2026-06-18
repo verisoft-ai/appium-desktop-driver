@@ -76,6 +76,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     javaSwing: {
         isBoolean: true,
     },
+    jdkPath: {
+        isString: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;

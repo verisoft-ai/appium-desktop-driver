@@ -178,6 +178,7 @@ const easingFunctions = Object.freeze({
 const UINT32_MAX = 0xFFFFFFFF;
 
 const user32 = load('user32.dll');
+const kernel32 = load('kernel32.dll');
 
 const POINT = struct('POINT', {
     x: 'long',
@@ -303,6 +304,9 @@ const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hW
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
+const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
+const GetCurrentThreadId = kernel32.func(/* c */ `DWORD __stdcall GetCurrentThreadId()`) as () => DWORD;
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -863,14 +867,38 @@ export function getAllWindowHandles(): number[] {
 }
 
 export function trySetForegroundWindow(windowHandle: number): boolean {
-    return EnumWindows((hWnd) => {
+    let targetHWnd: HWND | null = null;
+
+    EnumWindows((hWnd) => {
         if (windowHandle === Number(address(hWnd))) {
-            SetForegroundWindow(hWnd);
+            targetHWnd = hWnd;
             return false;
         }
-
         return true;
     }, 0);
+
+    if (!targetHWnd) {
+        return false;
+    }
+
+    const hForeground = GetForegroundWindow();
+    if (!hForeground) {
+        return SetForegroundWindow(targetHWnd);
+    }
+
+    const ourThreadId = GetCurrentThreadId();
+    const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
+
+    const attached = ourThreadId !== foregroundThreadId &&
+        AttachThreadInput(ourThreadId, foregroundThreadId, true);
+
+    const result = SetForegroundWindow(targetHWnd);
+
+    if (attached) {
+        AttachThreadInput(ourThreadId, foregroundThreadId, false);
+    }
+
+    return result;
 }
 
 export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number {

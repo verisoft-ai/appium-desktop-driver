@@ -1,18 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser } from 'webdriverio';
-import { closeAllTestApps, createCalculatorSession, createRootSession, quitSession } from './helpers/session.js';
+import { closeAllTestApps, createCalculatorSession, createNotepadSession, createRootSession, getNotepadTextArea, quitSession } from './helpers/session.js';
 
 describe('Window and app management commands', () => {
     let calc: Browser;
     let root: Browser;
+    let notepad: Browser;
 
     beforeAll(async () => {
         calc = await createCalculatorSession();
+        notepad = await createNotepadSession();
         root = await createRootSession();
     });
 
     afterAll(async () => {
         await quitSession(calc);
+        await quitSession(notepad);
         await quitSession(root);
         closeAllTestApps();
     });
@@ -75,6 +78,23 @@ describe('Window and app management commands', () => {
 
         it('throws NoSuchWindowError for an unknown handle', async () => {
             await expect(calc.switchToWindow('0xDEADBEEF')).rejects.toThrow();
+        });
+
+        it('switches between two different windows and elements are accessible in each', async () => {
+            const calcHandle = await calc.getWindowHandle();
+            const notepadHandle = await notepad.getWindowHandle();
+
+            await root.switchToWindow(calcHandle);
+            const calcResults = await root.$('~CalculatorResults');
+            await expect(calcResults.isExisting()).resolves.toBe(true);
+
+            await root.switchToWindow(notepadHandle);
+            const notepadArea = await getNotepadTextArea(root);
+            await expect(notepadArea.isExisting()).resolves.toBe(true);
+
+            await root.switchToWindow(calcHandle);
+            const calcResultsAgain = await root.$('~CalculatorResults');
+            await expect(calcResultsAgain.isExisting()).resolves.toBe(true);
         });
     });
 

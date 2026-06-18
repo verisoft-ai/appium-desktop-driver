@@ -93,6 +93,10 @@ internal static class AgentInjector
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
+            // Strip JVM env vars so third-party agents (e.g. UFT jvmhook) don't
+            // corrupt the version output or prevent the JVM from starting.
+            foreach (var key in new[] { "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS" })
+                si.EnvironmentVariables.Remove(key);
             using var p = Process.Start(si);
             // `java -version` writes to stderr
             var line = p?.StandardError.ReadLine() ?? "";

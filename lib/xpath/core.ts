@@ -566,7 +566,6 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
                     return [''];
                 }
             }
-        // eslint-disable-next-line no-fallthrough
         case PROCESSING_INSTRUCTION_TEST:
         default:
             return [];

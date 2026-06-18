@@ -233,6 +233,25 @@ Re-launches the app from the `appium:app` capability. No arguments.
 
 Closes the current root application window. No arguments.
 
+#### windows: switchToWindowByTitle
+
+Switches the session to a window matched by title. Uses Win32 `EnumWindows` so it always searches all visible top-level windows regardless of where the session is currently rooted.
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `title` | string | Yes | Title string to match against |
+| `exact` | boolean | No | `true` for exact case-insensitive match. Default: `false` (substring match) |
+
+Throws `NoSuchWindowError` if no window matches after the implicit timeout.
+
+```js
+// Partial match — finds "Untitled - Notepad", "My Doc - Notepad", etc.
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
+
+// Exact match
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Untitled - Notepad', exact: true }]);
+```
+
 #### windows: getWindowElement
 
 Returns the automation element ID of the current root window. No arguments.

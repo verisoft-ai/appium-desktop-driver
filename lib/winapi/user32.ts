@@ -866,6 +866,30 @@ export function getAllWindowHandles(): number[] {
     return handles;
 }
 
+export function getVisibleWindowsWithTitles(): Array<{ handle: number; title: string }> {
+    const windows: Array<{ handle: number; title: string }> = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(256);
+                    GetWindowTextA(hWnd, buffer, buffer.length);
+                    const title = buffer.toString('utf8').replace(/\0/g, '');
+                    if (title) {
+                        windows.push({ handle: Number(address(hWnd)), title });
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return windows;
+}
+
 export function trySetForegroundWindow(windowHandle: number): boolean {
     let targetHWnd: HWND | null = null;
 

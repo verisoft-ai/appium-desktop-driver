@@ -7,6 +7,7 @@ import { sleep } from '../util';
 import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
 import {
     getAllWindowHandles,
+    getVisibleWindowsWithTitles,
     getWindowAllHandlesForProcessIds,
     keyDown,
     keyUp,
@@ -142,6 +143,36 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
     }
 
     throw new errors.NoSuchWindowError(`No window was found with name or handle '${nameOrHandle}'.`);
+}
+
+export async function switchToWindowByTitle(
+    this: AppiumDesktopDriver,
+    args: { title: string; exact?: boolean },
+): Promise<void> {
+    const { title, exact = false } = args;
+    const titleLower = title.toLowerCase();
+
+    for (let i = 1; i <= SET_WINDOW_MAX_POLL_ATTEMPTS; i++) {
+        const windows = getVisibleWindowsWithTitles();
+        const match = windows.find(({ title: t }) => {
+            const tLower = t.toLowerCase();
+            return exact ? tLower === titleLower : tLower.includes(titleLower);
+        });
+
+        if (match) {
+            this.log.info(`Found window with title '${match.title}'. Setting it as the root element.`);
+            const elementId = await this.sendCommand('setRootElementFromHandle', { handle: match.handle }) as string | null;
+            if (elementId && elementId.trim() !== '') {
+                trySetForegroundWindow(match.handle);
+                return;
+            }
+        }
+
+        this.log.info(`Failed to locate window with title '${title}'. Sleeping for ${POLL_INTERVAL_MS}ms and retrying... (${i}/${SET_WINDOW_MAX_POLL_ATTEMPTS})`);
+        await sleep(POLL_INTERVAL_MS);
+    }
+
+    throw new errors.NoSuchWindowError(`No window was found with title '${title}'.`);
 }
 
 export async function closeApp(this: AppiumDesktopDriver): Promise<void> {

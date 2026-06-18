@@ -81,6 +81,29 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
         }
     );
 
+    server.registerTool(
+        'switch_to_window_by_title',
+        {
+            description:
+                'Switch focus to a window by its title. ' +
+                'By default uses case-insensitive substring matching so partial titles work (e.g. "Notepad" matches "Untitled - Notepad"). ' +
+                'Set exact=true to require a full case-insensitive match.',
+            inputSchema: {
+                title: z.string().min(1).describe('Window title (or partial title) to match'),
+                exact: z.boolean().optional().describe('If true, require an exact case-insensitive title match. Default: false (substring match)'),
+            },
+        },
+        async ({ title, exact }) => {
+            try {
+                const driver = session.getDriver();
+                await driver.executeScript('windows: switchToWindowByTitle', [{ title, exact }]);
+                return { content: [{ type: 'text' as const, text: `Switched to window with title matching '${title}'` }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
     // Window-pattern tools (UIA Window pattern) — operate on a window element ID
 
     server.registerTool(

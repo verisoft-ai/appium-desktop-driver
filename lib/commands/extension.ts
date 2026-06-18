@@ -66,6 +66,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     getDpiScale: 'executeGetDpiScale',
     findByVision: 'executeFindByVision',
     attachJavaSwing: 'executeAttachJavaSwing',
+    switchToWindowByTitle: 'windowsSwitchToWindowByTitle',
 } as const);
 
 const ContentType = Object.freeze({
@@ -232,6 +233,16 @@ export async function patternClose(this: AppiumDesktopDriver, element: Element):
 
 export async function windowsCloseApp(this: AppiumDesktopDriver): Promise<void> {
     return await this.closeApp();
+}
+
+export async function windowsSwitchToWindowByTitle(
+    this: AppiumDesktopDriver,
+    args?: { title?: string; exact?: boolean },
+): Promise<void> {
+    if (!args?.title) {
+        throw new errors.InvalidArgumentError('switchToWindowByTitle requires a "title" argument.');
+    }
+    return await this.switchToWindowByTitle({ title: args.title, exact: args.exact });
 }
 
 export async function windowsLaunchApp(this: AppiumDesktopDriver): Promise<void> {

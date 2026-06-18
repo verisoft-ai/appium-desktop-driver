@@ -96,10 +96,13 @@ await driver.executeScript('windows: click', [{
   interClickDelayMs: 100,
 }]);
 
-// Give the app time to open, then switch to the new window
+// Give the app time to open, then switch to the new window by handle...
 await driver.pause(2000);
 const allHandles = await driver.getWindowHandles();
 await driver.switchToWindow(allHandles[allHandles.length - 1]);
+
+// ...or switch by title (partial, case-insensitive)
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
 
 const titleBar = await driver.$('//TitleBar');
 console.log(await titleBar.getText());

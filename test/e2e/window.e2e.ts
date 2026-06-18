@@ -98,6 +98,49 @@ describe('Window and app management commands', () => {
         });
     });
 
+    describe('switchToWindowByTitle', () => {
+        it('switches to a window by partial title (substring match)', async () => {
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: 'Calculator' }]);
+            const title = await root.getTitle();
+            expect(title).toContain('Calculator');
+        });
+
+        it('switches to a different window by partial title', async () => {
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
+            const title = await root.getTitle();
+            expect(title).toContain('Notepad');
+        });
+
+        it('match is case-insensitive', async () => {
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: 'calculator' }]);
+            const title = await root.getTitle();
+            expect(title).toContain('Calculator');
+        });
+
+        it('switches back and elements are accessible in each window', async () => {
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: 'Calculator' }]);
+            const calcResults = await root.$('~CalculatorResults');
+            await expect(calcResults.isExisting()).resolves.toBe(true);
+
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
+            const notepadArea = await getNotepadTextArea(root);
+            await expect(notepadArea.isExisting()).resolves.toBe(true);
+        });
+
+        it('exact match succeeds when title matches fully (case-insensitive)', async () => {
+            const fullTitle = await calc.getTitle();
+            await root.executeScript('windows: switchToWindowByTitle', [{ title: fullTitle, exact: true }]);
+            const current = await root.getTitle();
+            expect(current).toBe(fullTitle);
+        });
+
+        it('throws NoSuchWindowError for a title that matches nothing', async () => {
+            await expect(
+                root.executeScript('windows: switchToWindowByTitle', [{ title: 'xXNonExistentWindowXx' }])
+            ).rejects.toThrow();
+        });
+    });
+
     describe('getPageSource', () => {
         it('returns a non-empty XML string', async () => {
             const source = await calc.getPageSource();

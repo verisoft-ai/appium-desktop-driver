@@ -55,7 +55,7 @@ internal static class AgentInjector
                 $"AgentLoader failed (exit {process.ExitCode}): {stderr.Trim()}");
     }
 
-    private static string FindJavaExe(string? jdkPath = null)
+    internal static string FindJavaExe(string? jdkPath = null)
     {
         // Explicit jdkPath takes priority over JAVA_HOME
         var javaHome = !string.IsNullOrEmpty(jdkPath) ? jdkPath : Environment.GetEnvironmentVariable("JAVA_HOME");

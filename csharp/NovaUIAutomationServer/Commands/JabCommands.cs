@@ -107,6 +107,19 @@ public static class JabCommands
         if (jdkPath != null)
             sb.AppendLine("  jdkPath (explicit): " + jdkPath);
         sb.AppendLine("  JAVA_HOME:          " + (Environment.GetEnvironmentVariable("JAVA_HOME") ?? "(not set)"));
+
+        try
+        {
+            var resolvedJava = AgentInjector.FindJavaExe(jdkPath);
+            var bitness = resolvedJava.Contains("Program Files (x86)", StringComparison.OrdinalIgnoreCase)
+                ? "32-bit (x86)"
+                : "64-bit or unknown";
+            sb.AppendLine($"  java.exe used:      {resolvedJava} [{bitness}]");
+        }
+        catch (Exception jex)
+        {
+            sb.AppendLine($"  java.exe used:      (resolution failed: {jex.Message})");
+        }
         sb.AppendLine("  JAVA_TOOL_OPTIONS:  " + (Environment.GetEnvironmentVariable("JAVA_TOOL_OPTIONS") ?? "(not set)"));
         sb.AppendLine("  _JAVA_OPTIONS:      " + (Environment.GetEnvironmentVariable("_JAVA_OPTIONS") ?? "(not set)"));
         sb.AppendLine("  JDK_JAVA_OPTIONS:   " + (Environment.GetEnvironmentVariable("JDK_JAVA_OPTIONS") ?? "(not set)"));

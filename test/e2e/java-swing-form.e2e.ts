@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser } from 'webdriverio';
+const ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf' as const;
 import { createJavaSwingFormSession, quitSession } from './helpers/session.js';
 
 describe('Java Swing Form', () => {
@@ -350,6 +351,116 @@ describe('Java Swing Form', () => {
                     endElementId: btn.elementId,
                 }])
             ).resolves.not.toThrow();
+        });
+    });
+
+    describe('class name strategy (AccessibleRole display string)', () => {
+        it('"text" finds all JTextField components', async () => {
+            const fields = await driver.$$('.text');
+            expect(fields.length).toBe(3);
+        });
+
+        it('"push button" finds JButton (among possible internal combo arrow buttons)', async () => {
+            const buttons = await driver.$$('.push button');
+            expect(buttons.length).toBeGreaterThanOrEqual(1);
+            const names = await buttons.map((b) => b.getAttribute('Name'));
+            expect(names).toContain('submitButton');
+        });
+
+        it('"check box" finds JCheckBox', async () => {
+            const checkboxes = await driver.$$('.check box');
+            expect(checkboxes.length).toBe(1);
+            expect(await checkboxes[0].getAttribute('Name')).toBe('agreeCheckbox');
+        });
+
+        it('"combo box" finds JComboBox', async () => {
+            const combos = await driver.$$('.combo box');
+            expect(combos.length).toBe(1);
+            expect(await combos[0].getAttribute('Name')).toBe('country');
+        });
+
+        it('"label" finds all JLabel components', async () => {
+            const labels = await driver.$$('.label');
+            expect(labels.length).toBeGreaterThanOrEqual(4); // First Name, Last Name, Email, Country
+        });
+    });
+
+    describe('tag name strategy (UIA ControlType mapped to Java role)', () => {
+        it('"Edit" finds all JTextField components', async () => {
+            const fields = await driver.findElements('tag name', 'Edit');
+            expect(fields.length).toBe(3);
+        });
+
+        it('"Button" finds JButton (among possible internal combo arrow buttons)', async () => {
+            const buttons = await driver.findElements('tag name', 'Button');
+            expect(buttons.length).toBeGreaterThanOrEqual(1);
+            const names = await Promise.all(buttons.map((b) => driver.getElementAttribute(b[ELEMENT_KEY], 'Name')));
+            expect(names).toContain('submitButton');
+        });
+
+        it('"CheckBox" finds JCheckBox', async () => {
+            const checkboxes = await driver.findElements('tag name', 'CheckBox');
+            expect(checkboxes.length).toBe(1);
+            expect(await driver.getElementAttribute(checkboxes[0][ELEMENT_KEY], 'Name')).toBe('agreeCheckbox');
+        });
+
+        it('"ComboBox" finds JComboBox', async () => {
+            const combos = await driver.findElements('tag name', 'ComboBox');
+            expect(combos.length).toBe(1);
+            expect(await driver.getElementAttribute(combos[0][ELEMENT_KEY], 'Name')).toBe('country');
+        });
+    });
+
+    describe('JavaSimpleClass XPath attribute', () => {
+        it('//*[@JavaSimpleClass="JTextField"] finds all three text fields', async () => {
+            const fields = await driver.$$('//*[@JavaSimpleClass="JTextField"]');
+            expect(fields.length).toBe(3);
+        });
+
+        it('//*[@JavaSimpleClass="JButton"] finds submitButton', async () => {
+            const buttons = await driver.$$('//*[@JavaSimpleClass="JButton"]');
+            expect(buttons.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('//*[@JavaSimpleClass="JCheckBox"] finds agreeCheckbox', async () => {
+            const checkboxes = await driver.$$('//*[@JavaSimpleClass="JCheckBox"]');
+            expect(checkboxes.length).toBe(1);
+            expect(await checkboxes[0].getAttribute('Name')).toBe('agreeCheckbox');
+        });
+
+        it('//*[@JavaSimpleClass="JComboBox"] finds country dropdown', async () => {
+            const combos = await driver.$$('//*[@JavaSimpleClass="JComboBox"]');
+            expect(combos.length).toBe(1);
+            expect(await combos[0].getAttribute('Name')).toBe('country');
+        });
+
+        it('combined JavaSimpleClass + Name predicate finds specific field', async () => {
+            const el = await driver.$('//*[@JavaSimpleClass="JTextField" and @Name="email"]');
+            expect(await el.isExisting()).toBe(true);
+            expect(await el.getAttribute('Name')).toBe('email');
+        });
+    });
+
+    describe('JavaClass XPath attribute', () => {
+        it('//*[@JavaClass="javax.swing.JTextField"] finds all three text fields', async () => {
+            const fields = await driver.$$('//*[@JavaClass="javax.swing.JTextField"]');
+            expect(fields.length).toBe(3);
+        });
+
+        it('//*[@JavaClass="javax.swing.JButton"] finds submitButton', async () => {
+            const buttons = await driver.$$('//*[@JavaClass="javax.swing.JButton"]');
+            expect(buttons.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('//*[@JavaClass="javax.swing.JCheckBox"] finds agreeCheckbox', async () => {
+            const checkboxes = await driver.$$('//*[@JavaClass="javax.swing.JCheckBox"]');
+            expect(checkboxes.length).toBe(1);
+        });
+
+        it('combined JavaClass + Name predicate finds specific field', async () => {
+            const el = await driver.$('//*[@JavaClass="javax.swing.JTextField" and @Name="firstName"]');
+            expect(await el.isExisting()).toBe(true);
+            expect(await el.getAttribute('Name')).toBe('firstName');
         });
     });
 });

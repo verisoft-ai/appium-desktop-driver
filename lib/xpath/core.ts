@@ -554,6 +554,18 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
                 }
                 return results;
             }
+            // Unknown UIA property — try getProperty anyway to support Java-specific
+            // attributes (JavaClass, JavaSimpleClass). Java elements have no RuntimeId
+            // in their info dict so elIds above is empty; query contextId directly.
+            {
+                const id = contextId ?? await sendCommand('saveRootElementToTable', {}) as string;
+                try {
+                    const val = (await sendCommand('getProperty', { elementId: id, property: nodeTest.name }) as string) ?? '';
+                    return [val];
+                } catch {
+                    return [''];
+                }
+            }
         // eslint-disable-next-line no-fallthrough
         case PROCESSING_INSTRUCTION_TEST:
         default:

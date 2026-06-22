@@ -2,7 +2,7 @@
 
 Appium Desktop Driver is a Windows UI automation driver for
 [Appium 3](https://appium.io). It automates UWP, WinForms, WPF, Win32,
-and Java Swing applications via Windows UI Automation (UIA3).
+Java Swing, and legacy Internet Explorer applications.
 
 Key advantages over WinAppDriver:
 
@@ -11,6 +11,7 @@ Key advantages over WinAppDriver:
 - Reliable text input independent of the active keyboard layout
 - Java Swing / AWT automation via injected JVM agent (no JAB required)
 - WebView2, Chrome, and Edge embedded content via CDP
+- Legacy Internet Explorer via IEDriverServer (auto-downloaded)
 - Built-in screen recording, clipboard API, and vision-based finding
 - MCP server for direct use with AI coding agents
 
@@ -56,6 +57,8 @@ All capabilities use the `appium:` prefix in W3C format
 | `appium:ms:forcequit` | boolean | Force-kill process on session close |
 | `appium:ms:experimental-webdriver` | boolean | Experimental WebDriver features |
 | `appium:logFile` | string | Path to write session logs |
+| `appium:useInternetExplorer` | boolean | Enable legacy IE mode. IEDriverServer is downloaded and cached automatically on first use. All WebDriver commands proxy through IEDriverServer instead of UIA. |
+| `appium:ieDriverServerPath` | string | Path to a local `IEDriverServer.exe`. Overrides the auto-downloaded binary when `useInternetExplorer` is true. |
 
 ## Examples
 
@@ -198,6 +201,54 @@ await driver.performActions([
 await driver.releaseActions();
 await driver.deleteSession();
 ```
+
+### Legacy Internet Explorer
+
+IE uses MSAA/COM rather than UIA, so the driver bypasses its C# server
+entirely and proxies all WebDriver commands through IEDriverServer.
+
+`IEDriverServer.exe` is downloaded and cached automatically on first use
+(requires internet access). Subsequent sessions skip the download.
+
+No `appium:app` capability is needed. IEDriverServer launches
+`iexplore.exe` automatically when the session is created.
+
+**IE must be configured before the first session:**
+
+- Internet Options → Security: disable Protected Mode on all four zones
+- Internet Options → Advanced: disable Enhanced Protected Mode
+- View → Zoom: set to exactly 100%
+
+```js
+import { remote } from 'webdriverio';
+
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:useInternetExplorer': true,
+  },
+});
+
+await driver.url('https://example.com');
+const h1 = await driver.$('h1');
+console.log(await h1.getText()); // "Example Domain"
+
+await driver.deleteSession();
+```
+
+To use a locally downloaded binary instead of the auto-downloaded one:
+
+```js
+'appium:useInternetExplorer': true,
+'appium:ieDriverServerPath': 'C:\\WebDriver\\IEDriverServer.exe',
+```
+
+See [API.md — Internet Explorer](./API.md#internet-explorer) for
+troubleshooting and VM setup notes.
 
 ## API Reference
 

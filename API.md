@@ -23,6 +23,7 @@ for installation, capabilities, and usage examples.
   - [Java Swing Agent](#java-swing-agent)
 - [W3C Actions](#w3c-actions)
 - [WebView and CDP](#webview-and-cdp)
+- [Internet Explorer](#internet-explorer)
 - [Java Swing Automation](#java-swing-automation)
 
 ## Locator Strategies
@@ -576,6 +577,98 @@ await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program 
 ```
 
 ---
+
+## Internet Explorer
+
+Legacy `iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
+detects IE mode and bypasses its C# server entirely, proxying all
+WebDriver commands through IEDriverServer instead.
+
+### How it works
+
+1. Driver spawns `IEDriverServer.exe` on a free port (5555–5655).
+2. Creates a W3C session on IEDriverServer via HTTP. IEDriverServer
+   launches `iexplore.exe` automatically — no `appium:app` needed.
+3. Sets up `JWProxy` — all incoming WebDriver commands forward to
+   IEDriverServer for the session lifetime.
+4. On `deleteSession`: gracefully closes the IE session, kills
+   IEDriverServer, and resets proxy state.
+
+### Capabilities
+
+| Capability | Type | Description |
+| --- | --- | --- |
+| `appium:useInternetExplorer` | boolean | Enable IE mode. IEDriverServer is downloaded and cached automatically on first use. |
+| `appium:ieDriverServerPath` | string | Path to a local `IEDriverServer.exe`. Overrides the auto-downloaded binary. |
+
+### IEDriverServer auto-download
+
+On first use, the driver downloads
+`IEDriverServer_Win32_4.14.0.zip` from the Selenium GitHub releases
+and caches the extracted binary at:
+
+```text
+{driver-root}/iedriver/4.14.0/IEDriverServer.exe
+```
+
+Subsequent sessions skip the download. Requires internet access on
+first use only. Use `appium:ieDriverServerPath` in air-gapped
+environments.
+
+### IE configuration (required)
+
+Before automating IE, apply these settings in Internet Options:
+
+- **Security tab** — uncheck "Enable Protected Mode" on every zone
+  (Internet, Local Intranet, Trusted Sites, Restricted Sites)
+- **Advanced tab** — uncheck "Enable Enhanced Protected Mode"
+- **View menu** — set Zoom to exactly 100%
+
+Mismatched Protected Mode across zones is the most common cause of
+session creation failing with HTTP 500.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| HTTP 500 on session create | Protected Mode mismatch | Disable PM on all four zones |
+| "did not become ready" | Wrong path or missing VC++ | Run `IEDriverServer.exe --port=5555` manually to confirm it starts |
+| Navigation fails | Enhanced Protected Mode on | Disable in Internet Options → Advanced |
+| `IEDriverServer.exe` not found | Auto-download failed | Check internet access; or supply `appium:ieDriverServerPath` |
+
+IEDriverServer is a native C++ binary. It requires the
+Visual C++ 2019 Redistributable (x86), available from
+<https://aka.ms/vs/17/release/vc_redist.x86.exe>.
+
+### Limitations
+
+`windows:` extension commands are **not available** in IE mode. All
+WebDriver commands (including `executeScript`) are proxied directly to
+IEDriverServer, which does not understand the `windows:` protocol.
+
+Use standard WebDriver commands instead — IEDriverServer handles them
+via COM automation against the IE DOM:
+
+| Task | Standard WebDriver command | Instead of |
+| --- | --- | --- |
+| Click an element | `element.click()` | `windows: click` |
+| Type into a field | `element.setValue('text')` | `windows: keys` |
+| Read field value | `element.getValue()` | `windows: getValue` |
+| Submit a form | `element.click()` on submit button | `windows: invoke` |
+| Navigate | `driver.url('https://...')` | — |
+| Find elements | `driver.$('css selector')` | UIA locators |
+| Execute JS in page | `driver.execute('return ...')` | — |
+
+UIA locator strategies (`accessibility id`, `-windows uiautomation`,
+`class name`) are not available. Use `css selector`, `xpath`, `id`,
+`name`, `tag name`, `link text`, or `partial link text` — standard
+selectors that IEDriverServer resolves against the IE DOM.
+
+Other unavailable features: Java Swing agent, WebView2/CDP,
+screen recording, clipboard API, `appium:prerun`/`appium:postrun`.
+`appium:javaSwing` is silently ignored.
+
+Supported on Windows 10 with IE 11 only.
 
 ## Java Swing Automation
 

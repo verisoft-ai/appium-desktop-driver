@@ -1,5 +1,6 @@
 import * as actions from './actions';
 import * as serverSession from './server-session';
+import * as ieSession from './ie-session';
 import * as element from './element';
 import * as extension from './extension';
 import * as device from './device';
@@ -11,6 +12,7 @@ import * as contexts from './contexts';
 const commands = {
     ...actions,
     ...serverSession,
+    ...ieSession,
     ...element,
     ...extension,
     ...system,

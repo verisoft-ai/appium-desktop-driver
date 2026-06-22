@@ -1,4 +1,4 @@
-import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { BaseDriver, JWProxy, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
@@ -98,6 +98,10 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     _screenRecorder: ScreenRecorder | null = null;
     _logFileMirror: LogFileMirror | null = null;
     webviewDevtoolsPort: number | null = null;
+    ieDriverProcess: import('node:child_process').ChildProcess | null = null;
+    ieDriverPort: number | null = null;
+    ieDriverSessionId: string | null = null;
+    ieProxy: JWProxy | null = null;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
         super(opts, shouldValidateCaps);
@@ -265,50 +269,59 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                 this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. NovaWindows uses stdin/stdout IPC.`);
             }
 
-            // Only inject -javaagent: when we are launching the app ourselves.
-            // When attaching to an already-running app via appTopLevelWindow, the Attach
-            // API path is used instead (post-session, via injectJavaAgent command).
-            const javaSwingLaunchPath = this.caps.javaSwing
-                && !!this.caps.app
-                && this.caps.app !== 'root'
-                && this.caps.app !== 'none'
-                && !this.caps.appTopLevelWindow;
-
-            if (javaSwingLaunchPath) {
-                const agentJar = join(__dirname, '..', '..', 'native', 'win-x64', 'appium-desktop-agent.jar');
-                const agentFlag = `-javaagent:"${agentJar}"`;
-                this.caps.appArguments = this.caps.appArguments
-                    ? `${agentFlag} ${this.caps.appArguments}`
-                    : agentFlag;
-                this.log.info(`Java Swing mode enabled — injecting agent: ${agentJar}`);
-            }
-
-            await this.startServerSession();
-
-            if (this.caps.javaSwing) {
-                if (javaSwingLaunchPath) {
-                    this.log.info('Connecting to Java agent...');
-                    await this.sendCommand('enableJavaSwing', {});
-                    this.log.info('Java agent connected successfully.');
-                } else {
-                    // Attach API path: inject agent into already-running JVM via the window handle.
-                    if (!this.caps.appTopLevelWindow) {
-                        throw new errors.InvalidArgumentError(
-                            'javaSwing:true with no app requires the appTopLevelWindow capability to identify the Java window.'
-                        );
-                    }
-                    this.log.info('Java Swing mode: injecting agent into running JVM via Java Attach API...');
-                    await this.sendCommand('injectJavaAgent', { hwnd: Number(this.caps.appTopLevelWindow), jdkPath: this.caps.jdkPath });
-                    this.log.info('Java agent injected and connected successfully.');
+            if (this.isIEMode()) {
+                if (this.caps.javaSwing) {
+                    this.log.warn('javaSwing capability is ignored in IE mode (useInternetExplorer/ieDriverServerPath).');
                 }
+                // IE mode: bypass UIA entirely and proxy all commands through IEDriverServer
+                await this.startIESession();
+            } else {
+                // Only inject -javaagent: when we are launching the app ourselves.
+                // When attaching to an already-running app via appTopLevelWindow, the Attach
+                // API path is used instead (post-session, via injectJavaAgent command).
+                const javaSwingLaunchPath = this.caps.javaSwing
+                    && !!this.caps.app
+                    && this.caps.app !== 'root'
+                    && this.caps.app !== 'none'
+                    && !this.caps.appTopLevelWindow;
+
+                if (javaSwingLaunchPath) {
+                    const agentJar = join(__dirname, '..', '..', 'native', 'win-x64', 'appium-desktop-agent.jar');
+                    const agentFlag = `-javaagent:"${agentJar}"`;
+                    this.caps.appArguments = this.caps.appArguments
+                        ? `${agentFlag} ${this.caps.appArguments}`
+                        : agentFlag;
+                    this.log.info(`Java Swing mode enabled — injecting agent: ${agentJar}`);
+                }
+
+                await this.startServerSession();
+
+                if (this.caps.javaSwing) {
+                    if (javaSwingLaunchPath) {
+                        this.log.info('Connecting to Java agent...');
+                        await this.sendCommand('enableJavaSwing', {});
+                        this.log.info('Java agent connected successfully.');
+                    } else {
+                        // Attach API path: inject agent into already-running JVM via the window handle.
+                        if (!this.caps.appTopLevelWindow) {
+                            throw new errors.InvalidArgumentError(
+                                'javaSwing:true with no app requires the appTopLevelWindow capability to identify the Java window.'
+                            );
+                        }
+                        this.log.info('Java Swing mode: injecting agent into running JVM via Java Attach API...');
+                        await this.sendCommand('injectJavaAgent', { hwnd: Number(this.caps.appTopLevelWindow), jdkPath: this.caps.jdkPath });
+                        this.log.info('Java agent injected and connected successfully.');
+                    }
+                }
+
+                if (this.caps.prerun) {
+                    this.log.info('Executing prerun PowerShell script...');
+                    await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
+                }
+
+                setDpiAwareness();
             }
 
-            if (this.caps.prerun) {
-                this.log.info('Executing prerun PowerShell script...');
-                await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
-            }
-
-            setDpiAwareness();
             this.log.debug(`Started session ${sessionId}.`);
             return [sessionId, caps];
         } catch (e) {
@@ -319,6 +332,15 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
 
     override async deleteSession(sessionId?: string | null | undefined): Promise<void> {
         this.log.debug('Deleting AppiumDesktop driver session...');
+
+        if (this.ieDriverProcess) {
+            try {
+                await this.terminateIESession();
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                this.log.warn(`Failed to terminate IEDriverServer during session teardown: ${msg}`);
+            }
+        }
 
         if (this.chromedriver) {
             try {
@@ -334,32 +356,35 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
             this.currentContext = null;
         }
 
-        if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
-            try {
-                if (this.caps['ms:forcequit'] === true) {
-                    // Force quit the process
-                    const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
-                    if (isNotNull) {
-                        const processId = await this.sendCommand('getProperty', { elementId: await this.sendCommand('saveRootElementToTable', {}), property: 'ProcessId' }) as string;
-                        await this.sendCommand('stopProcess', { pid: Number(processId), force: true });
+        if (!this.isIEMode()) {
+            if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
+                try {
+                    if (this.caps['ms:forcequit'] === true) {
+                        // Force quit the process
+                        const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
+                        if (isNotNull) {
+                            const processId = await this.sendCommand('getProperty', { elementId: await this.sendCommand('saveRootElementToTable', {}), property: 'ProcessId' }) as string;
+                            await this.sendCommand('stopProcess', { pid: Number(processId), force: true });
+                        }
+                    } else {
+                        const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
+                        if (rootId) {
+                            await this.sendCommand('closeWindow', { elementId: rootId });
+                        }
                     }
-                } else {
-                    const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
-                    if (rootId) {
-                        await this.sendCommand('closeWindow', { elementId: rootId });
-                    }
+                } catch {
+                    // noop
                 }
-            } catch {
-                // noop
             }
-        }
-        if (this.caps.postrun) {
-            this.log.info('Executing postrun PowerShell script...');
-            await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
+            if (this.caps.postrun) {
+                this.log.info('Executing postrun PowerShell script...');
+                await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
+            }
+
+            await this.releaseActions();
+            await this.terminateServerSession();
         }
 
-        await this.releaseActions();
-        await this.terminateServerSession();
         await super.deleteSession(sessionId);
 
         if (this._logFileMirror) {

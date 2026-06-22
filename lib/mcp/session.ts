@@ -23,7 +23,7 @@ function checkAppiumReachable(host: string, port: number): Promise<boolean> {
 
 /** Session parameters provided by the agent via the create_session tool. */
 export interface SessionParams {
-    app: string;
+    app?: string;
     appArguments?: string;
     appWorkingDir?: string;
     waitForAppLaunch?: number;
@@ -35,6 +35,8 @@ export interface SessionParams {
     webviewEnabled?: boolean;
     webviewDevtoolsPort?: number;
     javaSwing?: boolean;
+    jdkPath?: string;
+    appTopLevelWindow?: string;
     newSessionCommandTimeout?: number;
 }
 
@@ -53,13 +55,14 @@ export class AppiumSession {
             throw new Error(`Appium not running on ${host}:${port}. Start it first with: appium --port ${port}`);
         }
 
-        process.stderr.write(`[MCP] Creating Appium session for app: ${params.app}\n`);
+        process.stderr.write(`[MCP] Creating Appium session for: ${params.app ?? params.appTopLevelWindow ?? 'desktop root'}\n`);
 
         const caps: Record<string, unknown> = {
             platformName: 'Windows',
             'appium:automationName': 'DesktopDriver',
-            'appium:app': params.app,
         };
+
+        if (params.app !== undefined) {caps['appium:app'] = params.app;}
 
         if (params.appArguments !== undefined) {caps['appium:appArguments'] = params.appArguments;}
         if (params.appWorkingDir !== undefined) {caps['appium:appWorkingDir'] = params.appWorkingDir;}
@@ -71,6 +74,8 @@ export class AppiumSession {
         if (params.webviewEnabled !== undefined) {caps['appium:webviewEnabled'] = params.webviewEnabled;}
         if (params.webviewDevtoolsPort !== undefined) {caps['appium:webviewDevtoolsPort'] = params.webviewDevtoolsPort;}
         if (params.javaSwing !== undefined) {caps['appium:javaSwing'] = params.javaSwing;}
+        if (params.jdkPath !== undefined) {caps['appium:jdkPath'] = params.jdkPath;}
+        if (params.appTopLevelWindow !== undefined) {caps['appium:appTopLevelWindow'] = params.appTopLevelWindow;}
         caps['appium:newCommandTimeout'] = params.newSessionCommandTimeout ?? 3600;
 
         this.driver = await remote({

@@ -71,7 +71,7 @@ export class AppiumSession {
         if (params.webviewEnabled !== undefined) {caps['appium:webviewEnabled'] = params.webviewEnabled;}
         if (params.webviewDevtoolsPort !== undefined) {caps['appium:webviewDevtoolsPort'] = params.webviewDevtoolsPort;}
         if (params.javaSwing !== undefined) {caps['appium:javaSwing'] = params.javaSwing;}
-        caps['appium:newSessionCommandTimeout'] = params.newSessionCommandTimeout ?? 3600;
+        caps['appium:newCommandTimeout'] = params.newSessionCommandTimeout ?? 3600;
 
         this.driver = await remote({
             hostname: this.appiumConfig.appiumHost,

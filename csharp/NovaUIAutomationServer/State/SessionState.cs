@@ -76,6 +76,23 @@ public class SessionState
         return id;
     }
 
+    public string? TrySaveElementAndReturnId(IUIAutomationElement element)
+    {
+        try
+        {
+            var runtimeId = element.GetRuntimeId();
+            if (runtimeId == null || runtimeId.Length == 0) return null;
+            var id = string.Join(".", runtimeId);
+            if (!ElementTable.ContainsKey(id))
+                ElementTable[id] = element;
+            return id;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public IUIAutomationElement GetElement(string elementId)
     {
         if (ElementTable.TryGetValue(elementId, out var element))

@@ -274,7 +274,7 @@ const LONG_PTR = pointer('LONG_PTR', types.long);
 const LPDWORD = pointer('LPDWORD', DWORD);
 const HWND = alias('HWND', HANDLE);
 const LPARAM = alias('LPARAM', LONG_PTR);
-const LPSTR = pointer('LPSTR', 'char');
+// const LPSTR = pointer('LPSTR', 'char');
 const LPWSTR = pointer('LPWSTR', 'wchar_t');
 
 const EnumWindowsProc = proto('BOOL __stdcall EnumWindowsProc (HWND hwnd, LPARAM lParam)');
@@ -286,7 +286,7 @@ type LONG_PTR = number;
 type LPDWORD = number;
 type HWND = unknown;
 type LPARAM = number;
-type LPSTR = Buffer;
+// type LPSTR = Buffer;
 type LPWSTR = Buffer;
 
 type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;

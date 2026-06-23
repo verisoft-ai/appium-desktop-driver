@@ -290,11 +290,13 @@ public static class FindCommands
                 el = next;
                 if (el.FindFirst(TreeScope.Element, condition) != null)
                 {
-                    results.Add(state.SaveElementAndReturnId(el));
+                    var id = state.TrySaveElementAndReturnId(el);
+                    if (id != null) results.Add(id);
                 }
                 foreach (var match in IterateArray(el.FindAll(TreeScope.Descendants, condition)))
                 {
-                    results.Add(state.SaveElementAndReturnId(match));
+                    var id = state.TrySaveElementAndReturnId(match);
+                    if (id != null) results.Add(id);
                 }
             }
             else
@@ -379,11 +381,13 @@ public static class FindCommands
                 el = prev;
                 if (el.FindFirst(TreeScope.Element, condition) != null)
                 {
-                    results.Add(state.SaveElementAndReturnId(el));
+                    var id = state.TrySaveElementAndReturnId(el);
+                    if (id != null) results.Add(id);
                 }
                 foreach (var match in IterateArray(el.FindAll(TreeScope.Descendants, condition)))
                 {
-                    results.Add(state.SaveElementAndReturnId(match));
+                    var id = state.TrySaveElementAndReturnId(match);
+                    if (id != null) results.Add(id);
                 }
             }
             else
@@ -483,12 +487,12 @@ public static class FindCommands
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var native = element.FindFirst(scope, condition);
-        if (native != null) return state.SaveElementAndReturnId(native);
+        if (native != null) return state.TrySaveElementAndReturnId(native);
 
         if (includeSelf)
         {
             var self = element.FindFirst(TreeScope.Element, condition);
-            if (self != null) return state.SaveElementAndReturnId(self);
+            if (self != null) return state.TrySaveElementAndReturnId(self);
         }
         var trueCond = state.Automation.CreateTrueCondition();
         return WalkForFirst(element, condition, trueCond, state);
@@ -497,7 +501,7 @@ public static class FindCommands
     private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state)
     {
         var direct = element.FindFirst(TreeScope.Children, condition);
-        if (direct != null) return state.SaveElementAndReturnId(direct);
+        if (direct != null) return state.TrySaveElementAndReturnId(direct);
 
         var children = element.FindAll(TreeScope.Children, trueCond);
         foreach (var child in IterateArray(children))
@@ -512,7 +516,9 @@ public static class FindCommands
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var nativeResults = IterateArray(element.FindAll(scope, condition))
-            .Select(el => state.SaveElementAndReturnId(el))
+            .Select(el => state.TrySaveElementAndReturnId(el))
+            .Where(id => id != null)
+            .Select(id => id!)
             .ToList();
 
         // Supplement with a manual walk to catch matches the native scope
@@ -523,13 +529,13 @@ public static class FindCommands
             var self = element.FindFirst(TreeScope.Element, condition);
             if (self != null)
             {
-                var id = state.SaveElementAndReturnId(self);
-                if (seen.Add(id)) nativeResults.Add(id);
+                var id = state.TrySaveElementAndReturnId(self);
+                if (id != null && seen.Add(id)) nativeResults.Add(id);
             }
         }
         var trueCond = state.Automation.CreateTrueCondition();
-        WalkForAll(element, condition, trueCond, state, nativeResults, seen);
-        return nativeResults.ToArray();
+        WalkForAll(element, condition, trueCond, state, nativeResults!, seen);
+        return nativeResults!.ToArray();
     }
 
     private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
@@ -539,8 +545,8 @@ public static class FindCommands
         {
             if (child.FindFirst(TreeScope.Element, condition) != null)
             {
-                var id = state.SaveElementAndReturnId(child);
-                if (seen.Add(id)) results.Add(id);
+                var id = state.TrySaveElementAndReturnId(child);
+                if (id != null && seen.Add(id)) results.Add(id);
             }
             WalkForAll(child, condition, trueCond, state, results, seen);
         }
@@ -563,7 +569,8 @@ public static class FindCommands
         var results = new List<string>();
         foreach (var el in IterateArray(array))
         {
-            results.Add(state.SaveElementAndReturnId(el));
+            var id = state.TrySaveElementAndReturnId(el);
+            if (id != null) results.Add(id);
         }
         return results.ToArray();
     }

@@ -60,6 +60,10 @@ const LOCATION_STRATEGIES = Object.freeze([
 const IE_NO_PROXY: RouteMatcher[] = [
     ['GET', new RegExp('^/session/[^/]+/window/handles')],
     ['POST', new RegExp('^/session/[^/]+/window$')],
+    // execute always goes through our handler so windows: commands work;
+    // the handler delegates to IEDriverServer for plain JS.
+    ['POST', new RegExp('^/session/[^/]+/execute$')],
+    ['POST', new RegExp('^/session/[^/]+/execute/sync')],
 ];
 
 // This is a set of methods and paths that we never want to proxy to Chromedriver.

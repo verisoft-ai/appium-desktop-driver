@@ -110,6 +110,10 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
         return await this.executePowerShellScript(args[0]);
     }
 
+    if (this.ieProxy && this.jwpProxyActive) {
+        return await this.ieProxy.command('/execute/sync', 'POST', { script, args });
+    }
+
     if (this.chromedriver && this.proxyActive()) {
         const endpoint = this.chromedriver.jwproxy.downstreamProtocol === PROTOCOLS.MJSONWP
                 ? '/execute'

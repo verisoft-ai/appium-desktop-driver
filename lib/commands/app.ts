@@ -1,7 +1,7 @@
 import { normalize } from 'node:path';
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
-import { propertyCondition, trueCondition } from '../server/conditions';
+import { propertyCondition } from '../server/conditions';
 import type { RectResult } from '../server/protocol';
 import { sleep } from '../util';
 import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
@@ -92,20 +92,7 @@ export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string
 }
 
 export async function getWindowHandles(this: AppiumDesktopDriver): Promise<string[]> {
-    const elIds = await this.sendCommand('findElements', {
-        scope: 'children',
-        condition: trueCondition(),
-        contextElementId: null,
-    }) as string[];
-
-    const nativeWindowHandles: string[] = [];
-
-    for (const elId of elIds ?? []) {
-        const nativeWindowHandle = await this.sendCommand('getProperty', { elementId: elId, property: 'NativeWindowHandle' }) as string;
-        nativeWindowHandles.push(`0x${Number(nativeWindowHandle).toString(16).padStart(8, '0')}`);
-    }
-
-    return nativeWindowHandles;
+    return getAllWindowHandles().map((h) => `0x${h.toString(16).padStart(8, '0')}`);
 }
 
 export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string): Promise<void> {

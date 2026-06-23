@@ -35,6 +35,15 @@ public class TestForm extends JFrame {
         JButton submit = new JButton("Submit");
         submit.getAccessibleContext().setAccessibleName("submitButton");
         add(submit);
+
+        JButton showError = new JButton("Show Error");
+        showError.getAccessibleContext().setAccessibleName("showErrorButton");
+        showError.addActionListener(e ->
+            SwingUtilities.invokeLater(() ->
+                JOptionPane.showMessageDialog(TestForm.this, "אירעה שגיאה", "שגיאה", JOptionPane.ERROR_MESSAGE)
+            )
+        );
+        add(showError);
     }
 
     public static void main(String[] args) {

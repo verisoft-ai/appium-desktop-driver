@@ -57,13 +57,6 @@ public class CommandHandler {
                 return buildInfo(w, id);
             }
         }
-        // Fallback: return first visible Java window if HWND match failed
-        for (Window w : Window.getWindows()) {
-            if (w.isShowing()) {
-                String id = registry.save(w);
-                return buildInfo(w, id);
-            }
-        }
         throw new IllegalStateException("No visible Java window found for hwnd=" + targetHwnd);
     }
 
@@ -74,7 +67,21 @@ public class CommandHandler {
             getPeer.setAccessible(true);
             Object peer = getPeer.invoke(c);
             if (peer == null) return 0L;
-            Method getHWnd = peer.getClass().getDeclaredMethod("getHWnd");
+            // getHWnd is declared on WComponentPeer, not always on the leaf peer class
+            // (e.g. WDialogPeer extends WWindowPeer extends WComponentPeer).
+            // getDeclaredMethod only searches the immediate class, so traverse the
+            // hierarchy to find the declaration.
+            Class<?> cls = peer.getClass();
+            Method getHWnd = null;
+            while (cls != null) {
+                try {
+                    getHWnd = cls.getDeclaredMethod("getHWnd");
+                    break;
+                } catch (NoSuchMethodException ignored) {
+                    cls = cls.getSuperclass();
+                }
+            }
+            if (getHWnd == null) return 0L;
             getHWnd.setAccessible(true);
             Object result = getHWnd.invoke(peer);
             return result instanceof Long ? (Long) result : ((Number) result).longValue();

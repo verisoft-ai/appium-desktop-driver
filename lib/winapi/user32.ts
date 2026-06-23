@@ -275,6 +275,7 @@ const LPDWORD = pointer('LPDWORD', DWORD);
 const HWND = alias('HWND', HANDLE);
 const LPARAM = alias('LPARAM', LONG_PTR);
 const LPSTR = pointer('LPSTR', 'char');
+const LPWSTR = pointer('LPWSTR', 'wchar_t');
 
 const EnumWindowsProc = proto('BOOL __stdcall EnumWindowsProc (HWND hwnd, LPARAM lParam)');
 
@@ -286,6 +287,7 @@ type LPDWORD = number;
 type HWND = unknown;
 type LPARAM = number;
 type LPSTR = Buffer;
+type LPWSTR = Buffer;
 
 type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;
 
@@ -300,7 +302,8 @@ const EnumDisplaySettingsA = user32.func(/* c */ `bool __stdcall EnumDisplaySett
 // end TODO
 
 const GetWindowThreadProcessId = user32.func(/* c */ `DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ LPDWORD lpdwProcessId)`) as (hWnd: HWND, lpdwProcessId: [LPDWORD | null]) => DWORD;
-const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
+// const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
+const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
@@ -822,9 +825,9 @@ export function getWindowAllHandlesForProcessIds(processIds: number[]): number[]
                 GetWindowThreadProcessId(hWnd, ptr);
                 const pid = ptr[0];
                 if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(256);
-                    GetWindowTextA(hWnd, buffer, buffer.length);
-                    const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
                     if (windowTitle) {
                         handles.push(Number(address(hWnd)));
                     }
@@ -848,9 +851,9 @@ export function getAllWindowHandles(): number[] {
         EnumWindows((hWnd) => {
             try {
                 if (IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(256);
-                    GetWindowTextA(hWnd, buffer, buffer.length);
-                    const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
                     if (windowTitle) {
                         handles.push(Number(address(hWnd)));
                     }
@@ -872,9 +875,9 @@ export function getVisibleWindowsWithTitles(): Array<{ handle: number; title: st
         EnumWindows((hWnd) => {
             try {
                 if (IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(256);
-                    GetWindowTextA(hWnd, buffer, buffer.length);
-                    const title = buffer.toString('utf8').replace(/\0/g, '');
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const title = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
                     if (title) {
                         windows.push({ handle: Number(address(hWnd)), title });
                     }

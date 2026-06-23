@@ -385,6 +385,64 @@ describe('Java Swing Form', () => {
         });
     });
 
+    describe('error dialog (switchToWindowByTitle)', () => {
+        const ERROR_DIALOG_TITLE = 'שגיאה';
+        let mainWindowHandle: string;
+
+        beforeAll(async () => {
+            mainWindowHandle = await driver.getWindowHandle();
+        });
+
+        it('clicking showErrorButton opens dialog — getWindowHandles returns extra handle', async () => {
+            const before = (await driver.getWindowHandles()).length;
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            const after = (await driver.getWindowHandles()).length;
+            expect(after).toBeGreaterThan(before);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+            await (await driver.$('~OK')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
+
+        it('switchToWindowByTitle switches to error dialog by exact Hebrew title', async () => {
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+            const title = await driver.getTitle();
+            expect(title).toBe(ERROR_DIALOG_TITLE);
+            await (await driver.$('~OK')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
+
+        it('dialog inner content accessible via JAB after switch — OK button exists', async () => {
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+            const okBtn = await driver.$('~OK');
+            expect(await okBtn.isExisting()).toBe(true);
+            await okBtn.click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
+
+        it('dismissing dialog and switching back — main form elements remain accessible', async () => {
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+            await (await driver.$('~OK')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+            const submitBtn = await driver.$('~submitButton');
+            expect(await submitBtn.isExisting()).toBe(true);
+        });
+    });
+
     describe('tag name strategy (UIA ControlType mapped to Java role)', () => {
         it('"Edit" finds all JTextField components', async () => {
             const fields = await driver.findElements('tag name', 'Edit');

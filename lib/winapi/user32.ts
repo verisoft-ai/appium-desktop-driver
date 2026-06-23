@@ -302,6 +302,7 @@ const EnumDisplaySettingsA = user32.func(/* c */ `bool __stdcall EnumDisplaySett
 // end TODO
 
 const GetWindowThreadProcessId = user32.func(/* c */ `DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ LPDWORD lpdwProcessId)`) as (hWnd: HWND, lpdwProcessId: [LPDWORD | null]) => DWORD;
+const GetClassNameW = user32.func(/* c */ `int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)`) as (hWnd: HWND, lpClassName: LPWSTR, nMaxCount: number) => number;
 // const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
 const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
@@ -851,8 +852,18 @@ export function getWindowProcessName(hwnd: number): string {
     }
 }
 
+export function getWindowClassName(hwnd: number): string {
+    try {
+        const buffer = Buffer.alloc(512);
+        const len = GetClassNameW(hwnd, buffer, 256);
+        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+    } catch {
+        return '';
+    }
+}
+
 export function isIEWindowHwnd(hwnd: number): boolean {
-    return getWindowProcessName(hwnd).toUpperCase() === 'IEXPLORE.EXE';
+    return getWindowClassName(hwnd) === 'IEFrame';
 }
 
 export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {

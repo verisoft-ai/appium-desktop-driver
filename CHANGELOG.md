@@ -1,3 +1,44 @@
+## [2.1.0-preview.6](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.5...v2.1.0-preview.6) (2026-06-23)
+
+### Features
+
+* add iexplorer.exe selenium driver server proxy ([0e678cc](https://github.com/verisoft-ai/appium-desktop-driver/commit/0e678cc433cf3e1943169ef7a295e07303570fd4))
+* add jdkPath capability ([5b3b727](https://github.com/verisoft-ai/appium-desktop-driver/commit/5b3b7276e8e82621555100c27d7a23851a7494b7))
+* add switch window by title script ([b04cd84](https://github.com/verisoft-ai/appium-desktop-driver/commit/b04cd84052574111bd5a71e68f973f2f238947cb))
+* apply thread process id strategy to set foreground ([9b268e8](https://github.com/verisoft-ai/appium-desktop-driver/commit/9b268e8afef7f8eda18ca17d5ad39bbd6b8891bf))
+* make java agent attachable to ongoing session ([7dfc414](https://github.com/verisoft-ai/appium-desktop-driver/commit/7dfc41445ae1ca2926d951087165a608be620a41))
+* **mcp:** add mcp support for java tools ([484aa0c](https://github.com/verisoft-ai/appium-desktop-driver/commit/484aa0c3b5f318e0705b7ff7281d8da7d610c149))
+* replace Java Access Bridge with JVM agent for Swing automation ([ef6b3a1](https://github.com/verisoft-ai/appium-desktop-driver/commit/ef6b3a1a493fba18ee0ca146d65e58da915182ad))
+
+### Bug Fixes
+
+* **actions:** re-implement tick based action sequence ([17b2f0d](https://github.com/verisoft-ai/appium-desktop-driver/commit/17b2f0d1fbc28efc2cb85f2d96f455b1982746e8))
+* add expand/collapse end to end tests and improve window attachment on start of session ([db562ea](https://github.com/verisoft-ai/appium-desktop-driver/commit/db562ea8f9544aafe33d110c484f57c3f8eff1f2))
+* bind socket to 127.0.0.1 to avoid windows fireawall ([91f56a5](https://github.com/verisoft-ai/appium-desktop-driver/commit/91f56a54c61370de41b86b9a2691aa678379b151))
+* clean env before injecting java agent, improve diagnostics ([1ec5cb7](https://github.com/verisoft-ai/appium-desktop-driver/commit/1ec5cb7ca935460724ed857f3bcf2be5b2745fa8))
+* correct setWindow and MCP window pattern tools ([a722b8d](https://github.com/verisoft-ai/appium-desktop-driver/commit/a722b8d2797f4e0eed645221e8c22ccc15fde299))
+* **jab:** interact with jab elements ([ab8247f](https://github.com/verisoft-ai/appium-desktop-driver/commit/ab8247fb63491c24c9c5d77d3e35627891906081))
+* java detection bug ([f567428](https://github.com/verisoft-ai/appium-desktop-driver/commit/f56742817c7e646cd7c58b6edef79785a006e1a9))
+* **mcp:** appium close session timeout ([348e88c](https://github.com/verisoft-ai/appium-desktop-driver/commit/348e88c902fb6569ea497681695279d486b1a7a5))
+* replace TransformPattern check with ClassName filter for CoreWindow ([042851b](https://github.com/verisoft-ai/appium-desktop-driver/commit/042851ba091c99024950480937694eb1835519eb))
+* use java 8 semantics ([4d1fec7](https://github.com/verisoft-ai/appium-desktop-driver/commit/4d1fec71899f95b01cc20b2bf4bbf3ad1918ba96))
+* xpath java swing and add end to end tests ([6692957](https://github.com/verisoft-ai/appium-desktop-driver/commit/66929573adda8c343ab42fab2015f154a1035694))
+
+### Miscellaneous Chores
+
+* fix end to end workflow [skip ci] ([ea8c4cf](https://github.com/verisoft-ai/appium-desktop-driver/commit/ea8c4cfb12cb3fff238541e6b33adefdcaa8af4b))
+* improve java swing examples ([980b4d6](https://github.com/verisoft-ai/appium-desktop-driver/commit/980b4d6b77535d9c7df86e71713815a211b1f6e1))
+* **release:** 2.1.0-preview.6 [skip ci] ([49ffddc](https://github.com/verisoft-ai/appium-desktop-driver/commit/49ffddcf023cbe31eee556395130cb10dd48a3e7))
+* **release:** 2.1.0-preview.6 [skip ci] ([8f24d00](https://github.com/verisoft-ai/appium-desktop-driver/commit/8f24d00caa5c0e91861c30ced6bb47bd4fe2dd15))
+* **release:** 2.1.0-preview.6 [skip ci] ([91e34d0](https://github.com/verisoft-ai/appium-desktop-driver/commit/91e34d012c15c251bdae88c163f09ebef382a18d))
+* **release:** 2.1.0-preview.6 [skip ci] ([28c8384](https://github.com/verisoft-ai/appium-desktop-driver/commit/28c8384391433fe27abdc7f0f648ccba562d613c))
+* **release:** 2.1.0-preview.6 [skip ci] ([4af853a](https://github.com/verisoft-ai/appium-desktop-driver/commit/4af853a2b2d68833a09c9fb45381dab3405e671f))
+* **release:** 2.1.0-preview.6 [skip ci] ([67dc1e2](https://github.com/verisoft-ai/appium-desktop-driver/commit/67dc1e2c3434ffa0c26a91e8440f8acbdbb740bd))
+* **release:** 2.1.0-preview.6 [skip ci] ([4171032](https://github.com/verisoft-ai/appium-desktop-driver/commit/41710321f15e38741bd55b5c0698b193c3882ca4))
+* **release:** 2.1.0-preview.6 [skip ci] ([8c29576](https://github.com/verisoft-ai/appium-desktop-driver/commit/8c29576f033b50adc36e4ae9be18aed439c02ec0))
+* **release:** 2.1.0-preview.7 [skip ci] ([1b64455](https://github.com/verisoft-ai/appium-desktop-driver/commit/1b644550be2ec1668070a94c5fefa3b021bc0cd3))
+* **release:** 2.1.0-preview.8 [skip ci] ([be2e60a](https://github.com/verisoft-ai/appium-desktop-driver/commit/be2e60a1f3ab19c7263dab823525375414ef0814))
+
 ## [2.1.0-preview.6](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0-preview.5...v2.1.0-preview.6) (2026-06-17)
 
 ### Features

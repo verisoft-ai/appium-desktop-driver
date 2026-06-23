@@ -6,6 +6,7 @@ import { errors, JWProxy } from '@appium/base-driver';
 import type { AppiumLogger } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { findFreePort, downloadFile, MODULE_NAME } from '../util';
+import { getWindowTitle, isIEWindowHwnd } from '../winapi/user32';
 
 const IE_DRIVER_PORT_LOWER = 5555;
 const IE_DRIVER_PORT_UPPER = 5655;
@@ -96,7 +97,7 @@ function pollIEDriverReady(port: number): Promise<boolean> {
     });
 }
 
-export async function startIESession(this: AppiumDesktopDriver): Promise<void> {
+async function startIEDriverProcess(this: AppiumDesktopDriver): Promise<void> {
     const exePath = this.caps.ieDriverServerPath
         ? this.caps.ieDriverServerPath
         : await getIEDriverExecutable(this.log);
@@ -129,10 +130,9 @@ export async function startIESession(this: AppiumDesktopDriver): Promise<void> {
     this.ieDriverProcess = proc;
     this.ieDriverPort = port;
 
-    // Poll until IEDriverServer is ready
     let ready = false;
     for (let i = 0; i < IE_DRIVER_READY_MAX_ATTEMPTS; i++) {
-        await new Promise((r) => setTimeout(r, IE_DRIVER_READY_POLL_MS));
+        await new Promise((resolve) => setTimeout(resolve, IE_DRIVER_READY_POLL_MS));
         ready = await pollIEDriverReady(port);
         if (ready) { break; }
     }
@@ -141,7 +141,12 @@ export async function startIESession(this: AppiumDesktopDriver): Promise<void> {
         throw new errors.SessionNotCreatedError(`IEDriverServer did not become ready on port ${port} after ${IE_DRIVER_READY_MAX_ATTEMPTS * IE_DRIVER_READY_POLL_MS}ms`);
     }
 
-    // Create W3C session on IEDriverServer
+    this.log.info(`IEDriverServer ready on port ${port}`);
+}
+
+async function createIEDriverSession(this: AppiumDesktopDriver): Promise<void> {
+    const port = this.ieDriverPort ?? 0;
+
     const sessionBody = JSON.stringify({
         capabilities: {
             alwaysMatch: {
@@ -198,9 +203,120 @@ export async function startIESession(this: AppiumDesktopDriver): Promise<void> {
     this.ieProxy = proxy;
     this.proxyReqRes = proxy.proxyReqRes.bind(proxy);
     this.proxyCommand = proxy.command.bind(proxy);
-    this.jwpProxyActive = true;
+}
 
-    this.log.info('IE mode active — all WebDriver commands proxied through IEDriverServer.');
+export async function ensureIEDriverReady(this: AppiumDesktopDriver): Promise<void> {
+    if (!this.ieDriverProcess) {
+        await startIEDriverProcess.call(this);
+    }
+    if (!this.ieDriverSessionId) {
+        await createIEDriverSession.call(this);
+    }
+}
+
+async function getIEHandleForHwnd(this: AppiumDesktopDriver, hwnd: number): Promise<string | null> {
+    const port = this.ieDriverPort ?? 0;
+    const sessionId = this.ieDriverSessionId ?? '';
+
+    const targetTitle = getWindowTitle(hwnd).toLowerCase();
+
+    // Get all IE window handles from IEDriverServer
+    let handlesResult: { status: number; body: string };
+    try {
+        handlesResult = await httpRequest({
+            hostname: 'localhost',
+            port,
+            path: `/session/${sessionId}/window/handles`,
+            method: 'GET',
+            timeout: 5000,
+        });
+    } catch {
+        return null;
+    }
+
+    let ieHandles: string[];
+    try {
+        ieHandles = JSON.parse(handlesResult.body)?.value ?? [];
+    } catch {
+        return null;
+    }
+
+    if (ieHandles.length === 0) { return null; }
+
+    // If only one IE window, use it directly
+    if (ieHandles.length === 1) { return ieHandles[0]; }
+
+    // Match by title
+    for (const handle of ieHandles) {
+        // Switch to this handle temporarily to get its title
+        try {
+            await httpRequest({
+                hostname: 'localhost',
+                port,
+                path: `/session/${sessionId}/window`,
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(JSON.stringify({ handle })) },
+                timeout: 3000,
+            }, JSON.stringify({ handle }));
+
+            const titleResult = await httpRequest({
+                hostname: 'localhost',
+                port,
+                path: `/session/${sessionId}/title`,
+                method: 'GET',
+                timeout: 3000,
+            });
+
+            const ieTitle = (JSON.parse(titleResult.body)?.value ?? '').toLowerCase();
+            if (targetTitle && ieTitle && ieTitle.includes(targetTitle.replace(/ - internet explorer$/, '').trim())) {
+                return handle;
+            }
+        } catch {
+            // continue
+        }
+    }
+
+    // No title match — fall back to first handle
+    return ieHandles[0];
+}
+
+export async function enableIEProxy(this: AppiumDesktopDriver, hwnd: number): Promise<void> {
+    await ensureIEDriverReady.call(this);
+
+    // Rebind proxy handlers — disableIEProxy clears these, so re-enabling after
+    // a non-IE switch must restore them even though ensureIEDriverReady short-circuits.
+    if (this.ieProxy) {
+        this.proxyReqRes = this.ieProxy.proxyReqRes.bind(this.ieProxy);
+        this.proxyCommand = this.ieProxy.command.bind(this.ieProxy);
+    }
+
+    const ieHandle = await getIEHandleForHwnd.call(this, hwnd);
+    if (ieHandle) {
+        const port = this.ieDriverPort ?? 0;
+        const sessionId = this.ieDriverSessionId ?? '';
+        const body = JSON.stringify({ handle: ieHandle });
+        await httpRequest({
+            hostname: 'localhost',
+            port,
+            path: `/session/${sessionId}/window`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+            },
+            timeout: 5000,
+        }, body);
+    }
+
+    this.jwpProxyActive = true;
+    this.log.info(`IE proxy enabled for HWND 0x${hwnd.toString(16).padStart(8, '0')}.`);
+}
+
+export function disableIEProxy(this: AppiumDesktopDriver): void {
+    this.jwpProxyActive = false;
+    this.proxyReqRes = null;
+    this.proxyCommand = null;
+    this.log.info('IE proxy disabled — switched to UIA mode.');
 }
 
 export async function terminateIESession(this: AppiumDesktopDriver): Promise<void> {
@@ -242,6 +358,4 @@ export async function terminateIESession(this: AppiumDesktopDriver): Promise<voi
     this.log.debug('IEDriverServer session terminated.');
 }
 
-export function isIEMode(this: AppiumDesktopDriver): boolean {
-    return !!(this.caps.useInternetExplorer || this.caps.ieDriverServerPath);
-}
+export { isIEWindowHwnd };

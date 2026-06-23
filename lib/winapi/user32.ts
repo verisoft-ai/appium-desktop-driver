@@ -310,6 +310,9 @@ const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWin
 const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
 const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
 const GetCurrentThreadId = kernel32.func(/* c */ `DWORD __stdcall GetCurrentThreadId()`) as () => DWORD;
+const OpenProcess = kernel32.func(/* c */ `HANDLE __stdcall OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId)`) as (dwDesiredAccess: number, bInheritHandle: number, dwProcessId: number) => number;
+const QueryFullProcessImageNameW = kernel32.func(/* c */ `BOOL __stdcall QueryFullProcessImageNameW(HANDLE hProcess, DWORD dwFlags, LPWSTR lpExeName, _Inout_ DWORD *lpdwSize)`) as (hProcess: number, dwFlags: number, lpExeName: Buffer, lpdwSize: [number]) => boolean;
+const CloseHandle = kernel32.func(/* c */ `BOOL __stdcall CloseHandle(HANDLE hObject)`) as (hObject: number) => boolean;
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -813,6 +816,43 @@ export function setDpiAwareness() {
     if (!SetProcessDPIAware()) {
         throw new errors.UnknownError('An error occurred while trying to set DPI awareness.');
     };
+}
+
+export function getWindowTitle(hwnd: number): string {
+    try {
+        const buffer = Buffer.alloc(512);
+        const len = GetWindowTextW(hwnd, buffer, 256);
+        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+    } catch {
+        return '';
+    }
+}
+
+export function getWindowProcessName(hwnd: number): string {
+    try {
+        const pidPtr: [LPDWORD | null] = [null];
+        GetWindowThreadProcessId(hwnd, pidPtr);
+        const pid = pidPtr[0];
+        if (!pid) { return ''; }
+        const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        const hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid as number);
+        if (!hProcess) { return ''; }
+        try {
+            const nameBuf = Buffer.alloc(1024);
+            const sizeArr: [number] = [512];
+            if (!QueryFullProcessImageNameW(hProcess, 0, nameBuf, sizeArr)) { return ''; }
+            const fullPath = nameBuf.slice(0, sizeArr[0] * 2).toString('utf16le');
+            return fullPath.split('\\').pop() ?? '';
+        } finally {
+            CloseHandle(hProcess);
+        }
+    } catch {
+        return '';
+    }
+}
+
+export function isIEWindowHwnd(hwnd: number): boolean {
+    return getWindowProcessName(hwnd).toUpperCase() === 'IEXPLORE.EXE';
 }
 
 export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {

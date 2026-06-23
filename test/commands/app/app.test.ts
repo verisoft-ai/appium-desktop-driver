@@ -12,8 +12,12 @@ import {
 } from '../../../lib/commands/app';
 import { createMockDriver } from '../../fixtures/driver';
 
+const mockGetAllWindowHandles = vi.fn().mockReturnValue([]);
+
 vi.mock('../../../lib/winapi/user32', () => ({
+    getAllWindowHandles: (...args: unknown[]) => mockGetAllWindowHandles(...args),
     getWindowAllHandlesForProcessIds: vi.fn().mockReturnValue([]),
+    isIEWindowHwnd: vi.fn().mockReturnValue(false),
     trySetForegroundWindow: vi.fn().mockReturnValue(true),
 }));
 
@@ -54,22 +58,18 @@ describe('getWindowHandle', () => {
 describe('getWindowHandles', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('returns array of hex window handles for each child window', async () => {
+    it('returns array of hex window handles for each visible window', async () => {
+        mockGetAllWindowHandles.mockReturnValue([100, 200]);
         const driver = createMockDriver() as any;
-        driver.sendCommand
-            .mockResolvedValueOnce(['1.1.1', '2.2.2'])
-            .mockResolvedValueOnce('100')
-            .mockResolvedValueOnce('200');
-
         const result = await getWindowHandles.call(driver);
         expect(result).toHaveLength(2);
         expect(result[0]).toBe('0x00000064');
         expect(result[1]).toBe('0x000000c8');
     });
 
-    it('returns empty array when no child windows found', async () => {
+    it('returns empty array when no windows found', async () => {
+        mockGetAllWindowHandles.mockReturnValue([]);
         const driver = createMockDriver() as any;
-        driver.sendCommand.mockResolvedValue([]);
         const result = await getWindowHandles.call(driver);
         expect(result).toEqual([]);
     });

@@ -97,6 +97,21 @@ export async function createChromeWebviewSession(extraCaps?: Record<string, unkn
 }
 
 export const EXPLORER_APP_PATH = 'C:\\Windows\\explorer.exe';
+export const CHARMAP_APP_PATH = 'C:\\Windows\\System32\\charmap.exe';
+
+export async function createCharmapSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': CHARMAP_APP_PATH,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
 
 export async function createExplorerSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({

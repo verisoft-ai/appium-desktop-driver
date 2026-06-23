@@ -38,7 +38,6 @@ export interface SessionParams {
     jdkPath?: string;
     appTopLevelWindow?: string;
     newSessionCommandTimeout?: number;
-    useInternetExplorer?: boolean;
     ieDriverServerPath?: string;
 }
 
@@ -78,7 +77,6 @@ export class AppiumSession {
         if (params.javaSwing !== undefined) {caps['appium:javaSwing'] = params.javaSwing;}
         if (params.jdkPath !== undefined) {caps['appium:jdkPath'] = params.jdkPath;}
         if (params.appTopLevelWindow !== undefined) {caps['appium:appTopLevelWindow'] = params.appTopLevelWindow;}
-        if (params.useInternetExplorer !== undefined) {caps['appium:useInternetExplorer'] = params.useInternetExplorer;}
         if (params.ieDriverServerPath !== undefined) {caps['appium:ieDriverServerPath'] = params.ieDriverServerPath;}
         caps['appium:newCommandTimeout'] = params.newSessionCommandTimeout ?? 3600;
 

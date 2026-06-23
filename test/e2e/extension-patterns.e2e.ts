@@ -5,6 +5,7 @@ import {
     createNotepadSession,
     createTodoSession,
     createExplorerSession,
+    createCharmapSession,
     getNotepadTextArea,
     quitSession,
     resetCalculator,
@@ -196,6 +197,34 @@ describe('windows: pattern extension commands', () => {
 
             const children = await explorer.$$('//TreeItem[@Name="This PC"]/TreeItem');
             expect(children.length).toBe(0);
+        });
+    });
+
+    describe('windows: expand / collapse (ComboBox)', () => {
+        let charmap: Browser;
+
+        beforeAll(async () => {
+            charmap = await createCharmapSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(charmap);
+        });
+
+        it('expands the font ComboBox without error', async () => {
+            const comboBox = await charmap.$('~105');
+            await expect(
+                charmap.executeScript('windows: expand', [comboBox])
+            ).resolves.not.toThrow();
+        });
+
+        it('collapses the font ComboBox without error', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+            await expect(
+                charmap.executeScript('windows: collapse', [comboBox])
+            ).resolves.not.toThrow();
         });
     });
 

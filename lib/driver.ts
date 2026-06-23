@@ -55,6 +55,13 @@ const LOCATION_STRATEGIES = Object.freeze([
     '-windows uiautomation',
 ] as const);
 
+// Routes that must never be proxied to IEDriverServer so our window-management
+// code can intercept them and route between UIA and IE transparently.
+const IE_NO_PROXY: RouteMatcher[] = [
+    ['GET', new RegExp('^/session/[^/]+/window/handles')],
+    ['POST', new RegExp('^/session/[^/]+/window$')],
+];
+
 // This is a set of methods and paths that we never want to proxy to Chromedriver.
 const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
     ['GET', new RegExp('^/session/[^/]+/appium')],
@@ -132,7 +139,9 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     }
 
     override getProxyAvoidList(): RouteMatcher[] {
-        return this.jwpProxyActive && this.chromedriver ? CHROMEDRIVER_NO_PROXY : [];
+        if (this.jwpProxyActive && this.ieProxy) { return IE_NO_PROXY; }
+        if (this.jwpProxyActive && this.chromedriver) { return CHROMEDRIVER_NO_PROXY; }
+        return [];
     }
 
     override async findElement(strategy: string, selector: string): Promise<Element> {
@@ -269,16 +278,8 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                 this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. NovaWindows uses stdin/stdout IPC.`);
             }
 
-            if (this.isIEMode()) {
-                if (this.caps.javaSwing) {
-                    this.log.warn('javaSwing capability is ignored in IE mode (useInternetExplorer/ieDriverServerPath).');
-                }
-                // IE mode: bypass UIA entirely and proxy all commands through IEDriverServer
-                await this.startIESession();
-            } else {
-                // Only inject -javaagent: when we are launching the app ourselves.
-                // When attaching to an already-running app via appTopLevelWindow, the Attach
-                // API path is used instead (post-session, via injectJavaAgent command).
+            // UIA server always starts. IEDriverServer starts lazily on first IE window switch.
+            {
                 const javaSwingLaunchPath = this.caps.javaSwing
                     && !!this.caps.app
                     && this.caps.app !== 'root'
@@ -302,7 +303,6 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                         await this.sendCommand('enableJavaSwing', {});
                         this.log.info('Java agent connected successfully.');
                     } else {
-                        // Attach API path: inject agent into already-running JVM via the window handle.
                         if (!this.caps.appTopLevelWindow) {
                             throw new errors.InvalidArgumentError(
                                 'javaSwing:true with no app requires the appTopLevelWindow capability to identify the Java window.'
@@ -356,34 +356,32 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
             this.currentContext = null;
         }
 
-        if (!this.isIEMode()) {
-            if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
-                try {
-                    if (this.caps['ms:forcequit'] === true) {
-                        // Force quit the process
-                        const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
-                        if (isNotNull) {
-                            const processId = await this.sendCommand('getProperty', { elementId: await this.sendCommand('saveRootElementToTable', {}), property: 'ProcessId' }) as string;
-                            await this.sendCommand('stopProcess', { pid: Number(processId), force: true });
-                        }
-                    } else {
-                        const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
-                        if (rootId) {
-                            await this.sendCommand('closeWindow', { elementId: rootId });
-                        }
+        if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
+            try {
+                if (this.caps['ms:forcequit'] === true) {
+                    // Force quit the process
+                    const isNotNull = await this.sendCommand('checkRootElementNotNull', {}) as boolean;
+                    if (isNotNull) {
+                        const processId = await this.sendCommand('getProperty', { elementId: await this.sendCommand('saveRootElementToTable', {}), property: 'ProcessId' }) as string;
+                        await this.sendCommand('stopProcess', { pid: Number(processId), force: true });
                     }
-                } catch {
-                    // noop
+                } else {
+                    const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
+                    if (rootId) {
+                        await this.sendCommand('closeWindow', { elementId: rootId });
+                    }
                 }
+            } catch {
+                // noop
             }
-            if (this.caps.postrun) {
-                this.log.info('Executing postrun PowerShell script...');
-                await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
-            }
-
-            await this.releaseActions();
-            await this.terminateServerSession();
         }
+        if (this.caps.postrun) {
+            this.log.info('Executing postrun PowerShell script...');
+            await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
+        }
+
+        await this.releaseActions();
+        await this.terminateServerSession();
 
         await super.deleteSession(sessionId);
 

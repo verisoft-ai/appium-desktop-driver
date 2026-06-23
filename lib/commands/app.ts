@@ -9,6 +9,7 @@ import {
     getAllWindowHandles,
     getVisibleWindowsWithTitles,
     getWindowAllHandlesForProcessIds,
+    isIEWindowHwnd,
     keyDown,
     keyUp,
     trySetForegroundWindow,
@@ -97,6 +98,19 @@ export async function getWindowHandles(this: AppiumDesktopDriver): Promise<strin
 
 export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string): Promise<void> {
     const handle = Number(nameOrHandle);
+
+    // Auto-detect IE: if numeric handle and the window belongs to iexplore.exe, enable IE proxy.
+    if (!isNaN(handle) && isIEWindowHwnd(handle)) {
+        this.log.info(`Window 0x${handle.toString(16).padStart(8, '0')} is an IE window — enabling IE proxy.`);
+        await this.enableIEProxy(handle);
+        return;
+    }
+
+    // Switching to a non-IE window: deactivate IE proxy if it was active.
+    if (this.jwpProxyActive && this.ieProxy) {
+        this.disableIEProxy();
+    }
+
     for (let i = 1; i <= SET_WINDOW_MAX_POLL_ATTEMPTS; i++) {
         if (!isNaN(handle)) {
             // Use ElementFromHandle directly — bypasses live-root tree search so
@@ -147,6 +161,18 @@ export async function switchToWindowByTitle(
         });
 
         if (match) {
+            // Auto-detect IE window by process name
+            if (isIEWindowHwnd(match.handle)) {
+                this.log.info(`Window '${match.title}' is an IE window — enabling IE proxy.`);
+                await this.enableIEProxy(match.handle);
+                return;
+            }
+
+            // Non-IE: deactivate IE proxy if active
+            if (this.jwpProxyActive && this.ieProxy) {
+                this.disableIEProxy();
+            }
+
             this.log.info(`Found window with title '${match.title}'. Setting it as the root element.`);
             const elementId = await this.sendCommand('setRootElementFromHandle', { handle: match.handle }) as string | null;
             if (elementId && elementId.trim() !== '') {

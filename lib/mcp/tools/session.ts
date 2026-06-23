@@ -31,12 +31,8 @@ export function registerSessionTools(server: McpServer, session: AppiumSession):
                 jdkPath: z.string().optional().describe('Path to the JDK installation used to inject the Java agent (e.g. "C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21"). Required if javaSwing is true and JAVA_HOME is not set.'),
                 appTopLevelWindow: z.string().optional().describe('Native window handle (decimal or hex string, e.g. "0x001A0B2C") of an already-running window to attach to instead of launching a new app. Use with javaSwing:true to attach the Java agent to an existing Java Swing/AWT window.'),
                 newSessionCommandTimeout: z.number().int().min(0).optional().describe('Seconds of inactivity before Appium auto-closes the session (default: 3600). Maps to Appium newCommandTimeout capability.'),
-                useInternetExplorer: z.boolean().optional().describe(
-                    'Enable legacy Internet Explorer automation. IEDriverServer is downloaded and cached automatically on first use. ' +
-                    'All WebDriver commands are proxied through IEDriverServer instead of UIA.'
-                ),
                 ieDriverServerPath: z.string().optional().describe(
-                    'Absolute path to a local IEDriverServer.exe. Overrides the auto-downloaded binary when useInternetExplorer is true. ' +
+                    'Absolute path to a local IEDriverServer.exe. Overrides the auto-downloaded binary when IE windows are automated. ' +
                     'Example: "C:\\\\WebDriver\\\\IEDriverServer.exe"'
                 ),
             },

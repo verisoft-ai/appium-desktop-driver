@@ -580,30 +580,37 @@ await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program 
 
 ## Internet Explorer
 
-Legacy `iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
-detects IE mode and bypasses its C# server entirely, proxying all
-WebDriver commands through IEDriverServer instead.
+`iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
+auto-detects IE windows by their Win32 class name (`IEFrame`) and
+transparently routes commands through IEDriverServer when the current
+window is IE, and back through UIA for all other windows. No special
+capability is needed.
 
 ### How it works
 
-1. Driver spawns `IEDriverServer.exe` on a free port (5555–5655).
-2. Creates a W3C session on IEDriverServer via HTTP. IEDriverServer
-   launches `iexplore.exe` automatically — no `appium:app` needed.
-3. Sets up `JWProxy` — all incoming WebDriver commands forward to
-   IEDriverServer for the session lifetime.
-4. On `deleteSession`: gracefully closes the IE session, kills
-   IEDriverServer, and resets proxy state.
+1. A standard desktop session starts with UIA active.
+2. When `switchToWindow` or `windows: switchToWindowByTitle` targets an
+   IE window, the driver detects it automatically.
+3. `IEDriverServer.exe` starts lazily on the first IE window switch
+   (port 5555–5655). A W3C session is created on IEDriverServer.
+4. `JWProxy` activates — WebDriver commands forward to IEDriverServer,
+   which resolves them against the IE DOM via COM.
+5. Switching to a non-IE window deactivates the proxy; UIA resumes.
+   IEDriverServer stays running for subsequent IE switches.
+6. On `deleteSession`: IE session is closed, IEDriverServer is killed,
+   and all state is reset.
 
 ### Capabilities
 
+No capability is required to automate IE. The only optional override:
+
 | Capability | Type | Description |
 | --- | --- | --- |
-| `appium:useInternetExplorer` | boolean | Enable IE mode. IEDriverServer is downloaded and cached automatically on first use. |
 | `appium:ieDriverServerPath` | string | Path to a local `IEDriverServer.exe`. Overrides the auto-downloaded binary. |
 
 ### IEDriverServer auto-download
 
-On first use, the driver downloads
+On first IE window switch, the driver downloads
 `IEDriverServer_Win32_4.14.0.zip` from the Selenium GitHub releases
 and caches the extracted binary at:
 
@@ -625,13 +632,35 @@ Before automating IE, apply these settings in Internet Options:
 - **View menu** — set Zoom to exactly 100%
 
 Mismatched Protected Mode across zones is the most common cause of
-session creation failing with HTTP 500.
+IEDriverServer session creation failing.
+
+### Mixed-window sessions
+
+IE and non-IE windows can be used in the same session:
+
+```js
+// Start a plain desktop session
+const driver = await remote({ capabilities: { platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver', 'appium:app': 'Root' } });
+
+// Switch to IE — proxy activates automatically
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Internet Explorer' }]);
+const h1 = await driver.$('h1');
+console.log(await h1.getText()); // IE DOM result
+
+// Switch to Notepad — UIA resumes automatically
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
+const src = await driver.getPageSource(); // UIA tree
+
+// Switch back to IE — proxy re-activates
+await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Internet Explorer' }]);
+```
 
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| HTTP 500 on session create | Protected Mode mismatch | Disable PM on all four zones |
+| IEDriverServer session fails on first IE switch | Protected Mode mismatch | Disable PM on all four zones in Internet Options → Security |
 | "did not become ready" | Wrong path or missing VC++ | Run `IEDriverServer.exe --port=5555` manually to confirm it starts |
 | Navigation fails | Enhanced Protected Mode on | Disable in Internet Options → Advanced |
 | `IEDriverServer.exe` not found | Auto-download failed | Check internet access; or supply `appium:ieDriverServerPath` |
@@ -640,33 +669,26 @@ IEDriverServer is a native C++ binary. It requires the
 Visual C++ 2019 Redistributable (x86), available from
 <https://aka.ms/vs/17/release/vc_redist.x86.exe>.
 
+### Locator strategies in IE windows
+
+When the active window is IE, commands route through IEDriverServer.
+UIA-specific locators are not available — use standard WebDriver selectors:
+
+`css selector`, `xpath`, `id`, `name`, `tag name`, `link text`, `partial link text`
+
+These are resolved by IEDriverServer against the IE DOM via COM.
+
 ### Limitations
 
-`windows:` extension commands are **not available** in IE mode. All
-WebDriver commands (including `executeScript`) are proxied directly to
-IEDriverServer, which does not understand the `windows:` protocol.
+When the active window is IE, the following are not available:
+Java Swing agent, WebView2/CDP, screen recording, clipboard API,
+`appium:prerun`/`appium:postrun`, and UIA locator strategies
+(`accessibility id`, `-windows uiautomation`, `class name`).
 
-Use standard WebDriver commands instead — IEDriverServer handles them
-via COM automation against the IE DOM:
-
-| Task | Standard WebDriver command | Instead of |
-| --- | --- | --- |
-| Click an element | `element.click()` | `windows: click` |
-| Type into a field | `element.setValue('text')` | `windows: keys` |
-| Read field value | `element.getValue()` | `windows: getValue` |
-| Submit a form | `element.click()` on submit button | `windows: invoke` |
-| Navigate | `driver.url('https://...')` | — |
-| Find elements | `driver.$('css selector')` | UIA locators |
-| Execute JS in page | `driver.execute('return ...')` | — |
-
-UIA locator strategies (`accessibility id`, `-windows uiautomation`,
-`class name`) are not available. Use `css selector`, `xpath`, `id`,
-`name`, `tag name`, `link text`, or `partial link text` — standard
-selectors that IEDriverServer resolves against the IE DOM.
-
-Other unavailable features: Java Swing agent, WebView2/CDP,
-screen recording, clipboard API, `appium:prerun`/`appium:postrun`.
-`appium:javaSwing` is silently ignored.
+`windows:` extension commands other than `switchToWindowByTitle` and
+`getWindowHandles` are forwarded to IEDriverServer and will return an
+error if IEDriverServer does not support them. Use standard WebDriver
+equivalents (`element.click()`, `driver.url()`, etc.) for IE windows.
 
 Supported on Windows 10 with IE 11 only.
 

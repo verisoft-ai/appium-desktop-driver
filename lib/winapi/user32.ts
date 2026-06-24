@@ -933,6 +933,11 @@ export function trySetForegroundWindow(windowHandle: number): boolean {
         return false;
     }
 
+    // Any SendInput event grants our thread foreground-set permission.
+    // Use Control (not Alt) to avoid activating menu-bar accelerator hints.
+    sendKeyInput(Key.CONTROL, true);
+    sendKeyInput(Key.CONTROL, false);
+
     const hForeground = GetForegroundWindow();
     if (!hForeground) {
         return SetForegroundWindow(targetHWnd);

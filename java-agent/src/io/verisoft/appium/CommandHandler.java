@@ -4,6 +4,7 @@ import javax.accessibility.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.List;
@@ -38,8 +39,11 @@ public class CommandHandler {
             case "getValue":       return getValue(params, registry);
             case "setValue":       return setValue(params, registry);
             case "invoke":         return invokeAction(params, registry);
-            case "isAlive":        return registry.isAlive((String) params.get("id"));
+            case "expandElement":  return expandElement(params, registry);
+            case "selectElement":  return selectElement(params, registry);
+            case "isAlive":        return registry.isAlive((String) params.get("id")); // works for both Component and virtual
             case "getToggleState": return getToggleState(params, registry);
+            case "requestFocus":   return requestFocus(params, registry);
             default: throw new IllegalArgumentException("Unknown command: " + command);
         }
     }
@@ -93,17 +97,31 @@ public class CommandHandler {
     // ── Children ───────────────────────────────────────────────────────────────
 
     private static Object getChildren(Map<String, Object> params, ComponentRegistry registry) {
-        Component parent = registry.get((String) params.get("id"));
+        String id = (String) params.get("id");
         List<Map<String, Object>> result = new ArrayList<>();
-        AccessibleContext ac = parent.getAccessibleContext();
+
+        AccessibleContext ac;
+        if (registry.isComponent(id)) {
+            Component parent = registry.get(id);
+            ac = parent.getAccessibleContext();
+        } else {
+            Accessible parent = registry.getAccessible(id);
+            ac = parent.getAccessibleContext();
+        }
+
         if (ac == null) return result;
         int count = ac.getAccessibleChildrenCount();
         for (int i = 0; i < count; i++) {
             Accessible child = ac.getAccessibleChild(i);
+            if (child == null) continue;
             if (child instanceof Component) {
                 Component cc = (Component) child;
                 String cid = registry.save(cc);
                 result.add(buildInfo(cc, cid));
+            } else {
+                // Virtual child (e.g. JList items, table cells) — not a Component but still Accessible
+                String cid = registry.saveAccessible(child);
+                result.add(buildInfoFromAccessible(child, cid));
             }
         }
         return result;
@@ -112,8 +130,11 @@ public class CommandHandler {
     // ── Info ───────────────────────────────────────────────────────────────────
 
     private static Object getInfo(Map<String, Object> params, ComponentRegistry registry) {
-        Component c = registry.get((String) params.get("id"));
-        return buildInfo(c, (String) params.get("id"));
+        String id = (String) params.get("id");
+        if (registry.isComponent(id)) {
+            return buildInfo(registry.get(id), id);
+        }
+        return buildInfoFromAccessible(registry.getAccessible(id), id);
     }
 
     static Map<String, Object> buildInfo(Component c, String id) {
@@ -183,110 +204,333 @@ public class CommandHandler {
         return info;
     }
 
+    static Map<String, Object> buildInfoFromAccessible(Accessible a, String id) {
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("id", id);
+        info.put("JavaClass", a.getClass().getName());
+        info.put("JavaSimpleClass", a.getClass().getSimpleName());
+
+        AccessibleContext ac = a.getAccessibleContext();
+        if (ac != null) {
+            info.put("Name", nullToEmpty(ac.getAccessibleName()));
+            info.put("AutomationId", nullToEmpty(ac.getAccessibleName()));
+            info.put("Description", nullToEmpty(ac.getAccessibleDescription()));
+            AccessibleRole role = ac.getAccessibleRole();
+            String roleStr = role != null ? role.toDisplayString(Locale.US) : "";
+            info.put("ClassName", roleStr);
+            info.put("LocalizedControlType", role != null ? role.toDisplayString() : "");
+
+            AccessibleStateSet states = ac.getAccessibleStateSet();
+            StringBuilder stateStr = new StringBuilder();
+            if (states != null) {
+                for (AccessibleState s : states.toArray()) {
+                    if (stateStr.length() > 0) stateStr.append(",");
+                    stateStr.append(s.toDisplayString(Locale.US).toLowerCase(Locale.US));
+                }
+            }
+            info.put("States", stateStr.toString());
+
+            boolean enabled = states != null && states.contains(AccessibleState.ENABLED);
+            info.put("IsEnabled", enabled);
+
+            // Bounds via AccessibleComponent
+            AccessibleComponent comp = ac.getAccessibleComponent();
+            if (comp != null) {
+                try {
+                    Point loc = comp.getLocationOnScreen();
+                    Dimension size = comp.getSize();
+                    info.put("x", loc.x);
+                    info.put("y", loc.y);
+                    info.put("width", size.width);
+                    info.put("height", size.height);
+                    info.put("IsOffscreen", false);
+                } catch (Exception e) {
+                    info.put("x", -1);
+                    info.put("y", -1);
+                    info.put("width", 0);
+                    info.put("height", 0);
+                    info.put("IsOffscreen", true);
+                }
+            } else {
+                info.put("x", -1);
+                info.put("y", -1);
+                info.put("width", 0);
+                info.put("height", 0);
+                info.put("IsOffscreen", true);
+            }
+
+            info.put("childCount", ac.getAccessibleChildrenCount());
+            info.put("IndexInParent", ac.getAccessibleIndexInParent());
+        } else {
+            info.put("Name", "");
+            info.put("AutomationId", "");
+            info.put("Description", "");
+            info.put("ClassName", "");
+            info.put("LocalizedControlType", "");
+            info.put("States", "");
+            info.put("IsEnabled", false);
+            info.put("IsOffscreen", true);
+            info.put("x", -1);
+            info.put("y", -1);
+            info.put("width", 0);
+            info.put("height", 0);
+            info.put("childCount", 0);
+            info.put("IndexInParent", 0);
+        }
+
+        return info;
+    }
+
     // ── Find ───────────────────────────────────────────────────────────────────
 
     private static Object findFirst(Map<String, Object> params, ComponentRegistry registry) {
-        Component root = registry.get((String) params.get("rootId"));
+        String rootId = (String) params.get("rootId");
         @SuppressWarnings("unchecked")
         Map<String, Object> condition = (Map<String, Object>) params.get("condition");
         String scope = (String) params.getOrDefault("scope", "descendants");
 
-        if ("element".equals(scope)) {
-            return matchesCondition(root, condition) ? (Object) params.get("rootId") : null;
+        if (registry.isComponent(rootId)) {
+            Component root = registry.get(rootId);
+            if ("element".equals(scope)) {
+                return matchesCondition(root, condition) ? rootId : null;
+            }
+            if ("children".equals(scope)) {
+                return findInDirectChildren(root.getAccessibleContext(), condition, registry);
+            }
+            boolean includeSelf = "subtree".equals(scope);
+            Accessible rootAsAccessible = (root instanceof Accessible) ? (Accessible) root : null;
+            return findFirstRecursive(root.getAccessibleContext(), includeSelf ? rootAsAccessible : null,
+                    rootId, condition, registry, 0);
+        } else {
+            Accessible root = registry.getAccessible(rootId);
+            AccessibleContext ac = root.getAccessibleContext();
+            if ("element".equals(scope)) {
+                return matchesAccessible(root, condition) ? rootId : null;
+            }
+            if ("children".equals(scope)) {
+                return findInDirectChildren(ac, condition, registry);
+            }
+            boolean includeSelf = "subtree".equals(scope);
+            return findFirstRecursive(ac, includeSelf ? root : null, rootId, condition, registry, 0);
         }
-        if ("children".equals(scope)) {
-            return findInDirectChildren(root, condition, registry);
-        }
-        boolean includeSelf = "subtree".equals(scope);
-        return findFirstRecursive(root, condition, includeSelf, registry, 0);
     }
 
     private static Object findAll(Map<String, Object> params, ComponentRegistry registry) {
-        Component root = registry.get((String) params.get("rootId"));
+        String rootId = (String) params.get("rootId");
         @SuppressWarnings("unchecked")
         Map<String, Object> condition = (Map<String, Object>) params.get("condition");
         String scope = (String) params.getOrDefault("scope", "descendants");
 
         List<String> results = new ArrayList<>();
-        if ("element".equals(scope)) {
-            if (matchesCondition(root, condition)) results.add((String) params.get("rootId"));
-            return results;
+        if (registry.isComponent(rootId)) {
+            Component root = registry.get(rootId);
+            if ("element".equals(scope)) {
+                if (matchesCondition(root, condition)) results.add(rootId);
+                return results;
+            }
+            if ("children".equals(scope)) {
+                collectDirectChildren(root.getAccessibleContext(), condition, registry, results);
+                return results;
+            }
+            boolean includeSelf = "subtree".equals(scope);
+            Accessible rootAsAccessible = (root instanceof Accessible) ? (Accessible) root : null;
+            findAllRecursive(root.getAccessibleContext(), includeSelf ? rootAsAccessible : null,
+                    rootId, condition, registry, results, 0);
+        } else {
+            Accessible root = registry.getAccessible(rootId);
+            AccessibleContext ac = root.getAccessibleContext();
+            if ("element".equals(scope)) {
+                if (matchesAccessible(root, condition)) results.add(rootId);
+                return results;
+            }
+            if ("children".equals(scope)) {
+                collectDirectChildren(ac, condition, registry, results);
+                return results;
+            }
+            boolean includeSelf = "subtree".equals(scope);
+            findAllRecursive(ac, includeSelf ? root : null, rootId, condition, registry, results, 0);
         }
-        if ("children".equals(scope)) {
-            collectDirectChildren(root, condition, registry, results);
-            return results;
-        }
-        boolean includeSelf = "subtree".equals(scope);
-        findAllRecursive(root, condition, includeSelf, registry, results, 0);
         return results;
     }
 
-    private static String findInDirectChildren(Component parent, Map<String, Object> condition, ComponentRegistry registry) {
-        AccessibleContext ac = parent.getAccessibleContext();
+    private static String findInDirectChildren(AccessibleContext ac, Map<String, Object> condition, ComponentRegistry registry) {
         if (ac == null) return null;
         int count = ac.getAccessibleChildrenCount();
         for (int i = 0; i < count; i++) {
             Accessible child = ac.getAccessibleChild(i);
+            if (child == null) continue;
             if (child instanceof Component) {
                 Component cc = (Component) child;
                 if (matchesCondition(cc, condition)) return registry.save(cc);
+            } else {
+                if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
             }
         }
         return null;
     }
 
-    private static void collectDirectChildren(Component parent, Map<String, Object> condition, ComponentRegistry registry, List<String> results) {
-        AccessibleContext ac = parent.getAccessibleContext();
+    private static void collectDirectChildren(AccessibleContext ac, Map<String, Object> condition, ComponentRegistry registry, List<String> results) {
         if (ac == null) return;
         int count = ac.getAccessibleChildrenCount();
         for (int i = 0; i < count; i++) {
             Accessible child = ac.getAccessibleChild(i);
+            if (child == null) continue;
             if (child instanceof Component) {
                 Component cc = (Component) child;
                 if (matchesCondition(cc, condition)) results.add(registry.save(cc));
+            } else {
+                if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
             }
         }
     }
 
-    private static String findFirstRecursive(Component node, Map<String, Object> condition,
-            boolean includeSelf, ComponentRegistry registry, int depth) {
+    /**
+     * @param ac          AccessibleContext of the node being searched
+     * @param selfNode    non-null when includeSelf=true for this level
+     * @param selfId      registry id of selfNode (used when selfNode matches)
+     */
+    private static String findFirstRecursive(AccessibleContext ac, Accessible selfNode, String selfId,
+            Map<String, Object> condition, ComponentRegistry registry, int depth) {
         if (depth > 100) return null;
-        if (includeSelf && matchesCondition(node, condition)) {
-            return registry.save(node);
+        if (selfNode != null) {
+            boolean matches = (selfNode instanceof Component)
+                    ? matchesCondition((Component) selfNode, condition)
+                    : matchesAccessible(selfNode, condition);
+            if (matches) return selfId;
         }
-        AccessibleContext ac = node.getAccessibleContext();
         if (ac == null) return null;
         int count = ac.getAccessibleChildrenCount();
         for (int i = 0; i < count; i++) {
             Accessible child = ac.getAccessibleChild(i);
-            if (!(child instanceof Component)) continue;
-            Component cc = (Component) child;
-            if (matchesCondition(cc, condition)) return registry.save(cc);
-            String found = findFirstRecursive(cc, condition, false, registry, depth + 1);
-            if (found != null) return found;
+            if (child == null) continue;
+            if (child instanceof Component) {
+                Component cc = (Component) child;
+                if (matchesCondition(cc, condition)) return registry.save(cc);
+                String found = findFirstRecursive(cc.getAccessibleContext(), null, null,
+                        condition, registry, depth + 1);
+                if (found != null) return found;
+            } else {
+                if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
+                AccessibleContext childAc = child.getAccessibleContext();
+                String found = findFirstRecursive(childAc, null, null, condition, registry, depth + 1);
+                if (found != null) return found;
+            }
         }
         return null;
     }
 
-    private static void findAllRecursive(Component node, Map<String, Object> condition,
-            boolean includeSelf, ComponentRegistry registry, List<String> results, int depth) {
+    private static void findAllRecursive(AccessibleContext ac, Accessible selfNode, String selfId,
+            Map<String, Object> condition, ComponentRegistry registry, List<String> results, int depth) {
         if (depth > 100) return;
-        if (includeSelf && matchesCondition(node, condition)) {
-            results.add(registry.save(node));
+        if (selfNode != null) {
+            boolean matches = (selfNode instanceof Component)
+                    ? matchesCondition((Component) selfNode, condition)
+                    : matchesAccessible(selfNode, condition);
+            if (matches) results.add(selfId);
         }
-        AccessibleContext ac = node.getAccessibleContext();
         if (ac == null) return;
         int count = ac.getAccessibleChildrenCount();
         for (int i = 0; i < count; i++) {
             Accessible child = ac.getAccessibleChild(i);
-            if (!(child instanceof Component)) continue;
-            Component cc = (Component) child;
-            if (matchesCondition(cc, condition)) results.add(registry.save(cc));
-            findAllRecursive(cc, condition, false, registry, results, depth + 1);
+            if (child == null) continue;
+            if (child instanceof Component) {
+                Component cc = (Component) child;
+                if (matchesCondition(cc, condition)) results.add(registry.save(cc));
+                findAllRecursive(cc.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
+            } else {
+                if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
+                findAllRecursive(child.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
+            }
         }
     }
 
     // ── Condition matching ─────────────────────────────────────────────────────
+
+    /** Matches a virtual (non-Component) Accessible against a condition. */
+    static boolean matchesAccessible(Accessible a, Map<String, Object> condition) {
+        if (condition == null) return true;
+        String type = (String) condition.get("type");
+        if (type == null || "true".equals(type)) return true;
+        if ("false".equals(type)) return false;
+
+        if ("not".equals(type)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> inner = (Map<String, Object>) condition.get("condition");
+            return !matchesAccessible(a, inner);
+        }
+        if ("and".equals(type)) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> conditions = (List<Map<String, Object>>) condition.get("conditions");
+            if (conditions == null) return true;
+            for (Map<String, Object> sub : conditions) {
+                if (!matchesAccessible(a, sub)) return false;
+            }
+            return true;
+        }
+        if ("or".equals(type)) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> conditions = (List<Map<String, Object>>) condition.get("conditions");
+            if (conditions == null) return false;
+            for (Map<String, Object> sub : conditions) {
+                if (matchesAccessible(a, sub)) return true;
+            }
+            return false;
+        }
+        if ("property".equals(type)) {
+            String prop = (String) condition.get("property");
+            Object valObj = condition.get("value");
+            String value = valObj instanceof String ? (String) valObj : String.valueOf(valObj);
+            return matchesAccessibleProperty(a, prop, value);
+        }
+        return false;
+    }
+
+    private static boolean matchesAccessibleProperty(Accessible a, String property, String value) {
+        AccessibleContext ac = a.getAccessibleContext();
+        String prop = property.toLowerCase(Locale.US);
+        switch (prop) {
+            case "name":
+            case "automationid": {
+                String name = ac != null ? nullToEmpty(ac.getAccessibleName()) : "";
+                return name.equals(value);
+            }
+            case "description":
+            case "helptext": {
+                String desc = ac != null ? nullToEmpty(ac.getAccessibleDescription()) : "";
+                return desc.equals(value);
+            }
+            case "controltype":
+            case "classname":
+            case "localizedcontroltype": {
+                if (ac == null) return false;
+                AccessibleRole role = ac.getAccessibleRole();
+                if (role == null) return false;
+                if ("controltype".equals(prop)) {
+                    String javaRole = uiaControlTypeToJavaRole(value);
+                    return javaRole != null && role.toDisplayString(Locale.US).equalsIgnoreCase(javaRole);
+                }
+                String roleNorm = role.toDisplayString(Locale.US).toLowerCase(Locale.US).replaceAll("[\\s\\-_]+", "");
+                String valueNorm = value.toLowerCase(Locale.US).replaceAll("[\\s\\-_]+", "");
+                return roleNorm.equals(valueNorm);
+            }
+            case "javaclass":
+                return a.getClass().getName().equals(value);
+            case "javasimpleclass":
+                return a.getClass().getSimpleName().equals(value);
+            case "isenabled": {
+                if (ac == null) return false;
+                AccessibleStateSet states = ac.getAccessibleStateSet();
+                boolean enabled = states != null && states.contains(AccessibleState.ENABLED);
+                return enabled == parseBool(value);
+            }
+            case "indexinparent": {
+                if (ac == null) return false;
+                return String.valueOf(ac.getAccessibleIndexInParent()).equals(value);
+            }
+            default:
+                return false;
+        }
+    }
 
     static boolean matchesCondition(Component c, Map<String, Object> condition) {
         if (condition == null) return true;
@@ -420,14 +664,127 @@ public class CommandHandler {
         return "true".equalsIgnoreCase(v) || "1".equals(v);
     }
 
+    // ── Expand (open popup / dropdown) ────────────────────────────────────────
+
+    private static Object expandElement(Map<String, Object> params, ComponentRegistry registry) throws Exception {
+        String id = (String) params.get("id");
+        AccessibleContext ac;
+        if (registry.isComponent(id)) {
+            ac = registry.get(id).getAccessibleContext();
+        } else {
+            ac = registry.getAccessible(id).getAccessibleContext();
+        }
+        if (ac == null) throw new RuntimeException("Element has no AccessibleContext — cannot expand");
+
+        AccessibleAction aa = ac.getAccessibleAction();
+        if (aa == null || aa.getAccessibleActionCount() == 0) {
+            throw new RuntimeException("JAB_NO_EXPAND_ACTION");
+        }
+
+        final String[] error = {null};
+        SwingUtilities.invokeAndWait(() -> {
+            try { aa.doAccessibleAction(0); }
+            catch (Exception e) { error[0] = e.getMessage(); }
+        });
+        if (error[0] != null) throw new RuntimeException("expand failed: " + error[0]);
+        return null;
+    }
+
+    // ── Select (combo box / list item) ────────────────────────────────────────
+
+    private static Object selectElement(Map<String, Object> params, ComponentRegistry registry) throws Exception {
+        String id = (String) params.get("id");
+
+        if (registry.isComponent(id)) {
+            return invokeAction(params, registry);
+        }
+
+        Accessible a = registry.getAccessible(id);
+        AccessibleContext itemAc = a.getAccessibleContext();
+        if (itemAc == null) throw new RuntimeException("No AccessibleContext on virtual item: " + id);
+        int index = itemAc.getAccessibleIndexInParent();
+        if (index < 0) throw new RuntimeException("Virtual item has no valid index in parent: " + id);
+
+        JList<?> jList = findOwningList(a);
+        if (jList != null) {
+            JComboBox<?> combo = findOwningCombo(jList);
+            if (combo != null) {
+                final JComboBox<?> finalCombo = combo;
+                SwingUtilities.invokeAndWait(() -> {
+                    finalCombo.setSelectedIndex(index);
+                    finalCombo.setPopupVisible(false);
+                });
+                return null;
+            }
+            final JList<?> finalList = jList;
+            SwingUtilities.invokeAndWait(() -> finalList.setSelectedIndex(index));
+            return null;
+        }
+
+        // Fallback: invoke AccessibleAction[0]
+        return invokeAction(params, registry);
+    }
+
+    private static JList<?> findOwningList(Accessible a) {
+        AccessibleContext ac = a.getAccessibleContext();
+        Accessible parent = ac != null ? ac.getAccessibleParent() : null;
+        while (parent != null) {
+            if (parent instanceof JList) return (JList<?>) parent;
+            AccessibleContext pac = parent.getAccessibleContext();
+            parent = pac != null ? pac.getAccessibleParent() : null;
+        }
+        return null;
+    }
+
+    private static JComboBox<?> findOwningCombo(JList<?> list) {
+        // Lightweight popup: combo is a direct AWT ancestor
+        Container ancestor = SwingUtilities.getAncestorOfClass(JComboBox.class, list);
+        if (ancestor instanceof JComboBox) return (JComboBox<?>) ancestor;
+        // Heavy-weight popup: popup is a separate window; walk via BasicComboPopup back-reference
+        Container parent = list.getParent();
+        while (parent != null) {
+            try {
+                Field f = parent.getClass().getDeclaredField("comboBox");
+                f.setAccessible(true);
+                Object val = f.get(parent);
+                if (val instanceof JComboBox) return (JComboBox<?>) val;
+            } catch (Exception ignored) {}
+            parent = parent.getParent();
+        }
+        return null;
+    }
+
     // ── Text access ────────────────────────────────────────────────────────────
 
     private static Object getValue(Map<String, Object> params, ComponentRegistry registry) {
-        Component c = registry.get((String) params.get("id"));
-        return getComponentText(c);
+        String id = (String) params.get("id");
+        if (registry.isComponent(id)) {
+            return getComponentText(registry.get(id));
+        }
+        Accessible a = registry.getAccessible(id);
+        AccessibleContext ac = a.getAccessibleContext();
+        if (ac != null) {
+            AccessibleText at = ac.getAccessibleText();
+            if (at != null && at.getCharCount() > 0) {
+                AccessibleEditableText aet = ac.getAccessibleEditableText();
+                if (aet != null) {
+                    try { return aet.getTextRange(0, at.getCharCount()); } catch (Exception ignored) {}
+                }
+                // text read failed — name is not the value
+                return "";
+            }
+            String name = ac.getAccessibleName();
+            if (name != null && !name.isEmpty()) return name;
+        }
+        return "";
     }
 
     static String getComponentText(Component c) {
+        // JComboBox: return the selected item's string, not the component name
+        if (c instanceof JComboBox) {
+            Object selected = ((JComboBox<?>) c).getSelectedItem();
+            return selected != null ? selected.toString() : "";
+        }
         AccessibleContext ac = c.getAccessibleContext();
         if (ac != null) {
             AccessibleText at = ac.getAccessibleText();
@@ -447,6 +804,7 @@ public class CommandHandler {
                         Method m = c.getClass().getMethod("getText");
                         return String.valueOf(m.invoke(c));
                     } catch (Exception ignored) {}
+                    return text;
                 }
                 return "";
             }
@@ -496,8 +854,32 @@ public class CommandHandler {
     // ── invoke ─────────────────────────────────────────────────────────────────
 
     private static Object invokeAction(Map<String, Object> params, ComponentRegistry registry) throws Exception {
-        Component c = registry.get((String) params.get("id"));
+        String id = (String) params.get("id");
 
+        if (!registry.isComponent(id)) {
+            // Virtual Accessible (e.g. list item) — fire AccessibleAction[0]
+            Accessible a = registry.getAccessible(id);
+            final String[] error = {null};
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    AccessibleContext ac = a.getAccessibleContext();
+                    if (ac != null) {
+                        AccessibleAction aa = ac.getAccessibleAction();
+                        if (aa != null && aa.getAccessibleActionCount() > 0) {
+                            aa.doAccessibleAction(0);
+                            return;
+                        }
+                    }
+                    error[0] = "Virtual element has no AccessibleAction";
+                } catch (Exception e) {
+                    error[0] = e.getMessage();
+                }
+            });
+            if (error[0] != null) throw new RuntimeException("invoke failed: " + error[0]);
+            return null;
+        }
+
+        Component c = registry.get(id);
         final String[] error = {null};
         SwingUtilities.invokeAndWait(() -> {
             try {
@@ -528,8 +910,13 @@ public class CommandHandler {
     // ── toggle state ───────────────────────────────────────────────────────────
 
     private static Object getToggleState(Map<String, Object> params, ComponentRegistry registry) {
-        Component c = registry.get((String) params.get("id"));
-        AccessibleContext ac = c.getAccessibleContext();
+        String id = (String) params.get("id");
+        AccessibleContext ac;
+        if (registry.isComponent(id)) {
+            ac = registry.get(id).getAccessibleContext();
+        } else {
+            ac = registry.getAccessible(id).getAccessibleContext();
+        }
         if (ac == null) return "Off";
         AccessibleStateSet states = ac.getAccessibleStateSet();
         if (states == null) return "Off";
@@ -537,6 +924,34 @@ public class CommandHandler {
         if (states.contains(AccessibleState.CHECKED)) return "On";
         if (states.contains(AccessibleState.SELECTED)) return "On";
         return "Off";
+    }
+
+    // ── Focus ──────────────────────────────────────────────────────────────────
+
+    private static Object requestFocus(Map<String, Object> params, ComponentRegistry registry) throws Exception {
+        String id = (String) params.get("id");
+        Component c;
+        if (registry.isComponent(id)) {
+            c = registry.get(id);
+        } else {
+            // Virtual elements can't own focus — focus nearest Component ancestor (e.g. the JList)
+            Accessible a = registry.getAccessible(id);
+            c = findNearestComponentAncestor(a);
+            if (c == null) return null;
+        }
+        SwingUtilities.invokeAndWait(c::requestFocusInWindow);
+        return null;
+    }
+
+    private static Component findNearestComponentAncestor(Accessible a) {
+        AccessibleContext ac = a.getAccessibleContext();
+        Accessible parent = ac != null ? ac.getAccessibleParent() : null;
+        while (parent != null) {
+            if (parent instanceof Component) return (Component) parent;
+            AccessibleContext pac = parent.getAccessibleContext();
+            parent = pac != null ? pac.getAccessibleParent() : null;
+        }
+        return null;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

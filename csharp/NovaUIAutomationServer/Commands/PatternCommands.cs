@@ -48,8 +48,20 @@ public static class PatternCommands
 
     public static object? Expand(SessionState state, JsonElement? parameters)
     {
-        var p = RequirePattern<IUIAutomationExpandCollapsePattern>(state, parameters, UIA.ExpandCollapsePatternId, "ExpandCollapsePattern");
-        p.Expand();
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var elementId = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        if (JavaAgentElement.IsJavaId(elementId))
+        {
+            // Throws with "JAB_NO_EXPAND_ACTION" when AccessibleAction unavailable —
+            // caller (TypeScript patternExpand) catches and falls back to ALT+Down.
+            state.Java!.Expand(state.Java.GetById(elementId));
+            return null;
+        }
+
+        var pattern = RequirePattern<IUIAutomationExpandCollapsePattern>(state, parameters, UIA.ExpandCollapsePatternId, "ExpandCollapsePattern");
+        pattern.Expand();
         return null;
     }
 
@@ -123,8 +135,18 @@ public static class PatternCommands
 
     public static object? Select(SessionState state, JsonElement? parameters)
     {
-        var p = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");
-        p.Select();
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var elementId = p.GetProperty("elementId").GetString()
+            ?? throw new ArgumentException("elementId is required.");
+
+        if (JavaAgentElement.IsJavaId(elementId))
+        {
+            state.Java!.Select(state.Java.GetById(elementId));
+            return null;
+        }
+
+        var pattern = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");
+        pattern.Select();
         return null;
     }
 

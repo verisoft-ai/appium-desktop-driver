@@ -302,6 +302,51 @@ describe('Java Swing Form', () => {
         });
     });
 
+    describe('department comboBox — virtual children (ALT+Down expand fallback)', () => {
+        it('department combo exists', async () => {
+            const combo = await driver.$('~department');
+            expect(await combo.isExisting()).toBe(true);
+        });
+
+        it('windows: expand opens popup via ALT+Down fallback (no AccessibleAction)', async () => {
+            const combo = await driver.$('~department');
+
+            // No AccessibleAction on this combo — driver falls back to focus + ALT+Down
+            await driver.executeScript('windows: expand', [combo]);
+            await driver.pause(300); // let popup open
+
+            const source = await driver.getPageSource();
+            expect(source).toContain('Engineering');
+            expect(source).toContain('Finance');
+            expect(source).toContain('HR');
+            expect(source).toContain('Marketing');
+        });
+
+        it('windows: select on a list item selects it and closes the popup', async () => {
+            const combo = await driver.$('~department');
+            await driver.executeScript('windows: expand', [combo]);
+            await driver.pause(300);
+
+            const item = await driver.$('~Finance');
+            await driver.executeScript('windows: select', [item]);
+            await driver.pause(200);
+
+            expect(await combo.getText()).toBe('Finance');
+        });
+
+        it('windows: expand + windows: select round-trip works for a different item', async () => {
+            const combo = await driver.$('~department');
+            await driver.executeScript('windows: expand', [combo]);
+            await driver.pause(300);
+
+            const item = await driver.$('~Marketing');
+            await driver.executeScript('windows: select', [item]);
+            await driver.pause(200);
+
+            expect(await combo.getText()).toBe('Marketing');
+        });
+    });
+
     describe('getPageSource', () => {
         it('returns non-empty XML string', async () => {
             const source = await driver.getPageSource();
@@ -375,8 +420,10 @@ describe('Java Swing Form', () => {
 
         it('"combo box" finds JComboBox', async () => {
             const combos = await driver.$$('.combo box');
-            expect(combos.length).toBe(1);
-            expect(await combos[0].getAttribute('Name')).toBe('country');
+            expect(combos.length).toBe(2);
+            const names = await combos.map((c) => c.getAttribute('Name'));
+            expect(names).toContain('country');
+            expect(names).toContain('department');
         });
 
         it('"label" finds all JLabel components', async () => {
@@ -464,7 +511,7 @@ describe('Java Swing Form', () => {
 
         it('"ComboBox" finds JComboBox', async () => {
             const combos = await driver.findElements('tag name', 'ComboBox');
-            expect(combos.length).toBe(1);
+            expect(combos.length).toBe(2);
             expect(await driver.getElementAttribute(combos[0][ELEMENT_KEY], 'Name')).toBe('country');
         });
     });

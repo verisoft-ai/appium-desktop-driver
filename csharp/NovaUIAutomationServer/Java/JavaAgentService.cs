@@ -190,6 +190,28 @@ internal sealed class JavaAgentService : IDisposable
         Thread.Sleep(50);
     }
 
+    public void Select(JavaAgentElement el)
+    {
+        Call("selectElement", new { id = el.Id });
+        Thread.Sleep(50);
+    }
+
+    public void RequestFocus(JavaAgentElement el)
+    {
+        Call("requestFocus", new { id = el.Id });
+    }
+
+    /// <summary>
+    /// Tries to expand the element via AccessibleAction[0].
+    /// Throws InvalidOperationException with message "JAB_NO_EXPAND_ACTION" when the element
+    /// has no accessible action — caller should fall back to keyboard (ALT+Down).
+    /// </summary>
+    public void Expand(JavaAgentElement el)
+    {
+        Call("expandElement", new { id = el.Id });
+        Thread.Sleep(50);
+    }
+
     // ── Page source XML ────────────────────────────────────────────────────────
 
     public void BuildXml(JavaAgentElement node, XmlDocument doc, XmlElement? parent)

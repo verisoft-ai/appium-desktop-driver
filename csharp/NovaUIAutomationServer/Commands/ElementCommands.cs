@@ -20,7 +20,7 @@ public static class ElementCommands
         {
             var javaEl = state.Java!.GetById(elementId);
             var lowerProp = propertyName.ToLowerInvariant();
-            if (lowerProp is "isenabled" or "isoffscreen" or "haskeyboardfocus" or "iskeyboardfocusable" or "clickablepoint")
+            if (lowerProp is "isenabled" or "isoffscreen" or "haskeyboardfocus" or "iskeyboardfocusable" or "clickablepoint" or "states")
             {
                 state.Java.GetFreshInfo(javaEl);
             }
@@ -204,8 +204,11 @@ public static class ElementCommands
         var elementId = p.GetProperty("elementId").GetString()
             ?? throw new ArgumentException("elementId is required.");
 
-        // Java agent: no direct focus API — skip silently
-        if (JavaAgentElement.IsJavaId(elementId)) return null;
+        if (JavaAgentElement.IsJavaId(elementId))
+        {
+            state.Java!.RequestFocus(state.Java.GetById(elementId));
+            return null;
+        }
 
         var element = state.GetElement(elementId);
         element.SetFocus();

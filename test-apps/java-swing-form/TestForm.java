@@ -1,3 +1,4 @@
+import javax.accessibility.*;
 import javax.swing.*;
 import java.awt.*;
 
@@ -5,7 +6,7 @@ public class TestForm extends JFrame {
     public TestForm() {
         setTitle("Test Form");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(400, 300);
+        setSize(400, 350);
         setLayout(new GridLayout(0, 2, 10, 10));
 
         add(new JLabel("First Name:"));
@@ -27,6 +28,33 @@ public class TestForm extends JFrame {
         JComboBox<String> country = new JComboBox<>(new String[]{"USA", "UK", "Other"});
         country.getAccessibleContext().setAccessibleName("country");
         add(country);
+
+        add(new JLabel("Department:"));
+        // ExpandCollapse pattern intentionally disabled — list items must be selected
+        // by finding virtual children in the open popup (no expand command support).
+        JComboBox<String> department = new JComboBox<String>(
+                new String[]{"Engineering", "HR", "Finance", "Marketing"}) {
+            @Override
+            public AccessibleContext getAccessibleContext() {
+                if (accessibleContext == null) {
+                    accessibleContext = new AccessibleJComboBox() {
+                        @Override
+                        public AccessibleStateSet getAccessibleStateSet() {
+                            AccessibleStateSet states = super.getAccessibleStateSet();
+                            states.remove(AccessibleState.EXPANDABLE);
+                            return states;
+                        }
+                        @Override
+                        public AccessibleAction getAccessibleAction() {
+                            return null;
+                        }
+                    };
+                    accessibleContext.setAccessibleName("department");
+                }
+                return accessibleContext;
+            }
+        };
+        add(department);
 
         JCheckBox agree = new JCheckBox("I agree");
         agree.getAccessibleContext().setAccessibleName("agreeCheckbox");

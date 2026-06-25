@@ -159,7 +159,23 @@ export async function patternInvoke(this: AppiumDesktopDriver, element: Element)
 }
 
 export async function patternExpand(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('expandElement', { elementId: element[W3C_ELEMENT_KEY] });
+    const elementId = element[W3C_ELEMENT_KEY];
+    try {
+        await this.sendCommand('expandElement', { elementId });
+    } catch (err: any) {
+        // JAB elements without AccessibleAction throw JAB_NO_EXPAND_ACTION.
+        // Fall back to the Windows standard keyboard shortcut: focus + ALT+Down.
+        if (String(err?.message ?? err).includes('JAB_NO_EXPAND_ACTION')) {
+            await this.sendCommand('setFocus', { elementId });
+            await sleep(50);
+            keyDown(Key.ALT);
+            keyDown(Key.DOWN);
+            keyUp(Key.DOWN);
+            keyUp(Key.ALT);
+            return;
+        }
+        throw err;
+    }
 }
 
 export async function patternCollapse(this: AppiumDesktopDriver, element: Element): Promise<void> {
@@ -211,7 +227,11 @@ export async function patternSetValue(this: AppiumDesktopDriver, element: Elemen
     try {
         await this.sendCommand('setElementValue', { elementId: element[W3C_ELEMENT_KEY], value });
     } catch {
-        await this.sendCommand('setElementRangeValue', { elementId: element[W3C_ELEMENT_KEY], value: Number(value) });
+        const numValue = Number(value);
+        if (isNaN(numValue)) {
+            throw new errors.InvalidArgumentError(`Value '${value}' is not a valid number for the RangeValue pattern.`);
+        }
+        await this.sendCommand('setElementRangeValue', { elementId: element[W3C_ELEMENT_KEY], value: numValue });
     }
 }
 
@@ -380,6 +400,7 @@ async function getElementPos(driver: AppiumDesktopDriver, elementId: string, off
         if (!elId || elId.trim() === '') {
             throw new errors.NoSuchElementError();
         }
+        elementId = elId;
     }
 
     const rect = await driver.sendCommand('getRect', { elementId }) as RectResult;

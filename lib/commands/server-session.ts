@@ -2,7 +2,7 @@ import { normalize } from 'node:path';
 import { AppiumDesktopDriver } from '../driver';
 import { NovaUIAutomationClient } from '../server/client';
 import { findFreePort } from '../util';
-import { getAllWindowHandles, getWindowAllHandlesForProcessIds, trySetForegroundWindow } from '../winapi/user32';
+import { getAllWindowHandles, getWindowAllHandlesForProcessIds, isIEWindowHwnd, trySetForegroundWindow } from '../winapi/user32';
 
 const MAX_INIT_RETRIES = 5;
 const INIT_RETRY_DELAY_MS = 500;
@@ -152,6 +152,9 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
         const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
         const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
         trySetForegroundWindow(nwh);
+        if (isIEWindowHwnd(nwh)) {
+            await this.enableIEProxy(nwh);
+        }
         return true;
     } catch {
         return false;

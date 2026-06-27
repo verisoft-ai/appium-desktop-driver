@@ -213,6 +213,9 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
 
         if (elementId) {
             trySetForegroundWindow(nativeWindowHandle);
+            if (isIEWindowHwnd(nativeWindowHandle)) {
+                await this.enableIEProxy(nativeWindowHandle);
+            }
             return;
         }
 
@@ -503,6 +506,9 @@ export async function attachToWindowHandles(
                 const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
                 const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
                 trySetForegroundWindow(nwh);
+                if (isIEWindowHwnd(nwh)) {
+                    await this.enableIEProxy(nwh);
+                }
             }
             return true;
         }
@@ -519,6 +525,9 @@ export async function attachToWindowHandles(
             const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
             const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
             trySetForegroundWindow(nwh);
+            if (isIEWindowHwnd(nwh)) {
+                await this.enableIEProxy(nwh);
+            }
             return true;
         }
     }
@@ -600,6 +609,10 @@ export async function attachToApplicationWindow(
             } catch {
                 // Window cannot receive focus (e.g. splash screen)
             }
+        }
+
+        if (isIEWindowHwnd(nwh)) {
+            await this.enableIEProxy(nwh);
         }
 
         // Splash-screen guard: probe for focusable descendants.

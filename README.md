@@ -109,6 +109,9 @@ await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad'
 const titleBar = await driver.$('//TitleBar');
 console.log(await titleBar.getText());
 
+// Switch back to the desktop root at any time
+await driver.switchToWindow('root');
+
 await driver.deleteSession();
 ```
 

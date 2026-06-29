@@ -253,6 +253,20 @@ await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad'
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Untitled - Notepad', exact: true }]);
 ```
 
+#### Switching back to the desktop root
+
+Pass the sentinel string `'root'` to `driver.switchToWindow()` to reset the session root back to the Windows desktop element. Useful after switching to a specific app window or a titleless system pane (e.g. system tray overflow).
+
+```js
+// Switch to some app window
+await driver.switchToWindow(someHandle);
+
+// ... do work ...
+
+// Return to full desktop root
+await driver.switchToWindow('root');
+```
+
 #### windows: getWindowElement
 
 Returns the automation element ID of the current root window. No arguments.

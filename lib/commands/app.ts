@@ -97,6 +97,11 @@ export async function getWindowHandles(this: AppiumDesktopDriver): Promise<strin
 }
 
 export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string): Promise<void> {
+    if (nameOrHandle.toLowerCase() === 'root') {
+        await this.sendCommand('setRootElement', {});
+        return;
+    }
+
     const handle = Number(nameOrHandle);
 
     // Auto-detect IE: if numeric handle and the window belongs to iexplore.exe, enable IE proxy.

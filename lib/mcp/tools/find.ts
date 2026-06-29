@@ -52,7 +52,11 @@ export function registerFindTools(server: McpServer, session: AppiumSession): vo
             try {
                 const driver = session.getDriver();
                 const rawEl = await driver.findElement(resolveStrategy(strategy as Strategy), selector);
-                return { content: [{ type: 'text' as const, text: rawEl[ELEMENT_KEY] }] };
+                const elementId = rawEl?.[ELEMENT_KEY];
+                if (!elementId) {
+                    return { isError: true, content: [{ type: 'text' as const, text: `Element not found: ${strategy}="${selector}"` }] };
+                }
+                return { content: [{ type: 'text' as const, text: elementId }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }
@@ -106,7 +110,11 @@ export function registerFindTools(server: McpServer, session: AppiumSession): vo
                     resolveStrategy(strategy as Strategy),
                     selector
                 );
-                return { content: [{ type: 'text' as const, text: rawEl[ELEMENT_KEY] }] };
+                const elementId = rawEl?.[ELEMENT_KEY];
+                if (!elementId) {
+                    return { isError: true, content: [{ type: 'text' as const, text: `Element not found: ${strategy}="${selector}"` }] };
+                }
+                return { content: [{ type: 'text' as const, text: elementId }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }

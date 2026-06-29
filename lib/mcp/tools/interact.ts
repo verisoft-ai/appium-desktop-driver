@@ -101,7 +101,7 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
                 const driver = session.getDriver();
                 const el = await driver.$({ [ELEMENT_KEY]: elementId });
                 const value = await el.getAttribute(attribute);
-                return { content: [{ type: 'text' as const, text: value ?? '' }] };
+                return { content: [{ type: 'text' as const, text: String(value ?? '') }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }

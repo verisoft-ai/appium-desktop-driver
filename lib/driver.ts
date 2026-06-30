@@ -1,4 +1,5 @@
-import { BaseDriver, JWProxy, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
@@ -23,6 +24,7 @@ import { setDpiAwareness } from './winapi/user32';
 import { xpathToElIdOrIds } from './xpath';
 
 import type { Chromedriver } from 'appium-chromedriver';
+import type { IESession } from './ie/session';
 import type {
     DefaultCreateSessionResult,
     DriverData,
@@ -54,17 +56,6 @@ const LOCATION_STRATEGIES = Object.freeze([
     'accessibility id',
     '-windows uiautomation',
 ] as const);
-
-// Routes that must never be proxied to IEDriverServer so our window-management
-// code can intercept them and route between UIA and IE transparently.
-const IE_NO_PROXY: RouteMatcher[] = [
-    ['GET', new RegExp('^/session/[^/]+/window/handles')],
-    ['POST', new RegExp('^/session/[^/]+/window$')],
-    // execute always goes through our handler so windows: commands work;
-    // the handler delegates to IEDriverServer for plain JS.
-    ['POST', new RegExp('^/session/[^/]+/execute$')],
-    ['POST', new RegExp('^/session/[^/]+/execute/sync')],
-];
 
 // This is a set of methods and paths that we never want to proxy to Chromedriver.
 const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
@@ -109,10 +100,9 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     _screenRecorder: ScreenRecorder | null = null;
     _logFileMirror: LogFileMirror | null = null;
     webviewDevtoolsPort: number | null = null;
-    ieDriverProcess: import('node:child_process').ChildProcess | null = null;
-    ieDriverPort: number | null = null;
-    ieDriverSessionId: string | null = null;
-    ieProxy: JWProxy | null = null;
+    ieSession: IESession | null = null;
+    ieContext: boolean = false;
+    ieHwnd?: number;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
         super(opts, shouldValidateCaps);
@@ -143,9 +133,12 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     }
 
     override getProxyAvoidList(): RouteMatcher[] {
-        if (this.jwpProxyActive && this.ieProxy) { return IE_NO_PROXY; }
         if (this.jwpProxyActive && this.chromedriver) { return CHROMEDRIVER_NO_PROXY; }
         return [];
+    }
+
+    isIEContext(): boolean {
+        return this.ieContext && this.ieSession !== null;
     }
 
     override async findElement(strategy: string, selector: string): Promise<Element> {
@@ -171,6 +164,17 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     override async findElOrEls(strategy: typeof LOCATION_STRATEGIES[number], selector: string, mult: true, context?: string): Promise<Element[]>;
     override async findElOrEls(strategy: typeof LOCATION_STRATEGIES[number], selector: string, mult: false, context?: string): Promise<Element>;
     override async findElOrEls(strategy: typeof LOCATION_STRATEGIES[number], selector: string, mult: boolean, context?: string): Promise<Element | Element[]> {
+        if (this.isIEContext()) {
+            if (mult) {
+                return this.ieSession!.findElements(strategy, selector) as unknown as Promise<Element[]>;
+            }
+            try {
+                return await this.ieSession!.findElement(strategy, selector) as unknown as Element;
+            } catch {
+                throw new errors.NoSuchElementError();
+            }
+        }
+
         let condition: ConditionDto;
         switch (strategy) {
             case 'id':
@@ -337,12 +341,12 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     override async deleteSession(sessionId?: string | null | undefined): Promise<void> {
         this.log.debug('Deleting AppiumDesktop driver session...');
 
-        if (this.ieDriverProcess) {
+        if (this.ieSession) {
             try {
-                await this.terminateIESession();
+                await this.terminateIEMode();
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                this.log.warn(`Failed to terminate IEDriverServer during session teardown: ${msg}`);
+                this.log.warn(`Failed to terminate IE bridge during session teardown: ${msg}`);
             }
         }
 

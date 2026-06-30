@@ -153,7 +153,7 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
         const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
         trySetForegroundWindow(nwh);
         if (isIEWindowHwnd(nwh)) {
-            await this.enableIEProxy(nwh);
+            await this.enableIEMode(nwh);
         }
         return true;
     } catch {

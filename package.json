@@ -1,6 +1,6 @@
 {
   "name": "appium-desktop-driver",
-  "version": "2.1.0-preview.17",
+  "version": "2.1.0-preview.18",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -15,6 +15,7 @@
   "files": [
     "build/lib/**/*",
     "iedriver/**/*",
+    "iebridge/IEBridge.exe",
     "native/win-x64/NovaUIAutomationServer.exe",
     "native/win-x64/appium-desktop-agent.jar",
     "scripts/postinstall.js",
@@ -28,8 +29,9 @@
   "scripts": {
     "build": "tsc -b",
     "build:native": "dotnet publish csharp/NovaUIAutomationServer/NovaUIAutomationServer.csproj -c Release -o native/win-x64/",
+    "build:iebridge": "dotnet publish csharp/IEBridge/IEBridge.csproj -r win-x86 -c Release -o iebridge/x86 && node -e \"const fs=require('fs');fs.copyFileSync('iebridge/x86/IEBridge.exe','iebridge/IEBridge.exe');\"",
     "build:java-agent": "cd java-agent && build.bat",
-    "build:all": "npm run build:java-agent && npm run build:native && npm run build",
+    "build:all": "npm run build:java-agent && npm run build:native && npm run build:iebridge && npm run build",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
     "test": "npx vitest run",

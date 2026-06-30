@@ -816,6 +816,13 @@ export function setDpiAwareness() {
     };
 }
 
+export function getWindowThreadProcessId(hwnd: number, pidOut: [number | null]): number {
+    const ptr: [LPDWORD | null] = [null];
+    const threadId = GetWindowThreadProcessId(hwnd, ptr);
+    pidOut[0] = ptr[0] ?? null;
+    return threadId;
+}
+
 export function getWindowTitle(hwnd: number): string {
     try {
         const buffer = Buffer.alloc(512);

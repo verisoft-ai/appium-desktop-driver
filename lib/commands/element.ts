@@ -13,6 +13,9 @@ export async function getProperty(this: AppiumDesktopDriver, propertyName: strin
 }
 
 export async function getAttribute(this: AppiumDesktopDriver, propertyName: string, elementId: string) {
+    if (this.isIEContext()) {
+        return this.ieSession!.getAttribute(elementId, propertyName);
+    }
     this.log.warn('Warning: Use getProperty instead of getAttribute for retrieving element properties.');
     return await this.getProperty(propertyName, elementId);
 }
@@ -23,20 +26,35 @@ export async function active(this: AppiumDesktopDriver): Promise<Element> {
 }
 
 export async function getName(this: AppiumDesktopDriver, elementId: string): Promise<string> {
+    if (this.isIEContext()) {
+        return (await this.ieSession!.getAttribute(elementId, 'tagName')) ?? '';
+    }
     return await this.sendCommand('getTagName', { elementId }) as string;
 }
 
 export async function getText(this: AppiumDesktopDriver, elementId: string): Promise<string> {
+    if (this.isIEContext()) {
+        return this.ieSession!.getText(elementId);
+    }
     const text = await this.sendCommand('getText', { elementId }) as string;
     // U+FFFC (Object Replacement Character) appears in UIA TextPattern results for embedded objects/placeholders
     return text.replace(/\uFFFC/g, '');
 }
 
 export async function clear(this: AppiumDesktopDriver, elementId: string): Promise<void> {
+    if (this.isIEContext()) {
+        await this.ieSession!.clear(elementId);
+        return;
+    }
     await this.sendCommand('setElementValue', { elementId, value: '' });
 }
 
 export async function setValue(this: AppiumDesktopDriver, value: string | string[], elementId: string): Promise<void> {
+    if (this.isIEContext()) {
+        const text = Array.isArray(value) ? value.join('') : value;
+        await this.ieSession!.setValue(elementId, text);
+        return;
+    }
     // Java agent elements: sendKeys goes to the OS-focused field regardless of elementId.
     // Use setElementValue which targets the element directly via AccessibleEditableText.
     if (elementId.startsWith('java:')) {
@@ -165,6 +183,9 @@ export async function setValue(this: AppiumDesktopDriver, value: string | string
 }
 
 export async function getElementRect(this: AppiumDesktopDriver, elementId: string): Promise<Rect> {
+    if (this.isIEContext()) {
+        throw new errors.NotYetImplementedError();
+    }
     const rect = await this.sendCommand('getRect', { elementId }) as RectResult;
     const rootRect = await this.sendCommand('getRootRect', {}) as RectResult;
     rect.x -= rootRect.x;
@@ -175,6 +196,9 @@ export async function getElementRect(this: AppiumDesktopDriver, elementId: strin
 }
 
 export async function elementDisplayed(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
+    if (this.isIEContext()) {
+        return this.ieSession!.isDisplayed(elementId);
+    }
     const result = await this.sendCommand('getProperty', { elementId, property: 'IsOffscreen' });
     // UIA3 getProperty returns a JS boolean for bool-typed properties; the old
     // PowerShell/UIA1 path returned the stringified "True"/"False". Handle both.
@@ -184,6 +208,9 @@ export async function elementDisplayed(this: AppiumDesktopDriver, elementId: str
 
 // TODO: find better way to handle whether to use select or toggle
 export async function elementSelected(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
+    if (this.isIEContext()) {
+        return this.ieSession!.isSelected(elementId);
+    }
     try {
         const result = await this.sendCommand('isElementSelected', { elementId }) as boolean;
         return result === true || String(result) === 'True';
@@ -194,11 +221,18 @@ export async function elementSelected(this: AppiumDesktopDriver, elementId: stri
 }
 
 export async function elementEnabled(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
+    if (this.isIEContext()) {
+        return this.ieSession!.isEnabled(elementId);
+    }
     const result = await this.sendCommand('getProperty', { elementId, property: 'IsEnabled' });
     return typeof result === 'boolean' ? result : String(result).toLowerCase() === 'true';
 }
 
 export async function click(this: AppiumDesktopDriver, elementId: string): Promise<void> {
+    if (this.isIEContext()) {
+        await this.ieSession!.click(elementId);
+        return;
+    }
     const easingFunction = this.caps.smoothPointerMove;
 
     // Detect menu items up-front — focusing an ancestor Pane/Window closes
@@ -313,6 +347,9 @@ export async function click(this: AppiumDesktopDriver, elementId: string): Promi
 }
 
 export async function getElementScreenshot(this: AppiumDesktopDriver, elementId: string): Promise<string> {
+    if (this.isIEContext()) {
+        throw new errors.NotYetImplementedError();
+    }
     const rootId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!rootId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');

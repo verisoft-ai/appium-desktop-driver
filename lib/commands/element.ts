@@ -27,7 +27,9 @@ export async function getName(this: AppiumDesktopDriver, elementId: string): Pro
 }
 
 export async function getText(this: AppiumDesktopDriver, elementId: string): Promise<string> {
-    return await this.sendCommand('getText', { elementId }) as string;
+    const text = await this.sendCommand('getText', { elementId }) as string;
+    // U+FFFC (Object Replacement Character) appears in UIA TextPattern results for embedded objects/placeholders
+    return text.replace(/\uFFFC/g, '');
 }
 
 export async function clear(this: AppiumDesktopDriver, elementId: string): Promise<void> {

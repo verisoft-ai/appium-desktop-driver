@@ -1,6 +1,6 @@
 {
   "name": "appium-desktop-driver",
-  "version": "2.1.0-preview.6",
+  "version": "2.1.0-preview.17",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -14,6 +14,7 @@
   "main": "build/lib/driver.js",
   "files": [
     "build/lib/**/*",
+    "iedriver/**/*",
     "native/win-x64/NovaUIAutomationServer.exe",
     "native/win-x64/appium-desktop-agent.jar",
     "scripts/postinstall.js",

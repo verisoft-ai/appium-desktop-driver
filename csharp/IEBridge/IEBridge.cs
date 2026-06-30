@@ -383,21 +383,56 @@ class Program
         catch { return ErrJson(seq, "NO_SUCH_ELEMENT"); }
     }
 
+    // TODO: This is a workaround. querySelector/querySelectorAll (IDocumentSelector)
+    // have no cross-process COM proxy in IE11. Better approach: do everything in JS —
+    // querySelector marks elements AND writes temp IDs to a hidden DOM node, then C#
+    // does getElementById per match (3+k calls instead of 2×n). See conversation notes.
+    static List<dynamic> CollectMarked(dynamic doc, string attr, string marker, bool multi)
+    {
+        var result = new List<dynamic>();
+        dynamic all = doc.all;
+        int len = (int)all.length;
+        for (int i = 0; i < len; i++)
+        {
+            try
+            {
+                dynamic el = all.item(i, 0);
+                object? val = el.getAttribute(attr, 0);
+                if (val != null && val.ToString() == marker)
+                {
+                    el.removeAttribute(attr, 0);
+                    result.Add(el);
+                    if (!multi) break;
+                }
+            }
+            catch { /* skip inaccessible elements (e.g. cross-frame) */ }
+        }
+        return result;
+    }
+
     static string FindByCss(int seq, dynamic doc, string css, bool multi)
     {
         try
         {
-            if (multi)
+            if (!multi)
             {
-                dynamic list = doc.querySelectorAll(css);
-                var ids = new List<string>();
-                foreach (dynamic el in list)
-                    ids.Add(Register(el));
-                return OkJsonList(seq, "elementIds", ids);
+                // querySelector returns IHTMLElement — cross-process safe.
+                dynamic single = doc.querySelector(css);
+                if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
+                return OkJson(seq, "elementId", Register(single));
             }
-            dynamic single = doc.querySelector(css);
-            if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
-            return OkJson(seq, "elementId", Register(single));
+            // querySelectorAll returns StaticNodeList which has no cross-process proxy.
+            // Use execScript to mark matches, then collect via doc.all (IHTMLDocument2).
+            dynamic win = doc.parentWindow;
+            string marker  = $"ieb{seq}";
+            string escaped = JsEscape(css);
+            win.execScript(
+                $"(function(){{var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)els[i].setAttribute('__ieb',{JsEscape(marker)});}})();",
+                "JScript");
+            List<dynamic> elems = CollectMarked(doc, "__ieb", marker, multi: true);
+            var ids = new List<string>();
+            foreach (dynamic el in elems) ids.Add(Register(el));
+            return OkJsonList(seq, "elementIds", ids);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
@@ -408,40 +443,22 @@ class Program
         try
         {
             dynamic win = doc.parentWindow;
+            string marker = $"ieb{seq}";
+            string script = multi
+                ? $"(function(){{var s=document.evaluate({escaped},document,null,5,null);for(var i=0;i<s.snapshotLength;i++)s.snapshotItem(i).setAttribute('__ieb',{JsEscape(marker)});}})();"
+                : $"(function(){{var n=document.evaluate({escaped},document,null,9,null).singleNodeValue;if(n&&n.setAttribute)n.setAttribute('__ieb',{JsEscape(marker)});}})();";
+            win.execScript(script, "JScript");
+
+            List<dynamic> elems = CollectMarked(doc, "__ieb", marker, multi);
             if (multi)
             {
-                string script =
-                    $"(function(){{" +
-                    $"var s=document.evaluate({escaped},document,null,5,null);" +
-                    $"for(var i=0;i<s.snapshotLength;i++){{" +
-                    $"s.snapshotItem(i).setAttribute('__ieb',i);" +
-                    $"}}" +
-                    $"}})();";
-                win.execScript(script, "JScript");
-
-                dynamic tagged = doc.querySelectorAll("[__ieb]");
                 var ids = new List<string>();
-                foreach (dynamic el in tagged)
-                {
-                    el.removeAttribute("__ieb", 0);
-                    ids.Add(Register(el));
-                }
+                foreach (dynamic el in elems) ids.Add(Register(el));
                 return OkJsonList(seq, "elementIds", ids);
             }
-            else
-            {
-                string script =
-                    $"(function(){{" +
-                    $"var n=document.evaluate({escaped},document,null,9,null).singleNodeValue;" +
-                    $"if(n&&n.setAttribute)n.setAttribute('__ieb_s','1');" +
-                    $"}})();";
-                win.execScript(script, "JScript");
-
-                dynamic tagged = doc.querySelector("[__ieb_s]");
-                if (tagged == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
-                tagged.removeAttribute("__ieb_s", 0);
-                return OkJson(seq, "elementId", Register(tagged));
-            }
+            if (elems.Count == 0)
+                return ErrJson(seq, "NO_SUCH_ELEMENT");
+            return OkJson(seq, "elementId", Register(elems[0]));
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }

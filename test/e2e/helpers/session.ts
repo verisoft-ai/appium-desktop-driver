@@ -163,8 +163,10 @@ export async function launchIEExternally(url: string): Promise<{ proc: ChildProc
     let hwnd = '0';
     while (Date.now() < deadline) {
         try {
+            // The IEFrame (browser chrome) process is always the oldest iexplore.exe.
+            // Tab/content processes start after it, so sorting ascending picks the frame.
             const out = execSync(
-                'powershell -Command "$p = Get-Process -Name iexplore -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Sort-Object StartTime -Descending | Select-Object -First 1; if ($p) { $p.MainWindowHandle } else { 0 }"',
+                'powershell -Command "$p = Get-Process -Name iexplore -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Sort-Object StartTime | Select-Object -First 1; if ($p) { $p.MainWindowHandle } else { 0 }"',
                 { stdio: ['ignore', 'pipe', 'ignore'] }
             ).toString().trim();
             if (out && out !== '0') { hwnd = out; break; }

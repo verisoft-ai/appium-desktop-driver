@@ -357,7 +357,7 @@ class Program
                 var ids = new List<string>();
                 int len = (int)list.length;
                 for (int i = 0; i < len; i++)
-                    ids.Add(Register(list.item((object)i)));
+                    ids.Add(Register(list[i]));
                 return OkJsonList(seq, "elementIds", ids);
             }
             dynamic single = doc.querySelector(css);
@@ -389,7 +389,7 @@ class Program
                 int len = (int)tagged.length;
                 for (int i = 0; i < len; i++)
                 {
-                    dynamic el = tagged.item((object)i);
+                    dynamic el = tagged[i];
                     el.removeAttribute("__ieb", 0);
                     ids.Add(Register(el));
                 }

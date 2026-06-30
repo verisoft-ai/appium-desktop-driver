@@ -296,6 +296,12 @@ class Program
 
     // ── Dispatcher ──────────────────────────────────────────────
 
+    // HRESULT for RPC_S_SERVER_UNAVAILABLE — thrown when the IE tab process
+    // is mid-replacement (LCIE hands off from old to new content process).
+    const int RPC_SERVER_UNAVAILABLE = unchecked((int)0x800706BA);
+    const int MAX_DOC_RETRIES        = 5;
+    const int DOC_RETRY_DELAY_MS     = 1500;
+
     static string Dispatch(Req req, int seq)
     {
         if (req.Cmd == "clearElements")
@@ -304,32 +310,58 @@ class Program
             return OkJson(seq);
         }
 
-        dynamic? doc = GetDocument(new IntPtr(req.Hwnd));
-        if (doc == null) return ErrJson(seq, "IE_DOCUMENT_NOT_FOUND");
-
-        return req.Cmd switch
+        // IE11 LCIE replaces its tab process after initial load. The old
+        // Internet_Explorer_Server window briefly lingers while the new one
+        // starts, causing either RPC_SERVER_UNAVAILABLE (old process dying)
+        // or IE_DOCUMENT_NOT_FOUND (window gone). Retry with a short delay
+        // to let the new tab process finish initialising.
+        for (int attempt = 0; attempt < MAX_DOC_RETRIES; attempt++)
         {
-            "getTitle"            => OkJson(seq, "title",  (string)doc.title),
-            "getUrl"              => OkJson(seq, "url",    (string)doc.url),
-            "getSource"           => GetSource(seq, doc),
-            "navigate"            => Navigate(seq, doc, req.Value!),
-            "findElementById"     => FindById(seq, doc, req.Value!),
-            "findElementsByCss"   => FindByCss(seq, doc, req.Value!, multi: false),
-            "findElementsCssAll"  => FindByCss(seq, doc, req.Value!, multi: true),
-            "findElementByXpath"  => FindByXpath(seq, doc, req.Value!, multi: false),
-            "findElementsByXpath" => FindByXpath(seq, doc, req.Value!, multi: true),
-            "click"               => ClickEl(seq, req.ElementId!),
-            "getValue"            => GetVal(seq, req.ElementId!),
-            "setValue"            => SetVal(seq, req.ElementId!, req.Value!),
-            "clear"               => SetVal(seq, req.ElementId!, ""),
-            "getText"             => GetText(seq, req.ElementId!),
-            "getAttribute"        => GetAttr(seq, req.ElementId!, req.Name!),
-            "isDisplayed"         => IsDisplayed(seq, req.ElementId!),
-            "isEnabled"           => IsEnabled(seq, req.ElementId!),
-            "isSelected"          => IsSelected(seq, req.ElementId!),
-            "executeScript"       => ExecScript(seq, doc, req.Script!),
-            _                     => ErrJson(seq, $"UNKNOWN_CMD:{req.Cmd}")
-        };
+            dynamic? doc = GetDocument(new IntPtr(req.Hwnd));
+            if (doc == null)
+            {
+                if (attempt < MAX_DOC_RETRIES - 1)
+                {
+                    System.Threading.Thread.Sleep(DOC_RETRY_DELAY_MS);
+                    continue;
+                }
+                return ErrJson(seq, "IE_DOCUMENT_NOT_FOUND");
+            }
+
+            try
+            {
+                return req.Cmd switch
+                {
+                    "getTitle"            => OkJson(seq, "title",  (string)doc.title),
+                    "getUrl"              => OkJson(seq, "url",    (string)doc.url),
+                    "getSource"           => GetSource(seq, doc),
+                    "navigate"            => Navigate(seq, doc, req.Value!),
+                    "findElementById"     => FindById(seq, doc, req.Value!),
+                    "findElementsByCss"   => FindByCss(seq, doc, req.Value!, multi: false),
+                    "findElementsCssAll"  => FindByCss(seq, doc, req.Value!, multi: true),
+                    "findElementByXpath"  => FindByXpath(seq, doc, req.Value!, multi: false),
+                    "findElementsByXpath" => FindByXpath(seq, doc, req.Value!, multi: true),
+                    "click"               => ClickEl(seq, req.ElementId!),
+                    "getValue"            => GetVal(seq, req.ElementId!),
+                    "setValue"            => SetVal(seq, req.ElementId!, req.Value!),
+                    "clear"               => SetVal(seq, req.ElementId!, ""),
+                    "getText"             => GetText(seq, req.ElementId!),
+                    "getAttribute"        => GetAttr(seq, req.ElementId!, req.Name!),
+                    "isDisplayed"         => IsDisplayed(seq, req.ElementId!),
+                    "isEnabled"           => IsEnabled(seq, req.ElementId!),
+                    "isSelected"          => IsSelected(seq, req.ElementId!),
+                    "executeScript"       => ExecScript(seq, doc, req.Script!),
+                    _                     => ErrJson(seq, $"UNKNOWN_CMD:{req.Cmd}")
+                };
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+                when (ex.HResult == RPC_SERVER_UNAVAILABLE && attempt < MAX_DOC_RETRIES - 1)
+            {
+                System.Threading.Thread.Sleep(DOC_RETRY_DELAY_MS);
+            }
+        }
+
+        return ErrJson(seq, "IE_DOCUMENT_NOT_FOUND");
     }
 
     // ── Find ────────────────────────────────────────────────────

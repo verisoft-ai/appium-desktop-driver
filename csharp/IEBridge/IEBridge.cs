@@ -383,31 +383,56 @@ class Program
         catch { return ErrJson(seq, "NO_SUCH_ELEMENT"); }
     }
 
-    // TODO: This is a workaround. querySelector/querySelectorAll (IDocumentSelector)
-    // have no cross-process COM proxy in IE11. Better approach: do everything in JS —
-    // querySelector marks elements AND writes temp IDs to a hidden DOM node, then C#
-    // does getElementById per match (3+k calls instead of 2×n). See conversation notes.
-    static List<dynamic> CollectMarked(dynamic doc, string attr, string marker, bool multi)
+    // IDocumentSelector (querySelector/querySelectorAll) and StaticNodeList have no
+    // cross-process COM proxy in IE11. Solution: run the selector entirely inside IE
+    // via execScript, write matched elements' sourceIndex values to a hidden store node,
+    // then retrieve each element with doc.all.item(idx) — O(5+k) COM calls regardless
+    // of page size (k = number of matched elements).
+    static string FindBySourceIndex(int seq, dynamic doc, dynamic win, string findScript, bool multi)
     {
-        var result = new List<dynamic>();
+        string storeId  = $"__ieb_{seq}";
+        string storeEsc = JsEscape(storeId);
+
+        // findScript must push integer sourceIndex values onto window.__ieb_idx.
+        win.execScript(
+            $"(function(){{" +
+            $"window.__ieb_idx=[];" +
+            $"{findScript}" +
+            $"var b=document.body||document.documentElement;" +
+            $"var s=document.createElement('span');" +
+            $"s.id={storeEsc};s.style.display='none';" +
+            $"s.setAttribute('data-ieb',window.__ieb_idx.join(','));" +
+            $"b.appendChild(s);" +
+            $"delete window.__ieb_idx;" +
+            $"}})();",
+            "JScript");
+
+        dynamic store = doc.getElementById(storeId);
+        if (store == null)
+            return multi ? OkJsonList(seq, "elementIds", new List<string>()) : ErrJson(seq, "NO_SUCH_ELEMENT");
+
+        string raw = (string)(store.getAttribute("data-ieb", 0) ?? "");
+
+        win.execScript(
+            $"(function(){{var s=document.getElementById({storeEsc});if(s)s.parentNode.removeChild(s);}})();",
+            "JScript");
+
+        if (string.IsNullOrEmpty(raw))
+            return multi ? OkJsonList(seq, "elementIds", new List<string>()) : ErrJson(seq, "NO_SUCH_ELEMENT");
+
         dynamic all = doc.all;
-        int len = (int)all.length;
-        for (int i = 0; i < len; i++)
+        var ids = new List<string>();
+        foreach (string part in raw.Split(','))
         {
-            try
-            {
-                dynamic el = all.item(i, 0);
-                object? val = el.getAttribute(attr, 0);
-                if (val != null && val.ToString() == marker)
-                {
-                    el.removeAttribute(attr, 0);
-                    result.Add(el);
-                    if (!multi) break;
-                }
-            }
-            catch { /* skip inaccessible elements (e.g. cross-frame) */ }
+            if (!int.TryParse(part.Trim(), out int idx)) continue;
+            try { ids.Add(Register((dynamic)all.item(idx, 0))); }
+            catch { }
+            if (!multi && ids.Count > 0) break;
         }
-        return result;
+
+        return multi
+            ? OkJsonList(seq, "elementIds", ids)
+            : (ids.Count > 0 ? OkJson(seq, "elementId", ids[0]) : ErrJson(seq, "NO_SUCH_ELEMENT"));
     }
 
     static string FindByCss(int seq, dynamic doc, string css, bool multi)
@@ -416,49 +441,28 @@ class Program
         {
             if (!multi)
             {
-                // querySelector returns IHTMLElement — cross-process safe.
                 dynamic single = doc.querySelector(css);
                 if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
                 return OkJson(seq, "elementId", Register(single));
             }
-            // querySelectorAll returns StaticNodeList which has no cross-process proxy.
-            // Use execScript to mark matches, then collect via doc.all (IHTMLDocument2).
-            dynamic win = doc.parentWindow;
-            string marker  = $"ieb{seq}";
-            string escaped = JsEscape(css);
-            win.execScript(
-                $"(function(){{var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)els[i].setAttribute('__ieb',{JsEscape(marker)});}})();",
-                "JScript");
-            List<dynamic> elems = CollectMarked(doc, "__ieb", marker, multi: true);
-            var ids = new List<string>();
-            foreach (dynamic el in elems) ids.Add(Register(el));
-            return OkJsonList(seq, "elementIds", ids);
+            string escaped   = JsEscape(css);
+            string findScript = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
+            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: true);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
 
     static string FindByXpath(int seq, dynamic doc, string xpath, bool multi)
     {
-        string escaped = JsEscape(xpath);
         try
         {
-            dynamic win = doc.parentWindow;
-            string marker = $"ieb{seq}";
-            string script = multi
-                ? $"(function(){{var s=document.evaluate({escaped},document,null,5,null);for(var i=0;i<s.snapshotLength;i++)s.snapshotItem(i).setAttribute('__ieb',{JsEscape(marker)});}})();"
-                : $"(function(){{var n=document.evaluate({escaped},document,null,9,null).singleNodeValue;if(n&&n.setAttribute)n.setAttribute('__ieb',{JsEscape(marker)});}})();";
-            win.execScript(script, "JScript");
-
-            List<dynamic> elems = CollectMarked(doc, "__ieb", marker, multi);
-            if (multi)
-            {
-                var ids = new List<string>();
-                foreach (dynamic el in elems) ids.Add(Register(el));
-                return OkJsonList(seq, "elementIds", ids);
-            }
-            if (elems.Count == 0)
-                return ErrJson(seq, "NO_SUCH_ELEMENT");
-            return OkJson(seq, "elementId", Register(elems[0]));
+            string escaped    = JsEscape(xpath);
+            // Wrap in try/catch: document.evaluate is unavailable in IE compatibility mode
+            // and would throw 80020101 (SCRIPT_E_REPORTED) without it.
+            string findScript = multi
+                ? $"try{{var s=document.evaluate({escaped},document,null,5,null);for(var i=0;i<s.snapshotLength;i++){{var n=s.snapshotItem(i);if(n.sourceIndex!==undefined)window.__ieb_idx.push(n.sourceIndex);}}}}catch(e){{}}"
+                : $"try{{var n=document.evaluate({escaped},document,null,9,null).singleNodeValue;if(n&&n.sourceIndex!==undefined)window.__ieb_idx.push(n.sourceIndex);}}catch(e){{}}";
+            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }

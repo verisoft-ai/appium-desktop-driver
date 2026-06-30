@@ -19,6 +19,19 @@ class Program
     static readonly Dictionary<string, dynamic> _elems = new();
     static int _elemSeq = 0;
 
+    // Held in a static field so the GC does not collect the delegate while
+    // the unmanaged EnumChildWindows call is in progress.
+    static readonly EnumChildProc _findIEServer = FindIEServerCallback;
+    static IntPtr _ieServerFound;
+
+    static bool FindIEServerCallback(IntPtr hwnd, IntPtr lp)
+    {
+        var buf = new StringBuilder(64);
+        GetClassName(hwnd, buf, 64);
+        if (buf.ToString() == "Internet Explorer_Server") { _ieServerFound = hwnd; return false; }
+        return true;
+    }
+
     [STAThread]
     static void Main()
     {
@@ -242,18 +255,9 @@ class Program
 
     static dynamic? GetDocument(IntPtr topHwnd)
     {
-        IntPtr ieServer = IntPtr.Zero;
-        EnumChildWindows(topHwnd, (hwnd, _) =>
-        {
-            var buf = new StringBuilder(64);
-            GetClassName(hwnd, buf, 64);
-            if (buf.ToString() == "Internet Explorer_Server")
-            {
-                ieServer = hwnd;
-                return false;
-            }
-            return true;
-        }, IntPtr.Zero);
+        _ieServerFound = IntPtr.Zero;
+        EnumChildWindows(topHwnd, _findIEServer, IntPtr.Zero);
+        IntPtr ieServer = _ieServerFound;
 
         if (ieServer == IntPtr.Zero) return null;
 

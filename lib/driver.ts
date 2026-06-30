@@ -51,6 +51,7 @@ const LOCATION_STRATEGIES = Object.freeze([
     'id',
     'name',
     'xpath',
+    'css selector',
     'tag name',
     'class name',
     'accessibility id',

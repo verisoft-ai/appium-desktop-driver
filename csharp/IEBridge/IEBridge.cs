@@ -357,11 +357,22 @@ class Program
         {
             if (multi)
             {
-                dynamic list = doc.querySelectorAll(css);
+                dynamic list;
+                try { list = doc.querySelectorAll(css); }
+                catch (Exception ex) { return ErrJson(seq, $"QSA_FAILED: {ex.Message}"); }
+
+                int len;
+                try { len = (int)list.length; }
+                catch (Exception ex) { return ErrJson(seq, $"LIST_LENGTH_FAILED: {ex.Message}"); }
+
                 var ids = new List<string>();
-                int len = (int)list.length;
                 for (int i = 0; i < len; i++)
-                    ids.Add(Register(list[i]));
+                {
+                    dynamic el;
+                    try { el = list[i]; }
+                    catch (Exception ex) { return ErrJson(seq, $"LIST_ITEM_{i}_FAILED: {ex.Message}"); }
+                    ids.Add(Register(el));
+                }
                 return OkJsonList(seq, "elementIds", ids);
             }
             dynamic single = doc.querySelector(css);

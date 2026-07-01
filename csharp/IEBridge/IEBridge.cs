@@ -523,25 +523,32 @@ class Program
 
     // ── Interactions ────────────────────────────────────────────
 
-    // Read a live JS boolean property from an element via execScript.
-    // COM dynamic dispatch for boolean properties (checked, disabled, selected) returns
-    // the HTML attribute default, not the live property value, in IE compatibility mode.
-    static bool ReadJsBool(dynamic el, string prop)
+    // Mark the element with a unique COM attribute, locate it from JS by that marker,
+    // then read the live JS boolean property. Avoids sourceIndex-based lookup which is
+    // unreliable in cross-process COM in IE compatibility mode.
+    static bool ReadJsBool(dynamic el, string prop, int seq)
     {
-        int idx    = (int)el.sourceIndex;
-        dynamic doc = el.document;
-        dynamic win = doc.parentWindow;
-        string storeId  = $"__iebr_{idx}_{prop}";
+        dynamic doc     = el.document;
+        dynamic win     = doc.parentWindow;
+        string marker   = $"iebmk{seq}{prop}";
+        string storeId  = $"__iebr{seq}";
         string storeEsc = JsEscape(storeId);
+        string mkEsc    = JsEscape(marker);
+
+        el.setAttribute("__iebm", marker, 0);
+
         win.execScript(
             $"(function(){{" +
-            $"var e=document.all.item({idx},0);" +
+            $"var t=null,all=document.all;" +
+            $"for(var i=0;i<all.length;i++){{if(all[i].getAttribute('__iebm')==={mkEsc}){{t=all[i];break;}}}}" +
+            $"if(t) t.removeAttribute('__iebm');" +
             $"var s=document.createElement('span');" +
             $"s.id={storeEsc};s.style.display='none';" +
-            $"s.setAttribute('data-v',e.{prop}?'1':'0');" +
+            $"s.setAttribute('data-v',t&&t.{prop}?'1':'0');" +
             $"(document.body||document.documentElement).appendChild(s);" +
             $"}})();",
             "JScript");
+
         dynamic store = doc.getElementById(storeId);
         bool result = false;
         if (store != null)
@@ -560,12 +567,29 @@ class Program
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            // Use JS click via execScript — el.click() via COM does not toggle checkboxes
-            // in IE compatibility mode (fires no state-change event).
-            int idx     = (int)el.sourceIndex;
+            // Mark element in C# via COM, locate it in JS by marker.
+            // For checkboxes/radios: directly toggle checked + fire events because
+            // element.click() in IE compatibility mode fires the event but does not
+            // toggle the checked property. For all other elements: use click().
+            string marker = $"iebclk{seq}";
+            string mkEsc  = JsEscape(marker);
+            el.setAttribute("__iebm", marker, 0);
             dynamic doc = el.document;
             doc.parentWindow.execScript(
-                $"document.all.item({idx},0).click();",
+                $"(function(){{" +
+                $"var t=null,all=document.all;" +
+                $"for(var i=0;i<all.length;i++){{if(all[i].getAttribute('__iebm')==={mkEsc}){{t=all[i];break;}}}}" +
+                $"if(!t) return;" +
+                $"t.removeAttribute('__iebm');" +
+                $"var tag=t.tagName.toLowerCase();" +
+                $"var type=(t.type||'').toLowerCase();" +
+                $"if(tag==='input'&&(type==='checkbox'||type==='radio')){{" +
+                $"  t.checked=!t.checked;" +
+                $"  if(t.fireEvent){{t.fireEvent('onclick');t.fireEvent('onchange');}}" +
+                $"}} else {{" +
+                $"  t.click();" +
+                $"}}" +
+                $"}})();",
                 "JScript");
             return OkJson(seq);
         }
@@ -637,7 +661,7 @@ class Program
         {
             // getAttribute("disabled", 0) returns boolean false (not null) for non-disabled
             // elements in IE compatibility mode, so string comparison is unreliable.
-            return OkJsonBool(seq, "value", !ReadJsBool(el, "disabled"));
+            return OkJsonBool(seq, "value", !ReadJsBool(el, "disabled", seq));
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
@@ -654,11 +678,11 @@ class Program
             {
                 string type = ((string)(el.type ?? "")).ToLower();
                 if (type == "checkbox" || type == "radio")
-                    sel = ReadJsBool(el, "checked");
+                    sel = ReadJsBool(el, "checked", seq);
             }
             else if (tag == "option")
             {
-                sel = ReadJsBool(el, "selected");
+                sel = ReadJsBool(el, "selected", seq);
             }
             return OkJsonBool(seq, "value", sel);
         }

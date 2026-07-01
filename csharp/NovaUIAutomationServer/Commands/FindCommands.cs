@@ -469,8 +469,11 @@ public static class FindCommands
         if (!state.IsJavaWindowElement(uiaRoot)) return false;
 
         // Get the Java agent root for this Java window HWND.
+        // Pass the window title as a secondary match key for JVMs where HWND
+        // reflection is blocked by module encapsulation (Java 9+).
         var hwnd = uiaRoot.CurrentNativeWindowHandle;
-        javaRoot = state.Java.GetWindowRoot(hwnd);
+        var title = uiaRoot.get_CurrentName() ?? "";
+        javaRoot = state.Java.GetWindowRoot(hwnd, title);
         return javaRoot != null;
     }
 

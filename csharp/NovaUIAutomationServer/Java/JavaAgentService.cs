@@ -95,9 +95,9 @@ internal sealed class JavaAgentService : IDisposable
 
     // ── Window root ────────────────────────────────────────────────────────────
 
-    public JavaAgentElement? GetWindowRoot(IntPtr hwnd)
+    public JavaAgentElement? GetWindowRoot(IntPtr hwnd, string title = "")
     {
-        var result = Call("getWindowRoot", new { hwnd = (long) hwnd });
+        var result = Call("getWindowRoot", new { hwnd = (long) hwnd, title });
         if (result == null) return null;
         return SaveFromResult(result.Value);
     }

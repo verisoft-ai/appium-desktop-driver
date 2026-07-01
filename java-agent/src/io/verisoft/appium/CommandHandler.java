@@ -52,16 +52,58 @@ public class CommandHandler {
 
     private static Object getWindowRoot(Map<String, Object> params, ComponentRegistry registry) {
         long targetHwnd = ((Number) params.get("hwnd")).longValue();
+        String targetTitle = params.containsKey("title") ? (String) params.get("title") : "";
 
+        List<Window> visible = new ArrayList<>();
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
             long hwnd = getHwnd(w);
-            if (hwnd == targetHwnd) {
+            if (hwnd != 0 && hwnd == targetHwnd) {
                 String id = registry.save(w);
                 return buildInfo(w, id);
             }
+            visible.add(w);
         }
-        throw new IllegalStateException("No visible Java window found for hwnd=" + targetHwnd);
+
+        // HWND match failed (getHwnd returns 0 on Java 9+ due to module encapsulation).
+        // Secondary: match by window title passed from the C# UIA layer.
+        if (targetTitle != null && !targetTitle.isEmpty()) {
+            for (Window w : visible) {
+                String wTitle = getWindowTitle(w);
+                if (targetTitle.equals(wTitle)) {
+                    String id = registry.save(w);
+                    return buildInfo(w, id);
+                }
+            }
+        }
+
+        // Tertiary: single visible window is unambiguous — agent runs in-process
+        // so all windows belong to the target app.
+        if (visible.size() == 1) {
+            Window w = visible.get(0);
+            String id = registry.save(w);
+            return buildInfo(w, id);
+        }
+
+        if (visible.isEmpty()) {
+            throw new IllegalStateException("No visible Java window found for hwnd=" + targetHwnd);
+        }
+
+        // Multiple visible windows, no match — include diagnostics.
+        StringBuilder sb = new StringBuilder(
+                "No Java window matched hwnd=" + targetHwnd + " title=\"" + targetTitle +
+                "\" and multiple visible windows exist. Visible windows:");
+        for (Window w : visible) {
+            sb.append("\n  hwnd=").append(getHwnd(w))
+              .append(" title=\"").append(getWindowTitle(w)).append("\"");
+        }
+        throw new IllegalStateException(sb.toString());
+    }
+
+    private static String getWindowTitle(Window w) {
+        if (w instanceof java.awt.Frame) return ((java.awt.Frame) w).getTitle();
+        if (w instanceof java.awt.Dialog) return ((java.awt.Dialog) w).getTitle();
+        return w.getClass().getSimpleName();
     }
 
     private static long getHwnd(Component c) {

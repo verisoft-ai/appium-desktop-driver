@@ -388,22 +388,27 @@ class Program
     // via execScript, write matched elements' sourceIndex values to a hidden store node,
     // then retrieve each element with doc.all.item(idx) — O(5+k) COM calls regardless
     // of page size (k = number of matched elements).
+    //
+    // findScript may also set window.__ieb_err to a non-empty string to surface
+    // diagnostic information when no results are found.
     static string FindBySourceIndex(int seq, dynamic doc, dynamic win, string findScript, bool multi)
     {
         string storeId  = $"__ieb_{seq}";
         string storeEsc = JsEscape(storeId);
 
-        // findScript must push integer sourceIndex values onto window.__ieb_idx.
         win.execScript(
             $"(function(){{" +
             $"window.__ieb_idx=[];" +
+            $"window.__ieb_err='';" +
             $"{findScript}" +
             $"var b=document.body||document.documentElement;" +
             $"var s=document.createElement('span');" +
             $"s.id={storeEsc};s.style.display='none';" +
             $"s.setAttribute('data-ieb',window.__ieb_idx.join(','));" +
+            $"s.setAttribute('data-ieb-err',window.__ieb_err||'');" +
             $"b.appendChild(s);" +
             $"delete window.__ieb_idx;" +
+            $"delete window.__ieb_err;" +
             $"}})();",
             "JScript");
 
@@ -411,11 +416,16 @@ class Program
         if (store == null)
             return multi ? OkJsonList(seq, "elementIds", new List<string>()) : ErrJson(seq, "NO_SUCH_ELEMENT");
 
-        string raw = (string)(store.getAttribute("data-ieb", 0) ?? "");
+        string raw    = (string)(store.getAttribute("data-ieb",     0) ?? "");
+        string errMsg = (string)(store.getAttribute("data-ieb-err", 0) ?? "");
 
         win.execScript(
             $"(function(){{var s=document.getElementById({storeEsc});if(s)s.parentNode.removeChild(s);}})();",
             "JScript");
+
+        // Surface diagnostic error when there are no results so callers can see exactly why.
+        if (!string.IsNullOrEmpty(errMsg) && string.IsNullOrEmpty(raw))
+            return ErrJson(seq, $"DIAG: {errMsg}");
 
         if (string.IsNullOrEmpty(raw))
             return multi ? OkJsonList(seq, "elementIds", new List<string>()) : ErrJson(seq, "NO_SUCH_ELEMENT");
@@ -456,12 +466,60 @@ class Program
     {
         try
         {
-            string escaped    = JsEscape(xpath);
-            // Wrap in try/catch: document.evaluate is unavailable in IE compatibility mode
-            // and would throw 80020101 (SCRIPT_E_REPORTED) without it.
-            string findScript = multi
-                ? $"try{{var s=document.evaluate({escaped},document,null,5,null);for(var i=0;i<s.snapshotLength;i++){{var n=s.snapshotItem(i);if(n.sourceIndex!==undefined)window.__ieb_idx.push(n.sourceIndex);}}}}catch(e){{}}"
-                : $"try{{var n=document.evaluate({escaped},document,null,9,null).singleNodeValue;if(n&&n.sourceIndex!==undefined)window.__ieb_idx.push(n.sourceIndex);}}catch(e){{}}";
+            string escaped = JsEscape(xpath);
+            string findScript;
+
+            if (multi)
+            {
+                // XPathResult type 7 = ORDERED_NODE_SNAPSHOT_TYPE (snapshotLength / snapshotItem).
+                // Type 5 (ORDERED_NODE_ITERATOR_TYPE) was used previously — iterators have no
+                // snapshotLength, so the loop condition 0 < undefined was always false.
+                findScript =
+                    "if(typeof document.evaluate==='undefined'){" +
+                    "  window.__ieb_err='document.evaluate not available';" +
+                    "} else {" +
+                    "  var __xr;" +
+                    "  try{ __xr=document.evaluate(" + escaped + ",document,null,7,null); }" +
+                    "  catch(e){ window.__ieb_err='evaluate threw: '+e.message; }" +
+                    "  if(__xr){" +
+                    "    if(typeof __xr.snapshotLength==='undefined'){" +
+                    "      window.__ieb_err='resultType='+__xr.resultType+' has no snapshotLength';" +
+                    "    } else {" +
+                    "      for(var __i=0;__i<__xr.snapshotLength;__i++){" +
+                    "        var __n=__xr.snapshotItem(__i);" +
+                    "        if(__n&&typeof __n.sourceIndex!=='undefined'){" +
+                    "          window.__ieb_idx.push(__n.sourceIndex);" +
+                    "        } else if(__n){" +
+                    "          window.__ieb_err='node['+__i+'] sourceIndex undefined tagName='+(__n.tagName||'?');" +
+                    "        }" +
+                    "      }" +
+                    "    }" +
+                    "  }" +
+                    "}";
+            }
+            else
+            {
+                // XPathResult type 9 = FIRST_ORDERED_NODE_TYPE (.singleNodeValue).
+                findScript =
+                    "if(typeof document.evaluate==='undefined'){" +
+                    "  window.__ieb_err='document.evaluate not available';" +
+                    "} else {" +
+                    "  var __xr;" +
+                    "  try{ __xr=document.evaluate(" + escaped + ",document,null,9,null); }" +
+                    "  catch(e){ window.__ieb_err='evaluate threw: '+e.message; }" +
+                    "  if(__xr){" +
+                    "    var __n=__xr.singleNodeValue;" +
+                    "    if(!__n){" +
+                    "      window.__ieb_err='singleNodeValue null resultType='+__xr.resultType;" +
+                    "    } else if(typeof __n.sourceIndex==='undefined'){" +
+                    "      window.__ieb_err='sourceIndex undefined tagName='+(__n.tagName||'?');" +
+                    "    } else {" +
+                    "      window.__ieb_idx.push(__n.sourceIndex);" +
+                    "    }" +
+                    "  }" +
+                    "}";
+            }
+
             return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }

@@ -523,25 +523,22 @@ class Program
 
     // ── Interactions ────────────────────────────────────────────
 
-    // Mark the element with a unique COM attribute, locate it from JS by that marker,
-    // then read the live JS boolean property. Avoids sourceIndex-based lookup which is
-    // unreliable in cross-process COM in IE compatibility mode.
+    // Read a live JS boolean property from an element using IE's uniqueID for lookup.
+    // uniqueID is an IE-internal string (e.g. "ms__id3") assigned to every element,
+    // accessible identically from both COM and JS — no sourceIndex or custom attributes needed.
     static bool ReadJsBool(dynamic el, string prop, int seq)
     {
         dynamic doc     = el.document;
         dynamic win     = doc.parentWindow;
-        string marker   = $"iebmk{seq}{prop}";
+        string uid      = (string)el.uniqueID;
         string storeId  = $"__iebr{seq}";
         string storeEsc = JsEscape(storeId);
-        string mkEsc    = JsEscape(marker);
-
-        el.setAttribute("__iebm", marker, 0);
+        string uidEsc   = JsEscape(uid);
 
         win.execScript(
             $"(function(){{" +
             $"var t=null,all=document.all;" +
-            $"for(var i=0;i<all.length;i++){{if(all[i].getAttribute('__iebm')==={mkEsc}){{t=all[i];break;}}}}" +
-            $"if(t) t.removeAttribute('__iebm');" +
+            $"for(var i=0;i<all.length;i++){{if(all[i].uniqueID==={uidEsc}){{t=all[i];break;}}}}" +
             $"var s=document.createElement('span');" +
             $"s.id={storeEsc};s.style.display='none';" +
             $"s.setAttribute('data-v',t&&t.{prop}?'1':'0');" +
@@ -567,20 +564,17 @@ class Program
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            // Mark element in C# via COM, locate it in JS by marker.
-            // For checkboxes/radios: directly toggle checked + fire events because
-            // element.click() in IE compatibility mode fires the event but does not
-            // toggle the checked property. For all other elements: use click().
-            string marker = $"iebclk{seq}";
-            string mkEsc  = JsEscape(marker);
-            el.setAttribute("__iebm", marker, 0);
+            // Locate element in JS by uniqueID — reliable across process boundary.
+            // For checkboxes/radios: set checked directly because element.click() in IE
+            // compatibility mode fires the event but does not toggle the checked property.
+            string uid  = (string)el.uniqueID;
+            string uidEsc = JsEscape(uid);
             dynamic doc = el.document;
             doc.parentWindow.execScript(
                 $"(function(){{" +
                 $"var t=null,all=document.all;" +
-                $"for(var i=0;i<all.length;i++){{if(all[i].getAttribute('__iebm')==={mkEsc}){{t=all[i];break;}}}}" +
+                $"for(var i=0;i<all.length;i++){{if(all[i].uniqueID==={uidEsc}){{t=all[i];break;}}}}" +
                 $"if(!t) return;" +
-                $"t.removeAttribute('__iebm');" +
                 $"var tag=t.tagName.toLowerCase();" +
                 $"var type=(t.type||'').toLowerCase();" +
                 $"if(tag==='input'&&(type==='checkbox'||type==='radio')){{" +

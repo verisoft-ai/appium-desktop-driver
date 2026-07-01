@@ -16,7 +16,8 @@ class Program
     static readonly Guid IID_IHTMLDocument2 =
         new Guid("332C4425-26CB-11D0-B483-00C04FD90119");
 
-    static readonly Dictionary<string, dynamic> _elems = new();
+    struct ElemEntry { public dynamic El; public int JsIdx; }
+    static readonly Dictionary<string, ElemEntry> _elems = new();
     static int _elemSeq = 0;
 
     // Held in a static field so the GC does not collect the delegate while
@@ -278,18 +279,19 @@ class Program
 
     // ── Element registry ────────────────────────────────────────
 
-    static string Register(dynamic el)
+    static string Register(dynamic el, int jsIdx)
     {
         string id = $"ie-{++_elemSeq}";
-        _elems[id] = el;
+        _elems[id] = new ElemEntry { El = el, JsIdx = jsIdx };
         return id;
     }
 
-    static dynamic? Resolve(string id)
+    // Returns (null, -1) when not found or stale.
+    static (dynamic? el, int jsIdx) Resolve(string id)
     {
-        if (!_elems.TryGetValue(id, out var el)) return null;
-        try { _ = (string)el.tagName; return el; }
-        catch { _elems.Remove(id); return null; }
+        if (!_elems.TryGetValue(id, out var entry)) return (null, -1);
+        try { _ = (string)entry.El.tagName; return (entry.El, entry.JsIdx); }
+        catch { _elems.Remove(id); return (null, -1); }
     }
 
     static void FlushElements() => _elems.Clear();
@@ -376,11 +378,11 @@ class Program
     {
         try
         {
-            dynamic el = doc.getElementById(id);
-            if (el == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
-            return OkJson(seq, "elementId", Register(el));
+            string escaped   = JsEscape(id);
+            string findScript = $"var el=document.getElementById({escaped});if(el&&typeof el.sourceIndex!=='undefined')window.__ieb_idx.push(el.sourceIndex);";
+            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: false);
         }
-        catch { return ErrJson(seq, "NO_SUCH_ELEMENT"); }
+        catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
 
     // IDocumentSelector (querySelector/querySelectorAll) and StaticNodeList have no
@@ -435,7 +437,7 @@ class Program
         foreach (string part in raw.Split(','))
         {
             if (!int.TryParse(part.Trim(), out int idx)) continue;
-            try { ids.Add(Register((dynamic)all.item(idx, 0))); }
+            try { ids.Add(Register((dynamic)all.item(idx, 0), idx)); }
             catch { }
             if (!multi && ids.Count > 0) break;
         }
@@ -449,15 +451,14 @@ class Program
     {
         try
         {
+            string escaped   = JsEscape(css);
             if (!multi)
             {
-                dynamic single = doc.querySelector(css);
-                if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
-                return OkJson(seq, "elementId", Register(single));
+                string findScript = $"var els=document.querySelectorAll({escaped});if(els.length>0)window.__ieb_idx.push(els[0].sourceIndex);";
+                return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: false);
             }
-            string escaped   = JsEscape(css);
-            string findScript = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
-            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: true);
+            string findScriptAll = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
+            return FindBySourceIndex(seq, doc, doc.parentWindow, findScriptAll, multi: true);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
@@ -523,22 +524,20 @@ class Program
 
     // ── Interactions ────────────────────────────────────────────
 
-    // Read a live JS boolean property from an element using IE's uniqueID for lookup.
-    // uniqueID is an IE-internal string (e.g. "ms__id3") assigned to every element,
-    // accessible identically from both COM and JS — no sourceIndex or custom attributes needed.
-    static bool ReadJsBool(dynamic el, string prop, int seq)
+    // Read a live JS boolean property (checked, disabled, selected) from an element.
+    // Uses the JS-computed sourceIndex stored at registration — reliable cross-process
+    // because document.all.item(idx) is a positional lookup inside the tab's JS engine,
+    // avoiding the cross-process COM property read that returns null for uniqueID.
+    static bool ReadJsBool(dynamic el, int jsIdx, string prop, int seq)
     {
         dynamic doc     = el.document;
         dynamic win     = doc.parentWindow;
-        string uid      = (string)el.uniqueID;
         string storeId  = $"__iebr{seq}";
         string storeEsc = JsEscape(storeId);
-        string uidEsc   = JsEscape(uid);
 
         win.execScript(
             $"(function(){{" +
-            $"var t=null,all=document.all;" +
-            $"for(var i=0;i<all.length;i++){{if(all[i].uniqueID==={uidEsc}){{t=all[i];break;}}}}" +
+            $"var t=document.all.item({jsIdx},0);" +
             $"var s=document.createElement('span');" +
             $"s.id={storeEsc};s.style.display='none';" +
             $"s.setAttribute('data-v',t&&t.{prop}?'1':'0');" +
@@ -560,20 +559,18 @@ class Program
 
     static string ClickEl(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, jsIdx) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            // Locate element in JS by uniqueID — reliable across process boundary.
-            // For checkboxes/radios: set checked directly because element.click() in IE
-            // compatibility mode fires the event but does not toggle the checked property.
-            string uid  = (string)el.uniqueID;
-            string uidEsc = JsEscape(uid);
+            // Locate element via document.all.item(jsIdx) — the JS-computed sourceIndex
+            // stored at registration, reliable across the cross-process COM boundary.
+            // For checkboxes/radios: toggle checked directly; element.click() in IE
+            // compatibility mode fires the event but does not reliably toggle the property.
             dynamic doc = el.document;
             doc.parentWindow.execScript(
                 $"(function(){{" +
-                $"var t=null,all=document.all;" +
-                $"for(var i=0;i<all.length;i++){{if(all[i].uniqueID==={uidEsc}){{t=all[i];break;}}}}" +
+                $"var t=document.all.item({jsIdx},0);" +
                 $"if(!t) return;" +
                 $"var tag=t.tagName.toLowerCase();" +
                 $"var type=(t.type||'').toLowerCase();" +
@@ -592,7 +589,7 @@ class Program
 
     static string GetVal(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, _) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
@@ -606,7 +603,7 @@ class Program
 
     static string SetVal(int seq, string id, string v)
     {
-        dynamic? el = Resolve(id);
+        var (el, _) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
@@ -619,7 +616,7 @@ class Program
 
     static string GetText(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, _) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try { return OkJson(seq, "text", (string)(el.innerText ?? "")); }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
@@ -627,7 +624,7 @@ class Program
 
     static string GetAttr(int seq, string id, string name)
     {
-        dynamic? el = Resolve(id);
+        var (el, _) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try { return OkJson(seq, "value", el.getAttribute(name, 0)?.ToString()); }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
@@ -635,7 +632,7 @@ class Program
 
     static string IsDisplayed(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, _) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
@@ -649,20 +646,18 @@ class Program
 
     static string IsEnabled(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, jsIdx) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            // getAttribute("disabled", 0) returns boolean false (not null) for non-disabled
-            // elements in IE compatibility mode, so string comparison is unreliable.
-            return OkJsonBool(seq, "value", !ReadJsBool(el, "disabled", seq));
+            return OkJsonBool(seq, "value", !ReadJsBool(el, jsIdx, "disabled", seq));
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
 
     static string IsSelected(int seq, string id)
     {
-        dynamic? el = Resolve(id);
+        var (el, jsIdx) = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
@@ -672,11 +667,11 @@ class Program
             {
                 string type = ((string)(el.type ?? "")).ToLower();
                 if (type == "checkbox" || type == "radio")
-                    sel = ReadJsBool(el, "checked", seq);
+                    sel = ReadJsBool(el, jsIdx, "checked", seq);
             }
             else if (tag == "option")
             {
-                sel = ReadJsBool(el, "selected", seq);
+                sel = ReadJsBool(el, jsIdx, "selected", seq);
             }
             return OkJsonBool(seq, "value", sel);
         }

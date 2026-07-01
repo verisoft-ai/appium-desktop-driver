@@ -586,7 +586,8 @@ class Program
         try
         {
             string tag  = ((string)el.tagName).ToLower();
-            string type = ((string)(el.type ?? "")).ToLower();
+            string type = "";
+            try { type = ((string)(el.type ?? "")).ToLower(); } catch { }
             bool isCheckable = tag == "input" && (type == "checkbox" || type == "radio");
 
             if (!isCheckable)
@@ -720,7 +721,8 @@ class Program
             bool sel = false;
             if (tag == "input")
             {
-                string type = ((string)(el.type ?? "")).ToLower();
+                string type = "";
+                try { type = ((string)(el.type ?? "")).ToLower(); } catch { }
                 if (type == "checkbox" || type == "radio")
                     sel = ReadJsBool(el, jsIdx, "checked", seq);
             }

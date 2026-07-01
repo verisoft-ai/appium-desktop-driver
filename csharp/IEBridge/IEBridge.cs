@@ -467,58 +467,54 @@ class Program
         try
         {
             string escaped = JsEscape(xpath);
-            string findScript;
-
-            if (multi)
-            {
-                // XPathResult type 7 = ORDERED_NODE_SNAPSHOT_TYPE (snapshotLength / snapshotItem).
-                // Type 5 (ORDERED_NODE_ITERATOR_TYPE) was used previously — iterators have no
-                // snapshotLength, so the loop condition 0 < undefined was always false.
-                findScript =
-                    "if(typeof document.evaluate==='undefined'){" +
-                    "  window.__ieb_err='document.evaluate not available';" +
-                    "} else {" +
-                    "  var __xr;" +
-                    "  try{ __xr=document.evaluate(" + escaped + ",document,null,7,null); }" +
-                    "  catch(e){ window.__ieb_err='evaluate threw: '+e.message; }" +
-                    "  if(__xr){" +
-                    "    if(typeof __xr.snapshotLength==='undefined'){" +
-                    "      window.__ieb_err='resultType='+__xr.resultType+' has no snapshotLength';" +
-                    "    } else {" +
-                    "      for(var __i=0;__i<__xr.snapshotLength;__i++){" +
-                    "        var __n=__xr.snapshotItem(__i);" +
-                    "        if(__n&&typeof __n.sourceIndex!=='undefined'){" +
-                    "          window.__ieb_idx.push(__n.sourceIndex);" +
-                    "        } else if(__n){" +
-                    "          window.__ieb_err='node['+__i+'] sourceIndex undefined tagName='+(__n.tagName||'?');" +
-                    "        }" +
-                    "      }" +
-                    "    }" +
-                    "  }" +
-                    "}";
-            }
-            else
-            {
-                // XPathResult type 9 = FIRST_ORDERED_NODE_TYPE (.singleNodeValue).
-                findScript =
-                    "if(typeof document.evaluate==='undefined'){" +
-                    "  window.__ieb_err='document.evaluate not available';" +
-                    "} else {" +
-                    "  var __xr;" +
-                    "  try{ __xr=document.evaluate(" + escaped + ",document,null,9,null); }" +
-                    "  catch(e){ window.__ieb_err='evaluate threw: '+e.message; }" +
-                    "  if(__xr){" +
-                    "    var __n=__xr.singleNodeValue;" +
-                    "    if(!__n){" +
-                    "      window.__ieb_err='singleNodeValue null resultType='+__xr.resultType;" +
-                    "    } else if(typeof __n.sourceIndex==='undefined'){" +
-                    "      window.__ieb_err='sourceIndex undefined tagName='+(__n.tagName||'?');" +
-                    "    } else {" +
-                    "      window.__ieb_idx.push(__n.sourceIndex);" +
-                    "    }" +
-                    "  }" +
-                    "}";
-            }
+            // Primary: DOM-based XPath subset — works in all IE document modes, no document.evaluate needed.
+            // Handles: //tag  //tag[@attr="val"]  //tag[contains(text(),"...")]
+            //          //tag[contains(@attr,"...")]  //tag[@attr]
+            // Fallback to document.evaluate for patterns the parser cannot handle (IE11 standards mode only).
+            string findScript =
+                "(function(){" +
+                "  var xpath=" + escaped + ";" +
+                "  var multi=" + (multi ? "true" : "false") + ";" +
+                "  function matchPred(el,pred){" +
+                "    if(!pred) return true;" +
+                "    var m;" +
+                // @attr="val" or @attr='val'
+                "    m=/^@([\\w-]+)=[\"']([^\"']*)[\"']$/.exec(pred);" +
+                "    if(m) return el.getAttribute(m[1])===m[2];" +
+                // contains(text(),"...") or contains(text(),'...')
+                "    m=/^contains\\(text\\(\\),[\"']([^\"']*)[\"']\\)$/.exec(pred);" +
+                "    if(m){var t=el.innerText||el.textContent||'';return t.indexOf(m[1])!==-1;}" +
+                // contains(@attr,"...")
+                "    m=/^contains\\(@([\\w-]+),[\"']([^\"']*)[\"']\\)$/.exec(pred);" +
+                "    if(m) return (el.getAttribute(m[1])||'').indexOf(m[2])!==-1;" +
+                // @attr (existence)
+                "    m=/^@([\\w-]+)$/.exec(pred);" +
+                "    if(m) return el.getAttribute(m[1])!==null;" +
+                "    return null;" + // null signals unsupported predicate
+                "  }" +
+                "  var m=/^\\/\\/([a-zA-Z*][a-zA-Z0-9_-]*)(?:\\[(.+?)\\])?$/.exec(xpath);" +
+                "  if(!m){" +
+                // Pattern not handled by DOM parser — try document.evaluate (IE11 standards mode only)
+                "    if(typeof document.evaluate!=='undefined'){" +
+                "      var rt=multi?7:9,xr;" +
+                "      try{xr=document.evaluate(xpath,document,null,rt,null);}catch(e){window.__ieb_err='evaluate threw: '+e.message;return;}" +
+                "      if(rt===9){var n=xr.singleNodeValue;if(n&&typeof n.sourceIndex!=='undefined')window.__ieb_idx.push(n.sourceIndex);}" +
+                "      else if(typeof xr.snapshotLength!=='undefined'){for(var i=0;i<xr.snapshotLength;i++){var n=xr.snapshotItem(i);if(n&&typeof n.sourceIndex!=='undefined')window.__ieb_idx.push(n.sourceIndex);}}" +
+                "    } else {window.__ieb_err='xpath pattern not supported and document.evaluate unavailable: '+xpath;}" +
+                "    return;" +
+                "  }" +
+                "  var tag=m[1]==='*'?null:m[1],pred=m[2]||null;" +
+                "  var nodes=tag?document.getElementsByTagName(tag):document.getElementsByTagName('*');" +
+                "  for(var i=0;i<nodes.length;i++){" +
+                "    var el=nodes[i];" +
+                "    var r=matchPred(el,pred);" +
+                "    if(r===null){window.__ieb_err='predicate not supported: '+pred;return;}" +
+                "    if(r&&typeof el.sourceIndex!=='undefined'){" +
+                "      window.__ieb_idx.push(el.sourceIndex);" +
+                "      if(!multi) return;" +
+                "    }" +
+                "  }" +
+                "})();";
 
             return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi);
         }

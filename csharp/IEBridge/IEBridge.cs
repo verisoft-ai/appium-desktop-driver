@@ -585,6 +585,19 @@ class Program
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
+            string tag  = ((string)el.tagName).ToLower();
+            string type = ((string)(el.type ?? "")).ToLower();
+            bool isCheckable = tag == "input" && (type == "checkbox" || type == "radio");
+
+            if (!isCheckable)
+            {
+                // COM el.click() works reliably for buttons, links, etc.
+                el.click();
+                return OkJson(seq);
+            }
+
+            // Checkboxes/radios: must toggle the checked property inside JS —
+            // COM el.click() fires the event but doesn't flip checked in compat mode.
             dynamic doc = el.document;
             string lookupJs;
             if (jsIdx >= 0)
@@ -597,23 +610,33 @@ class Program
                 try { elemId = (string)el.id; } catch { }
                 lookupJs = !string.IsNullOrEmpty(elemId)
                     ? $"var t=document.getElementById({JsEscape(elemId)});"
-                    : "var t=null;";
+                    : $"var t=null;";
             }
 
+            // Write result to a store span so we can confirm t was found.
+            string storeId  = $"__iebc{seq}";
+            string storeEsc = JsEscape(storeId);
             doc.parentWindow.execScript(
                 $"(function(){{" +
                 $"{lookupJs}" +
-                $"if(!t) return;" +
-                $"var tag=t.tagName.toLowerCase();" +
-                $"var type=(t.type||'').toLowerCase();" +
-                $"if(tag==='input'&&(type==='checkbox'||type==='radio')){{" +
-                $"  t.checked=!t.checked;" +
-                $"  if(t.fireEvent){{t.fireEvent('onclick');t.fireEvent('onchange');}}" +
-                $"}} else {{" +
-                $"  t.click();" +
-                $"}}" +
+                $"var s=document.createElement('span');" +
+                $"s.id={storeEsc};s.style.display='none';" +
+                $"s.setAttribute('data-found',t?'1':'0');" +
+                $"(document.body||document.documentElement).appendChild(s);" +
+                $"if(t){{t.checked=!t.checked;if(t.fireEvent){{t.fireEvent('onclick');t.fireEvent('onchange');}}}}" +
                 $"}})();",
                 "JScript");
+
+            dynamic store = doc.getElementById(storeId);
+            string found = store != null ? (string)(store.getAttribute("data-found", 0) ?? "0") : "store_null";
+            if (store != null)
+                doc.parentWindow.execScript(
+                    $"(function(){{var s=document.getElementById({storeEsc});if(s)s.parentNode.removeChild(s);}})();",
+                    "JScript");
+
+            if (found != "1")
+                return ErrJson(seq, $"CHECKBOX_ELEMENT_NOT_FOUND jsIdx={jsIdx} found={found}");
+
             return OkJson(seq);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }

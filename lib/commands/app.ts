@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { normalize } from 'node:path';
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
@@ -63,7 +64,25 @@ function normalizeWaitForAppLaunchMs(raw: number | undefined): number {
 }
 
 export async function getPageSource(this: AppiumDesktopDriver): Promise<string> {
+    if (this.isIEContext()) {
+        return this.ieSession!.getSource();
+    }
     return await this.sendCommand('getPageSource', {}) as string;
+}
+
+export async function getUrl(this: AppiumDesktopDriver): Promise<string> {
+    if (this.isIEContext()) {
+        return this.ieSession!.getUrl();
+    }
+    throw new errors.NotYetImplementedError();
+}
+
+export async function setUrl(this: AppiumDesktopDriver, url: string): Promise<void> {
+    if (this.isIEContext()) {
+        await this.ieSession!.navigate(url);
+        return;
+    }
+    throw new errors.NotYetImplementedError();
 }
 
 export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> {
@@ -87,6 +106,10 @@ export async function getWindowRect(this: AppiumDesktopDriver): Promise<Rect> {
 }
 
 export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string> {
+    if (this.isIEContext()) {
+        const h = this.ieHwnd!;
+        return `0x${h.toString(16).padStart(8, '0')}`;
+    }
     const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
     const nativeWindowHandle = await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string;
     return `0x${Number(nativeWindowHandle).toString(16).padStart(8, '0')}`;
@@ -106,14 +129,14 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
 
     // Auto-detect IE: if numeric handle and the window belongs to iexplore.exe, enable IE proxy.
     if (!isNaN(handle) && isIEWindowHwnd(handle)) {
-        this.log.info(`Window 0x${handle.toString(16).padStart(8, '0')} is an IE window — enabling IE proxy.`);
-        await this.enableIEProxy(handle);
+        this.log.info(`Window 0x${handle.toString(16).padStart(8, '0')} is an IE window — enabling IE mode.`);
+        await this.enableIEMode(handle);
         return;
     }
 
-    // Switching to a non-IE window: deactivate IE proxy if it was active.
-    if (this.jwpProxyActive && this.ieProxy) {
-        this.disableIEProxy();
+    // Switching to a non-IE window: deactivate IE mode if it was active.
+    if (this.ieContext) {
+        this.disableIEMode();
     }
 
     for (let i = 1; i <= SET_WINDOW_MAX_POLL_ATTEMPTS; i++) {
@@ -168,14 +191,14 @@ export async function switchToWindowByTitle(
         if (match) {
             // Auto-detect IE window by process name
             if (isIEWindowHwnd(match.handle)) {
-                this.log.info(`Window '${match.title}' is an IE window — enabling IE proxy.`);
-                await this.enableIEProxy(match.handle);
+                this.log.info(`Window '${match.title}' is an IE window — enabling IE mode.`);
+                await this.enableIEMode(match.handle);
                 return;
             }
 
-            // Non-IE: deactivate IE proxy if active
-            if (this.jwpProxyActive && this.ieProxy) {
-                this.disableIEProxy();
+            // Non-IE: deactivate IE mode if active
+            if (this.ieContext) {
+                this.disableIEMode();
             }
 
             this.log.info(`Found window with title '${match.title}'. Setting it as the root element.`);
@@ -219,7 +242,7 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         if (elementId) {
             trySetForegroundWindow(nativeWindowHandle);
             if (isIEWindowHwnd(nativeWindowHandle)) {
-                await this.enableIEProxy(nativeWindowHandle);
+                await this.enableIEMode(nativeWindowHandle);
             }
             return;
         }
@@ -371,6 +394,9 @@ export async function forward(this: AppiumDesktopDriver): Promise<void> {
 }
 
 export async function title(this: AppiumDesktopDriver): Promise<string> {
+    if (this.isIEContext()) {
+        return this.ieSession!.getTitle();
+    }
     const rootId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!rootId) {
         throw new errors.NoSuchWindowError('No active window found for this session.');
@@ -512,7 +538,7 @@ export async function attachToWindowHandles(
                 const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
                 trySetForegroundWindow(nwh);
                 if (isIEWindowHwnd(nwh)) {
-                    await this.enableIEProxy(nwh);
+                    await this.enableIEMode(nwh);
                 }
             }
             return true;
@@ -531,7 +557,7 @@ export async function attachToWindowHandles(
             const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
             trySetForegroundWindow(nwh);
             if (isIEWindowHwnd(nwh)) {
-                await this.enableIEProxy(nwh);
+                await this.enableIEMode(nwh);
             }
             return true;
         }
@@ -617,7 +643,7 @@ export async function attachToApplicationWindow(
         }
 
         if (isIEWindowHwnd(nwh)) {
-            await this.enableIEProxy(nwh);
+            await this.enableIEMode(nwh);
         }
 
         // Splash-screen guard: probe for focusable descendants.

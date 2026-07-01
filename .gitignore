@@ -1,6 +1,10 @@
 # C# build artifacts
 csharp/**/bin/
 csharp/**/obj/
+
+# IEBridge built binary and intermediate output — built at publish time, not committed
+iebridge/IEBridge.exe
+iebridge/x86/
 native/
 
 # Logs

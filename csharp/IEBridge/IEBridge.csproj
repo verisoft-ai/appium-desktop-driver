@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>10.0</LangVersion>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AssemblyName>IEBridge</AssemblyName>
+    <RootNamespace>IEBridge</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Required for dynamic COM dispatch via IDispatch -->
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+</Project>

@@ -2,7 +2,8 @@
 csharp/**/bin/
 csharp/**/obj/
 
-# IEBridge intermediate publish output (only the final IEBridge.exe is committed)
+# IEBridge built binary and intermediate output — built at publish time, not committed
+iebridge/IEBridge.exe
 iebridge/x86/
 native/
 

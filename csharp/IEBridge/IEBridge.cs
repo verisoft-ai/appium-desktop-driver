@@ -523,11 +523,52 @@ class Program
 
     // ── Interactions ────────────────────────────────────────────
 
+    // Read a live JS boolean property from an element via execScript.
+    // COM dynamic dispatch for boolean properties (checked, disabled, selected) returns
+    // the HTML attribute default, not the live property value, in IE compatibility mode.
+    static bool ReadJsBool(dynamic el, string prop)
+    {
+        int idx    = (int)el.sourceIndex;
+        dynamic doc = el.document;
+        dynamic win = doc.parentWindow;
+        string storeId  = $"__iebr_{idx}_{prop}";
+        string storeEsc = JsEscape(storeId);
+        win.execScript(
+            $"(function(){{" +
+            $"var e=document.all.item({idx},0);" +
+            $"var s=document.createElement('span');" +
+            $"s.id={storeEsc};s.style.display='none';" +
+            $"s.setAttribute('data-v',e.{prop}?'1':'0');" +
+            $"(document.body||document.documentElement).appendChild(s);" +
+            $"}})();",
+            "JScript");
+        dynamic store = doc.getElementById(storeId);
+        bool result = false;
+        if (store != null)
+        {
+            result = (string)(store.getAttribute("data-v", 0) ?? "0") == "1";
+            win.execScript(
+                $"(function(){{var s=document.getElementById({storeEsc});if(s)s.parentNode.removeChild(s);}})();",
+                "JScript");
+        }
+        return result;
+    }
+
     static string ClickEl(int seq, string id)
     {
         dynamic? el = Resolve(id);
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
-        try { el.click(); return OkJson(seq); }
+        try
+        {
+            // Use JS click via execScript — el.click() via COM does not toggle checkboxes
+            // in IE compatibility mode (fires no state-change event).
+            int idx     = (int)el.sourceIndex;
+            dynamic doc = el.document;
+            doc.parentWindow.execScript(
+                $"document.all.item({idx},0).click();",
+                "JScript");
+            return OkJson(seq);
+        }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
 
@@ -594,9 +635,9 @@ class Program
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            var disabled = el.getAttribute("disabled", 0);
-            var disStr = disabled?.ToString();
-            return OkJsonBool(seq, "value", disStr == null || disStr == "");
+            // getAttribute("disabled", 0) returns boolean false (not null) for non-disabled
+            // elements in IE compatibility mode, so string comparison is unreliable.
+            return OkJsonBool(seq, "value", !ReadJsBool(el, "disabled"));
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
@@ -612,11 +653,12 @@ class Program
             if (tag == "input")
             {
                 string type = ((string)(el.type ?? "")).ToLower();
-                sel = (type == "checkbox" || type == "radio") && el.@checked == true;
+                if (type == "checkbox" || type == "radio")
+                    sel = ReadJsBool(el, "checked");
             }
             else if (tag == "option")
             {
-                sel = el.selected == true;
+                sel = ReadJsBool(el, "selected");
             }
             return OkJsonBool(seq, "value", sel);
         }

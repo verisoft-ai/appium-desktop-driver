@@ -378,11 +378,18 @@ class Program
     {
         try
         {
-            string escaped   = JsEscape(id);
-            string findScript = $"var el=document.getElementById({escaped});if(el&&typeof el.sourceIndex!=='undefined')window.__ieb_idx.push(el.sourceIndex);";
-            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: false);
+            dynamic el = doc.getElementById(id);
+            if (el == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
+            return OkJson(seq, "elementId", Register(el, TryGetSourceIndex(el)));
         }
-        catch (Exception ex) { return ErrJson(seq, ex.Message); }
+        catch { return ErrJson(seq, "NO_SUCH_ELEMENT"); }
+    }
+
+    // Try to read sourceIndex from the COM proxy; returns -1 on failure.
+    static int TryGetSourceIndex(dynamic el)
+    {
+        try { return (int)el.sourceIndex; }
+        catch { return -1; }
     }
 
     // IDocumentSelector (querySelector/querySelectorAll) and StaticNodeList have no
@@ -451,14 +458,15 @@ class Program
     {
         try
         {
-            string escaped   = JsEscape(css);
             if (!multi)
             {
-                string findScript = $"var els=document.querySelectorAll({escaped});if(els.length>0)window.__ieb_idx.push(els[0].sourceIndex);";
-                return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: false);
+                dynamic single = doc.querySelector(css);
+                if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
+                return OkJson(seq, "elementId", Register(single, TryGetSourceIndex(single)));
             }
-            string findScriptAll = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
-            return FindBySourceIndex(seq, doc, doc.parentWindow, findScriptAll, multi: true);
+            string escaped   = JsEscape(css);
+            string findScript = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
+            return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: true);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }
@@ -525,9 +533,9 @@ class Program
     // ── Interactions ────────────────────────────────────────────
 
     // Read a live JS boolean property (checked, disabled, selected) from an element.
-    // Uses the JS-computed sourceIndex stored at registration — reliable cross-process
-    // because document.all.item(idx) is a positional lookup inside the tab's JS engine,
-    // avoiding the cross-process COM property read that returns null for uniqueID.
+    // Preferred: use the JS-computed sourceIndex stored at registration for a positional
+    // lookup — reliable across the cross-process boundary.
+    // Fallback (jsIdx == -1): find element in JS by its id attribute (works for named elements).
     static bool ReadJsBool(dynamic el, int jsIdx, string prop, int seq)
     {
         dynamic doc     = el.document;
@@ -535,9 +543,23 @@ class Program
         string storeId  = $"__iebr{seq}";
         string storeEsc = JsEscape(storeId);
 
+        string lookupJs;
+        if (jsIdx >= 0)
+        {
+            lookupJs = $"var t=document.all.item({jsIdx},0);";
+        }
+        else
+        {
+            string? elemId = null;
+            try { elemId = (string)el.id; } catch { }
+            lookupJs = !string.IsNullOrEmpty(elemId)
+                ? $"var t=document.getElementById({JsEscape(elemId)});"
+                : "var t=null;";
+        }
+
         win.execScript(
             $"(function(){{" +
-            $"var t=document.all.item({jsIdx},0);" +
+            $"{lookupJs}" +
             $"var s=document.createElement('span');" +
             $"s.id={storeEsc};s.style.display='none';" +
             $"s.setAttribute('data-v',t&&t.{prop}?'1':'0');" +
@@ -563,14 +585,24 @@ class Program
         if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
         try
         {
-            // Locate element via document.all.item(jsIdx) — the JS-computed sourceIndex
-            // stored at registration, reliable across the cross-process COM boundary.
-            // For checkboxes/radios: toggle checked directly; element.click() in IE
-            // compatibility mode fires the event but does not reliably toggle the property.
             dynamic doc = el.document;
+            string lookupJs;
+            if (jsIdx >= 0)
+            {
+                lookupJs = $"var t=document.all.item({jsIdx},0);";
+            }
+            else
+            {
+                string? elemId = null;
+                try { elemId = (string)el.id; } catch { }
+                lookupJs = !string.IsNullOrEmpty(elemId)
+                    ? $"var t=document.getElementById({JsEscape(elemId)});"
+                    : "var t=null;";
+            }
+
             doc.parentWindow.execScript(
                 $"(function(){{" +
-                $"var t=document.all.item({jsIdx},0);" +
+                $"{lookupJs}" +
                 $"if(!t) return;" +
                 $"var tag=t.tagName.toLowerCase();" +
                 $"var type=(t.type||'').toLowerCase();" +

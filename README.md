@@ -11,7 +11,7 @@ Key advantages over WinAppDriver:
 - Reliable text input independent of the active keyboard layout
 - Java Swing / AWT automation via injected JVM agent (no JAB required)
 - WebView2, Chrome, and Edge embedded content via CDP
-- Internet Explorer automation via IEDriverServer (auto-detected, auto-downloaded)
+- Internet Explorer 11 automation via built-in IE DOM Bridge (no IEDriverServer required)
 - Built-in screen recording, clipboard API, and vision-based finding
 - MCP server for direct use with AI coding agents
 
@@ -57,7 +57,7 @@ All capabilities use the `appium:` prefix in W3C format
 | `appium:ms:forcequit` | boolean | Force-kill process on session close |
 | `appium:ms:experimental-webdriver` | boolean | Experimental WebDriver features |
 | `appium:logFile` | string | Path to write session logs |
-| `appium:ieDriverServerPath` | string | Path to a local `IEDriverServer.exe`. Overrides the auto-downloaded binary for IE windows. |
+| `appium:ieDriverServerPath` | string | **Deprecated.** No longer used; IE is automated via the built-in DOM Bridge. |
 
 ## Examples
 
@@ -204,21 +204,115 @@ await driver.releaseActions();
 await driver.deleteSession();
 ```
 
-### Internet Explorer
+### Internet Explorer (IE DOM Bridge)
 
-IE windows are detected automatically — no special capability is required.
-Start a standard desktop session and switch to any IE window; the driver
-activates the IEDriverServer proxy transparently. Switch back to a
-non-IE window and UIA resumes automatically.
+The driver includes a built-in IE DOM Bridge — a 32-bit C# process
+(`IEBridge.exe`) that attaches to a running IE 11 window via the
+`WM_HTML_GETOBJECT` message, retrieves `IHTMLDocument2` through COM, and
+routes all element commands over stdio JSON. No IEDriverServer and no
+WebDriver protocol proxy are involved.
 
-`IEDriverServer.exe` is downloaded and cached on first IE window switch
-(requires internet access). Subsequent sessions skip the download.
+IE mode activates automatically whenever a session window has the
+`IEFrame` window class. This happens when:
 
-**IE must be configured before automating it:**
+- `appium:app` is set to the IE executable and the driver launches it, or
+- `appium:appTopLevelWindow` points to an existing IE window handle, or
+- `windows: switchToWindow` / `windows: switchToWindowByTitle` targets an IE window.
 
-- Internet Options → Security: disable Protected Mode on all four zones
-- Internet Options → Advanced: disable Enhanced Protected Mode
-- View → Zoom: set to exactly 100%
+**Prerequisites:**
+
+- Internet Explorer 11 at `C:\Program Files\Internet Explorer\iexplore.exe`
+- Internet Options → Security: Protected Mode **disabled** on all four zones
+- Internet Options → Advanced: Enhanced Protected Mode **disabled**
+- View → Zoom: set to exactly **100%**
+
+**Supported locator strategies:** `css selector`, `id`, `xpath`
+
+Supported XPath patterns: `//tag`, `//tag[@attr="val"]`,
+`//tag[contains(text(),"...")]`, `//tag[contains(@attr,"...")]`, `//tag[@attr]`
+
+**Command support:**
+
+| Command | Status | Notes |
+|---|---|---|
+| `findElement` / `findElements` | ✅ | css selector, id, xpath |
+| `getTitle` | ✅ | |
+| `getUrl` | ✅ | |
+| `getPageSource` | ✅ | |
+| `url()` | ✅ | navigate to URL |
+| `getWindowHandle` | ✅ | returns HWND hex string |
+| `getText(el)` | ✅ | |
+| `getAttribute(el, name)` | ✅ | |
+| `clear(el)` | ✅ | input / textarea only |
+| `setValue(el, value)` | ✅ | input / textarea only |
+| `click(el)` | ✅ / ⚠️ | works for buttons, links; broken for checkboxes and radios |
+| `isDisplayed(el)` | ✅ | |
+| `isEnabled(el)` | ⚠️ | unreliable for elements without an `id` attribute |
+| `isSelected(el)` | ❌ | always returns `false` |
+| `executeScript(script, args)` | ✅ | runs JS in the IE tab |
+| `getElementRect(el)` | ❌ | not implemented |
+| `getElementScreenshot(el)` | ❌ | not implemented |
+| `windows:` extension commands | ❌ | target the UIA tree, not the HTML DOM |
+
+#### Launch IE and automate it
+
+```js
+import { remote } from 'webdriverio';
+
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:app': 'C:\\Program Files\\Internet Explorer\\iexplore.exe',
+    'appium:appArguments': 'https://example.com',
+    'appium:shouldCloseApp': true,
+  },
+});
+
+await driver.pause(3000); // wait for IE to load the page
+await driver.setTimeout({ implicit: 5000 });
+
+const title = await driver.getTitle();
+console.log(title); // "Example Domain"
+
+const h1 = await driver.$('h1');
+console.log(await h1.getText());
+
+await driver.deleteSession();
+```
+
+#### Attach to an already-open IE window
+
+```js
+import { remote } from 'webdriverio';
+
+// hwnd is the decimal or hex HWND string of the IEFrame window
+const driver = await remote({
+  hostname: '127.0.0.1',
+  port: 4723,
+  path: '/',
+  capabilities: {
+    platformName: 'Windows',
+    'appium:automationName': 'DesktopDriver',
+    'appium:appTopLevelWindow': '0x001A0B2C',
+    'appium:shouldCloseApp': false,
+  },
+});
+
+const url = await driver.getUrl();
+console.log(url);
+
+await driver.deleteSession();
+```
+
+#### Switch between IE and UIA within the same session
+
+Start a `Root` session and navigate between windows freely. The driver
+switches between IE Bridge mode and UIA mode automatically based on whether
+the target window is an `IEFrame`.
 
 ```js
 import { remote } from 'webdriverio';
@@ -234,26 +328,17 @@ const driver = await remote({
   },
 });
 
-// Switch to an already-open IE window — IEDriverServer starts automatically
+// Focus the IE window — IE Bridge activates automatically
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Internet Explorer' }]);
 
 const h1 = await driver.$('h1');
-console.log(await h1.getText()); // "Example Domain"
+console.log(await h1.getText());
 
-// Switch back to any other window — UIA resumes automatically
+// Switch to a non-IE window — UIA resumes automatically
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
 
 await driver.deleteSession();
 ```
-
-To use a locally downloaded binary instead of the auto-downloaded one:
-
-```js
-'appium:ieDriverServerPath': 'C:\\WebDriver\\IEDriverServer.exe',
-```
-
-See [API.md — Internet Explorer](./API.md#internet-explorer) for
-troubleshooting and VM setup notes.
 
 ## API Reference
 

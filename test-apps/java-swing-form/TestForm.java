@@ -72,6 +72,22 @@ public class TestForm extends JFrame {
             )
         );
         add(showError);
+
+        JButton showUntitled = new JButton("Show Untitled Dialog");
+        showUntitled.getAccessibleContext().setAccessibleName("showUntitledDialogButton");
+        showUntitled.addActionListener(e -> SwingUtilities.invokeLater(() -> {
+            JDialog dialog = new JDialog(TestForm.this, "", true);
+            dialog.setSize(250, 120);
+            dialog.setLocationRelativeTo(TestForm.this);
+            JButton closeBtn = new JButton("Close");
+            closeBtn.getAccessibleContext().setAccessibleName("closeUntitledDialog");
+            closeBtn.addActionListener(ev -> dialog.dispose());
+            dialog.setLayout(new FlowLayout());
+            dialog.add(new JLabel("Untitled dialog content"));
+            dialog.add(closeBtn);
+            dialog.setVisible(true);
+        }));
+        add(showUntitled);
     }
 
     public static void main(String[] args) {

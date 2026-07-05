@@ -15,6 +15,7 @@ import { sleep } from '../util';
 import { DEFAULT_EXT, ScreenRecorder, UploadOptions, uploadRecordedMedia } from './screen-recorder';
 import { KeyEventFlags, VirtualKey } from '../winapi/types';
 import {
+    getAllWindowsWithDetails,
     getResolutionScalingFactor,
     keyDown,
     keyUp,
@@ -67,6 +68,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     findByVision: 'executeFindByVision',
     attachJavaSwing: 'executeAttachJavaSwing',
     switchToWindowByTitle: 'windowsSwitchToWindowByTitle',
+    getWindows: 'windowsGetWindows',
 } as const);
 
 const ContentType = Object.freeze({
@@ -163,9 +165,11 @@ export async function patternExpand(this: AppiumDesktopDriver, element: Element)
     try {
         await this.sendCommand('expandElement', { elementId });
     } catch (err: any) {
-        // JAB elements without AccessibleAction throw JAB_NO_EXPAND_ACTION.
-        // Fall back to the Windows standard keyboard shortcut: focus + ALT+Down.
-        if (String(err?.message ?? err).includes('JAB_NO_EXPAND_ACTION')) {
+        const msg = String(err?.message ?? err);
+        // Fall back to keyboard (focus + ALT+Down) when the element doesn't support
+        // ExpandCollapsePattern — covers both JAB elements (JAB_NO_EXPAND_ACTION) and
+        // regular UIA elements that expose no expand pattern.
+        if (msg.includes('JAB_NO_EXPAND_ACTION') || msg.includes('does not support ExpandCollapsePattern')) {
             await this.sendCommand('setFocus', { elementId });
             await sleep(50);
             keyDown(Key.ALT);
@@ -267,6 +271,10 @@ export async function windowsSwitchToWindowByTitle(
         throw new errors.InvalidArgumentError('switchToWindowByTitle requires a "title" argument.');
     }
     return await this.switchToWindowByTitle({ title: args.title, exact: args.exact });
+}
+
+export async function windowsGetWindows(): Promise<Array<{ handle: string; title: string; className: string }>> {
+    return getAllWindowsWithDetails();
 }
 
 export async function windowsLaunchApp(this: AppiumDesktopDriver): Promise<void> {

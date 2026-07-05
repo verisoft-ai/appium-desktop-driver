@@ -925,6 +925,34 @@ export function getVisibleWindowsWithTitles(): Array<{ handle: number; title: st
     return windows;
 }
 
+export function getAllWindowsWithDetails(): Array<{ handle: string; title: string; className: string }> {
+    const windows: Array<{ handle: string; title: string; className: string }> = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const titleBuf = Buffer.alloc(512);
+                    const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
+                    const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
+
+                    const classBuf = Buffer.alloc(512);
+                    const classLen = GetClassNameW(hWnd, classBuf, 256);
+                    const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
+
+                    const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
+                    windows.push({ handle, title, className });
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return windows;
+}
+
 export function trySetForegroundWindow(windowHandle: number): boolean {
     let targetHWnd: HWND | null = null;
 

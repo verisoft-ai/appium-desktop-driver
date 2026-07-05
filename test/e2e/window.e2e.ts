@@ -141,6 +141,58 @@ describe('Window and app management commands', () => {
         });
     });
 
+    describe('windows: getWindows', () => {
+        it('returns array of objects with handle, title, className fields', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            expect(Array.isArray(windows)).toBe(true);
+            expect(windows.length).toBeGreaterThan(0);
+            for (const w of windows) {
+                expect(w.handle).toMatch(/^0x[0-9a-fA-F]{8}$/);
+                expect(typeof w.title).toBe('string');
+                expect(typeof w.className).toBe('string');
+            }
+        });
+
+        it('Calculator window appears with non-empty title and className', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const calcWindow = windows.find((w) => w.title.toLowerCase().includes('calculator'));
+            expect(calcWindow).toBeDefined();
+            expect(calcWindow!.className.length).toBeGreaterThan(0);
+        });
+
+        it('Notepad window appears with non-empty title and className', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const notepadWindow = windows.find((w) => w.title.toLowerCase().includes('notepad'));
+            expect(notepadWindow).toBeDefined();
+            expect(notepadWindow!.className.length).toBeGreaterThan(0);
+        });
+
+        it('switching to Calculator by handle from windows: getWindows gives access to CalculatorResults', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const calcWindow = windows.find((w) => w.title.toLowerCase().includes('calculator'));
+            expect(calcWindow).toBeDefined();
+            await root.switchToWindow(calcWindow!.handle);
+            const results = await root.$('~CalculatorResults');
+            expect(await results.isExisting()).toBe(true);
+        });
+
+        it('switching to Notepad by handle from windows: getWindows gives access to text area', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const notepadWindow = windows.find((w) => w.title.toLowerCase().includes('notepad'));
+            expect(notepadWindow).toBeDefined();
+            await root.switchToWindow(notepadWindow!.handle);
+            const textArea = await getNotepadTextArea(root);
+            expect(await textArea.isExisting()).toBe(true);
+        });
+
+        it('includes windows with empty title (untitled windows are not filtered out)', async () => {
+            const windows = await root.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            // getWindowHandles only returns titled windows — getWindows should return >= that count
+            const titledHandles = await root.getWindowHandles();
+            expect(windows.length).toBeGreaterThanOrEqual(titledHandles.length);
+        });
+    });
+
     describe('getPageSource', () => {
         it('returns a non-empty XML string', async () => {
             const source = await calc.getPageSource();

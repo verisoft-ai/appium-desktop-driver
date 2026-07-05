@@ -106,6 +106,12 @@ await driver.switchToWindow(allHandles[allHandles.length - 1]);
 // ...or switch by title (partial, case-insensitive)
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
 
+// To include untitled windows (getWindowHandles omits them), use getWindows instead.
+// It returns { handle, title, className } for every visible top-level window.
+const windows = await driver.executeScript('windows: getWindows', []);
+const popup = windows.find(w => w.className === 'SunAwtDialog' && w.title === '');
+if (popup) await driver.switchToWindow(popup.handle);
+
 const titleBar = await driver.$('//TitleBar');
 console.log(await titleBar.getText());
 

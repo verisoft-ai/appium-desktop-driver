@@ -67,7 +67,8 @@ public class CommandHandler {
 
         // HWND match failed (getHwnd returns 0 on Java 9+ due to module encapsulation).
         // Secondary: match by window title passed from the C# UIA layer.
-        if (targetTitle != null && !targetTitle.isEmpty()) {
+        // Empty title is valid — it matches untitled dialogs (JDialog with no title set).
+        if (targetTitle != null) {
             for (Window w : visible) {
                 String wTitle = getWindowTitle(w);
                 if (targetTitle.equals(wTitle)) {

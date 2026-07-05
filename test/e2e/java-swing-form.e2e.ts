@@ -432,6 +432,65 @@ describe('Java Swing Form', () => {
         });
     });
 
+    describe('windows: getWindows — untitled dialog', () => {
+        let mainWindowHandle: string;
+
+        beforeAll(async () => {
+            mainWindowHandle = await driver.getWindowHandle();
+        });
+
+        it('showUntitledDialogButton exists', async () => {
+            const btn = await driver.$('~showUntitledDialogButton');
+            expect(await btn.isExisting()).toBe(true);
+        });
+
+        it('windows: getWindows returns array of objects with handle, title, className', async () => {
+            const windows = await driver.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            expect(Array.isArray(windows)).toBe(true);
+            expect(windows.length).toBeGreaterThan(0);
+            for (const w of windows) {
+                expect(typeof w.handle).toBe('string');
+                expect(w.handle).toMatch(/^0x[0-9a-fA-F]{8}$/);
+                expect(typeof w.title).toBe('string');
+                expect(typeof w.className).toBe('string');
+            }
+        });
+
+        it('untitled dialog appears in windows: getWindows with SunAwtDialog className and empty title', async () => {
+            const btn = await driver.$('~showUntitledDialogButton');
+            await btn.click();
+            await driver.pause(500);
+
+            const windows = await driver.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const popup = windows.find((w) => w.className === 'SunAwtDialog' && w.title === '');
+            expect(popup).toBeDefined();
+            expect(popup!.handle).toMatch(/^0x[0-9a-fA-F]{8}$/);
+
+            // clean up
+            await driver.switchToWindow(popup!.handle);
+            await (await driver.$('~closeUntitledDialog')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
+
+        it('switching to untitled dialog by handle makes closeUntitledDialog button accessible', async () => {
+            const btn = await driver.$('~showUntitledDialogButton');
+            await btn.click();
+            await driver.pause(500);
+
+            const windows = await driver.executeScript('windows: getWindows', []) as Array<{ handle: string; title: string; className: string }>;
+            const popup = windows.find((w) => w.className === 'SunAwtDialog' && w.title === '');
+            expect(popup).toBeDefined();
+
+            await driver.switchToWindow(popup!.handle);
+            const closeBtn = await driver.$('~closeUntitledDialog');
+            expect(await closeBtn.isExisting()).toBe(true);
+            await closeBtn.click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
+    });
+
     describe('error dialog (switchToWindowByTitle)', () => {
         const ERROR_DIALOG_TITLE = 'שגיאה';
         let mainWindowHandle: string;

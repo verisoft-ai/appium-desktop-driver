@@ -63,6 +63,27 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
     );
 
     server.registerTool(
+        'get_windows',
+        {
+            description:
+                'Get all visible windows including untitled ones. ' +
+                'Returns an array of { handle, title, className } objects. ' +
+                'Use handle to switch to any window (including those with no title) via switch_to_window. ' +
+                'Use className to identify untitled windows such as popups and dialogs.',
+            annotations: { readOnlyHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const windows = await driver.executeScript('windows: getWindows', []);
+                return { content: [{ type: 'text' as const, text: JSON.stringify(windows, null, 2) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
         'switch_to_window',
         {
             description: 'Switch focus to a different window by its handle (from get_window_handles).',

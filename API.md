@@ -234,6 +234,32 @@ Re-launches the app from the `appium:app` capability. No arguments.
 
 Closes the current root application window. No arguments.
 
+#### windows: getWindows
+
+Returns all visible top-level windows including **untitled windows** that the standard WebDriver `getWindowHandles()` omits.
+
+Each entry in the returned array contains:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `handle` | string | Hex window handle (e.g. `0x000a1234`) — pass directly to `driver.switchToWindow()` |
+| `title` | string | Window title. Empty string `""` for untitled windows |
+| `className` | string | Win32 window class name (e.g. `SunAwtDialog`, `Notepad`, `#32770`) |
+
+**Difference from `getWindowHandles()`:** The standard `getWindowHandles()` only returns windows with a non-empty title. `windows: getWindows` returns all visible windows and provides richer metadata, making it possible to locate and switch to untitled popups and dialogs by their class name or handle.
+
+```js
+const windows = await driver.executeScript('windows: getWindows', []);
+// [
+//   { handle: '0x000a1234', title: 'My App', className: 'SunAwtFrame' },
+//   { handle: '0x000b5678', title: '',        className: 'SunAwtDialog' },
+// ]
+
+// Switch to an untitled Java Swing dialog by class name
+const popup = windows.find(w => w.className === 'SunAwtDialog' && w.title === '');
+await driver.switchToWindow(popup.handle);
+```
+
 #### windows: switchToWindowByTitle
 
 Switches the session to a window matched by title. Uses Win32 `EnumWindows` so it always searches all visible top-level windows regardless of where the session is currently rooted.
@@ -389,11 +415,6 @@ await driver.executeScript('windows: click', [{ x, y }]);
 #### windows: powerShell
 
 Executes a PowerShell script and returns stdout.
-Requires the `power_shell` insecure feature flag:
-
-```bash
-appium --use-insecure-feature power_shell
-```
 
 The driver runs a single persistent PowerShell session per Appium
 session, so variables set in one call are available in subsequent

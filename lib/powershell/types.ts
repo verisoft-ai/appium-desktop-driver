@@ -50,6 +50,8 @@ export const StringProperty = Object.freeze({
     HELP_TEXT: 'helptext',
     FRAMEWORK_ID: 'frameworkid',
     ITEM_STATUS: 'itemstatus',
+    JAVA_SIMPLE_CLASS: 'javasimpleclass',
+    JAVA_CLASS: 'javaclass',
 } as const);
 
 export const BooleanProperty = Object.freeze({

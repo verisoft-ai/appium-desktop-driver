@@ -151,7 +151,7 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
         await this.sendCommand('setRootElementFromElementId', { elementId });
         const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
         const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-        trySetForegroundWindow(nwh);
+        await trySetForegroundWindow(nwh);
         if (isIEWindowHwnd(nwh)) {
             await this.enableIEMode(nwh);
         }

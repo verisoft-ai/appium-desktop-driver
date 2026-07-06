@@ -311,6 +311,12 @@ const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWin
 const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
 const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
 const GetCurrentThreadId = kernel32.func(/* c */ `DWORD __stdcall GetCurrentThreadId()`) as () => DWORD;
+const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int nCmdShow)`) as (hWnd: HWND, nCmdShow: number) => BOOL;
+const IsIconic = user32.func(/* c */ `BOOL __stdcall IsIconic(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const BringWindowToTop = user32.func(/* c */ `BOOL __stdcall BringWindowToTop(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const SetFocus = user32.func(/* c */ `HWND __stdcall SetFocus(HWND hWnd)`) as (hWnd: HWND) => HWND;
+
+const SW_RESTORE = 9;
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -953,44 +959,94 @@ export function getAllWindowsWithDetails(): Array<{ handle: string; title: strin
     return windows;
 }
 
-export function trySetForegroundWindow(windowHandle: number): boolean {
+function isForeground(targetHWnd: HWND): boolean {
+    try {
+        const fg = GetForegroundWindow();
+        return fg !== null && Number(address(fg)) === Number(address(targetHWnd));
+    } catch {
+        return false;
+    }
+}
+
+export async function trySetForegroundWindow(windowHandle: number): Promise<boolean> {
     let targetHWnd: HWND | null = null;
 
-    EnumWindows((hWnd) => {
-        if (windowHandle === Number(address(hWnd))) {
-            targetHWnd = hWnd;
-            return false;
-        }
-        return true;
-    }, 0);
+    try {
+        EnumWindows((hWnd) => {
+            if (windowHandle === Number(address(hWnd))) {
+                targetHWnd = hWnd;
+                return false;
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: EnumWindows failed: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+    }
 
     if (!targetHWnd) {
         return false;
     }
 
+    // Strategy 0: restore minimized window — SetForegroundWindow silently fails when target is iconic.
+    try {
+        if (IsIconic(targetHWnd)) {
+            ShowWindow(targetHWnd, SW_RESTORE);
+            await sleep(50);
+        }
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: restore-minimized failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Strategy 1: SendInput trick + SetForegroundWindow.
     // Any SendInput event grants our thread foreground-set permission.
     // Use Control (not Alt) to avoid activating menu-bar accelerator hints.
-    sendKeyInput(Key.CONTROL, true);
-    sendKeyInput(Key.CONTROL, false);
-
-    const hForeground = GetForegroundWindow();
-    if (!hForeground) {
-        return SetForegroundWindow(targetHWnd);
+    try {
+        sendKeyInput(Key.CONTROL, true);
+        sendKeyInput(Key.CONTROL, false);
+        SetForegroundWindow(targetHWnd);
+        await sleep(50);
+        if (isForeground(targetHWnd)) return true;
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 1 (SendInput+SFW) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    const ourThreadId = GetCurrentThreadId();
-    const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
-
-    const attached = ourThreadId !== foregroundThreadId &&
-        AttachThreadInput(ourThreadId, foregroundThreadId, true);
-
-    const result = SetForegroundWindow(targetHWnd);
-
-    if (attached) {
-        AttachThreadInput(ourThreadId, foregroundThreadId, false);
+    // Strategy 2: AttachThreadInput + SetForegroundWindow + SetFocus.
+    try {
+        const hForeground = GetForegroundWindow();
+        if (hForeground) {
+            const ourThreadId = GetCurrentThreadId();
+            const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
+            const attached = ourThreadId !== foregroundThreadId &&
+                AttachThreadInput(ourThreadId, foregroundThreadId, true);
+            try {
+                SetForegroundWindow(targetHWnd);
+                if (attached) {
+                    SetFocus(targetHWnd);
+                }
+            } finally {
+                if (attached) {
+                    AttachThreadInput(ourThreadId, foregroundThreadId, false);
+                }
+            }
+            await sleep(50);
+            if (isForeground(targetHWnd)) return true;
+        }
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 2 (AttachThreadInput) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    return result;
+    // Strategy 3: BringWindowToTop — different internal z-order path than SetForegroundWindow.
+    try {
+        BringWindowToTop(targetHWnd);
+        await sleep(50);
+        if (isForeground(targetHWnd)) return true;
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 3 (BringWindowToTop) failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    log.warn(`trySetForegroundWindow: all strategies exhausted for handle 0x${windowHandle.toString(16).padStart(8, '0')}`);
+    return false;
 }
 
 export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number {

@@ -146,7 +146,7 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
             try {
                 const elementId = await this.sendCommand('setRootElementFromHandle', { handle }) as string | null;
                 if (elementId && elementId.trim() !== '') {
-                    trySetForegroundWindow(handle);
+                    await trySetForegroundWindow(handle);
                     return;
                 }
             } catch {
@@ -204,7 +204,7 @@ export async function switchToWindowByTitle(
             this.log.info(`Found window with title '${match.title}'. Setting it as the root element.`);
             const elementId = await this.sendCommand('setRootElementFromHandle', { handle: match.handle }) as string | null;
             if (elementId && elementId.trim() !== '') {
-                trySetForegroundWindow(match.handle);
+                await trySetForegroundWindow(match.handle);
                 return;
             }
         }
@@ -240,7 +240,7 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         const elementId = await this.sendCommand('setRootElementFromHandle', { handle: nativeWindowHandle }) as string | null;
 
         if (elementId) {
-            trySetForegroundWindow(nativeWindowHandle);
+            await trySetForegroundWindow(nativeWindowHandle);
             if (isIEWindowHwnd(nativeWindowHandle)) {
                 await this.enableIEMode(nativeWindowHandle);
             }
@@ -536,7 +536,7 @@ export async function attachToWindowHandles(
             if (isNotNull) {
                 const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
                 const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-                trySetForegroundWindow(nwh);
+                await trySetForegroundWindow(nwh);
                 if (isIEWindowHwnd(nwh)) {
                     await this.enableIEMode(nwh);
                 }
@@ -555,7 +555,7 @@ export async function attachToWindowHandles(
         if (isNotNull) {
             const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
             const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-            trySetForegroundWindow(nwh);
+            await trySetForegroundWindow(nwh);
             if (isIEWindowHwnd(nwh)) {
                 await this.enableIEMode(nwh);
             }
@@ -632,7 +632,7 @@ export async function attachToApplicationWindow(
     if (isNotNull) {
         const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
         const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-        let focused = trySetForegroundWindow(nwh);
+        let focused = await trySetForegroundWindow(nwh);
         if (!focused) {
             try {
                 await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);

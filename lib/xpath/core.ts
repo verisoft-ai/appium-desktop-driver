@@ -91,6 +91,8 @@ const XPathAllowedProperties = Object.freeze([
     Property.ORIENTATION,
     Property.PROCESS_ID,
     Property.RUNTIME_ID,
+    Property.JAVA_SIMPLE_CLASS,
+    Property.JAVA_CLASS,
 ] as const);
 
 type XPathAllowedProperties = typeof XPathAllowedProperties[number];
@@ -516,13 +518,19 @@ function convertNodeTestToCondition(nodeTest: NodeTestNode): Condition {
 
 async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, context: XPathElement, sendCommand: SendCommandFn): Promise<string[]> {
     const contextId = getContextElementId(context);
-    // Get the runtime IDs for the context element(s)
-    const runtimeId = await sendCommand('getProperty', {
-        elementId: contextId ?? await sendCommand('saveRootElementToTable', {}),
-        property: 'RuntimeId',
-    }) as string;
 
-    const elIds = runtimeId.split('\n').map((id) => id.trim()).filter(Boolean);
+    // JAB elements (java:pid:id) have no UIA RuntimeId concept and store objects
+    // as WeakReferences. Calling getProperty('RuntimeId') for a GC'd JAB element
+    // throws instead of returning "". Skip the call entirely — the unknown-property
+    // fallback below uses contextId directly and is already try/catch protected.
+    let elIds: string[] = [];
+    if (!contextId?.startsWith('java:')) {
+        const runtimeId = (await sendCommand('getProperty', {
+            elementId: contextId ?? await sendCommand('saveRootElementToTable', {}),
+            property: 'RuntimeId',
+        }) as string) ?? '';
+        elIds = runtimeId.split('\n').map((id) => id.trim()).filter(Boolean);
+    }
     const extraProperties = ['x', 'y', 'width', 'height'];
 
     switch (nodeTest.type) {

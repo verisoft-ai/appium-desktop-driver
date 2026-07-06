@@ -4,7 +4,7 @@ import javax.accessibility.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.lang.reflect.Field;
+import java.awt.event.MouseEvent;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.List;
@@ -759,8 +759,24 @@ public class CommandHandler {
                 });
                 return null;
             }
+            // JComboBox not reachable (unusual LAF). Synthesize a mouse-released event on the list
+            // item — BasicComboPopup's MouseListener handles it by calling setSelectedItem() and
+            // setPopupVisible(false).
             final JList<?> finalList = jList;
-            SwingUtilities.invokeAndWait(() -> finalList.setSelectedIndex(index));
+            final int finalIndex = index;
+            SwingUtilities.invokeAndWait(() -> {
+                finalList.setSelectedIndex(finalIndex);
+                Rectangle cell = finalList.getCellBounds(finalIndex, finalIndex);
+                if (cell != null) {
+                    int cx = cell.x + cell.width / 2;
+                    int cy = cell.y + cell.height / 2;
+                    long now = System.currentTimeMillis();
+                    finalList.dispatchEvent(new MouseEvent(finalList, MouseEvent.MOUSE_PRESSED,
+                        now, MouseEvent.BUTTON1_DOWN_MASK, cx, cy, 1, false, MouseEvent.BUTTON1));
+                    finalList.dispatchEvent(new MouseEvent(finalList, MouseEvent.MOUSE_RELEASED,
+                        now, 0, cx, cy, 1, false, MouseEvent.BUTTON1));
+                }
+            });
             return null;
         }
 
@@ -783,15 +799,14 @@ public class CommandHandler {
         // Lightweight popup: combo is a direct AWT ancestor
         Container ancestor = SwingUtilities.getAncestorOfClass(JComboBox.class, list);
         if (ancestor instanceof JComboBox) return (JComboBox<?>) ancestor;
-        // Heavy-weight popup: popup is a separate window; walk via BasicComboPopup back-reference
+        // Heavyweight popup: BasicComboPopup extends JPopupMenu; getInvoker() returns the JComboBox
+        // that opened it. Public API — works on all Java versions without reflection.
         Container parent = list.getParent();
         while (parent != null) {
-            try {
-                Field f = parent.getClass().getDeclaredField("comboBox");
-                f.setAccessible(true);
-                Object val = f.get(parent);
-                if (val instanceof JComboBox) return (JComboBox<?>) val;
-            } catch (Exception ignored) {}
+            if (parent instanceof JPopupMenu) {
+                Component invoker = ((JPopupMenu) parent).getInvoker();
+                if (invoker instanceof JComboBox) return (JComboBox<?>) invoker;
+            }
             parent = parent.getParent();
         }
         return null;

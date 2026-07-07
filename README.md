@@ -256,6 +256,8 @@ Supported XPath patterns: `//tag`, `//tag[@attr="val"]`,
 | `isEnabled(el)` | ⚠️ | unreliable for elements without an `id` attribute |
 | `isSelected(el)` | ❌ | always returns `false` |
 | `executeScript(script, args)` | ✅ | runs JS in the IE tab |
+| `switchToFrame(id)` | ✅ | by index, element, or `null` for default content |
+| `switchToParentFrame()` | ✅ | returns to default content (single-level only) |
 | `getElementRect(el)` | ❌ | not implemented |
 | `getElementScreenshot(el)` | ❌ | not implemented |
 | `windows:` extension commands | ❌ | target the UIA tree, not the HTML DOM |
@@ -313,6 +315,28 @@ console.log(url);
 
 await driver.deleteSession();
 ```
+
+#### Switch into an iframe
+
+```js
+// By 0-based index
+await driver.switchToFrame(0);
+
+// By element
+const frameEl = await driver.$('iframe#content');
+await driver.switchToFrame(frameEl);
+
+// Element finds are now scoped to the frame's document
+const h1 = await driver.$('h1');
+console.log(await h1.getText());
+
+// Back to the top-level document
+await driver.switchToFrame(null);
+```
+
+Only one level of nesting is tracked — switching into a frame while
+already inside one replaces the current frame context rather than
+stacking. `switchToParentFrame()` always returns to default content.
 
 #### Switch between IE and UIA within the same session
 

@@ -82,7 +82,7 @@ Windows UI Automation (UIA3)
 | [lib/mcp/tools/interact.ts](lib/mcp/tools/interact.ts) | `click_element`, `set_value`, `clear_element`, `get_text`, `get_attribute`, `is_element_displayed`, `is_element_enabled` |
 | [lib/mcp/tools/advanced.ts](lib/mcp/tools/advanced.ts) | `advanced_click`, `send_keys`, `hover`, `scroll`, `click_and_drag` |
 | [lib/mcp/tools/patterns.ts](lib/mcp/tools/patterns.ts) | UIA pattern tools — `invoke_element`, `expand_element`, `collapse_element`, `toggle_element`, `set_element_value`, `get_element_value`, window state tools |
-| [lib/mcp/tools/window.ts](lib/mcp/tools/window.ts) | `take_screenshot`, `get_page_source`, `get_window_rect`, `get_window_handles`, `switch_to_window` |
+| [lib/mcp/tools/window.ts](lib/mcp/tools/window.ts) | `take_screenshot`, `get_page_source`, `get_window_rect`, `get_window_handles`, `switch_to_window`, `switch_to_frame`, `switch_to_default_content` |
 | [lib/mcp/tools/app.ts](lib/mcp/tools/app.ts) | `get_window_element`, `launch_app`, `close_app`, `get_device_time` |
 | [lib/mcp/tools/clipboard.ts](lib/mcp/tools/clipboard.ts) | `get_clipboard`, `set_clipboard` |
 
@@ -613,6 +613,24 @@ Switch automation focus to a different window.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `handle` | string | yes | Handle from `get_window_handles` |
+
+---
+
+#### `switch_to_frame`
+Switch context into an iframe or frame inside an IE window. After switching, element finds are scoped to that frame's document. IE context only (switch to an IE window first).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `index` | number | one of `index`/`name`/`elementId` | 0-based frame index |
+| `name` | string | one of `index`/`name`/`elementId` | Frame `name` or `id` attribute |
+| `elementId` | string | one of `index`/`name`/`elementId` | Element ID of an `<iframe>`/`<frame>` (from `find_element`) |
+
+---
+
+#### `switch_to_default_content`
+Switch back to the top-level document after a `switch_to_frame` call. Required before interacting with elements outside the frame. IE context only.
+
+No parameters.
 
 ---
 

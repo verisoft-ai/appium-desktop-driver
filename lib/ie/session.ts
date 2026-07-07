@@ -150,6 +150,18 @@ export class IESession {
         return r.result ?? null;
     }
 
+    async switchToFrame(id: number | string): Promise<void> {
+        await this.send('switchToFrame', { value: String(id) });
+    }
+
+    async switchToFrameByElement(elementId: string): Promise<void> {
+        await this.send('switchToFrame', { elementId, value: '' });
+    }
+
+    async switchToDefaultContent(): Promise<void> {
+        await this.send('switchToDefaultContent');
+    }
+
     clearElements(): void {
         // eslint-disable-next-line promise/prefer-await-to-then
         this.send('clearElements').catch(() => {/* best-effort */});

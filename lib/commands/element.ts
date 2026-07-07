@@ -356,3 +356,32 @@ export async function getElementScreenshot(this: AppiumDesktopDriver, elementId:
     }
     return await this.sendCommand('getElementScreenshot', { elementId }) as string;
 }
+
+export async function setFrame(
+    this: AppiumDesktopDriver,
+    id: null | number | Record<string, string>,
+): Promise<void> {
+    if (!this.isIEContext()) {
+        throw new errors.NotImplementedError('setFrame is only supported in IE context');
+    }
+    if (id === null) {
+        await this.ieSession!.switchToDefaultContent();
+        return;
+    }
+    if (typeof id === 'number') {
+        await this.ieSession!.switchToFrame(id);
+        return;
+    }
+    const elementId = id[W3C_ELEMENT_KEY];
+    if (!elementId) {
+        throw new errors.InvalidArgumentError('Invalid frame reference: missing element key');
+    }
+    await this.ieSession!.switchToFrameByElement(elementId);
+}
+
+export async function switchToParentFrame(this: AppiumDesktopDriver): Promise<void> {
+    if (!this.isIEContext()) {
+        throw new errors.NotImplementedError('switchToParentFrame is only supported in IE context');
+    }
+    await this.ieSession!.switchToDefaultContent();
+}

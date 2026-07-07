@@ -215,4 +215,62 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
             }
         }
     );
+
+    server.registerTool(
+        'switch_to_frame',
+        {
+            description:
+                'Switch context into an iframe or frame inside an IE window. ' +
+                'After switching, element finds are scoped to that frame\'s document. ' +
+                'Provide exactly one of: index (0-based integer), name (frame name/id attribute), or elementId (element ID of the iframe element). ' +
+                'Only supported in IE context (after switch_to_window targeting an IE window).',
+            inputSchema: {
+                index: z.number().int().min(0).optional()
+                    .describe('0-based frame index'),
+                name: z.string().min(1).optional()
+                    .describe('Frame name or id attribute'),
+                elementId: z.string().min(1).optional()
+                    .describe('Element ID of an <iframe> or <frame> element (from find_element)'),
+            },
+        },
+        async ({ index, name, elementId }) => {
+            try {
+                const driver = session.getDriver();
+                if (index !== undefined) {
+                    await driver.switchFrame(index as never);
+                } else if (name !== undefined) {
+                    // switchFrame does not accept strings in WebDriver Classic — find the element first
+                    const frameEl = await driver.$(`//iframe[@name="${name}"]`)
+                        ?? await driver.$(`//frame[@name="${name}"]`);
+                    await driver.switchFrame(frameEl);
+                } else if (elementId !== undefined) {
+                    await driver.switchFrame({ [W3C_ELEMENT_KEY]: elementId } as never);
+                } else {
+                    return { isError: true, content: [{ type: 'text' as const, text: 'Provide one of: index, name, or elementId' }] };
+                }
+                return { content: [{ type: 'text' as const, text: 'Switched to frame' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'switch_to_default_content',
+        {
+            description:
+                'Switch back to the top-level document after a switch_to_frame call. ' +
+                'Required before interacting with elements outside the frame. ' +
+                'Only supported in IE context.',
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.switchFrame(null);
+                return { content: [{ type: 'text' as const, text: 'Switched to default content' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
 }

@@ -19,6 +19,7 @@ class Program
     struct ElemEntry { public dynamic El; public int JsIdx; }
     static readonly Dictionary<string, ElemEntry> _elems = new();
     static int _elemSeq = 0;
+    static dynamic? _frameDoc = null;
 
     // Held in a static field so the GC does not collect the delegate while
     // the unmanaged EnumChildWindows call is in progress.
@@ -252,6 +253,11 @@ class Program
     static string ErrJson(int seq, string msg)
         => $"{{\"seq\":{seq},\"ok\":false,\"error\":{JsEscape(msg)}}}";
 
+    // val is a pre-serialized JSON literal (number/string/bool/array/object/null),
+    // embedded verbatim rather than JsEscape'd as a string.
+    static string OkJsonRaw(int seq, string key, string? val)
+        => $"{{\"seq\":{seq},\"ok\":true,{JsEscape(key)}:{val ?? "null"}}}";
+
     // ── Document acquisition ────────────────────────────────────
 
     static dynamic? GetDocument(IntPtr topHwnd)
@@ -312,6 +318,25 @@ class Program
             return OkJson(seq);
         }
 
+        if (req.Cmd == "switchToDefaultContent")
+        {
+            _frameDoc = null;
+            FlushElements();
+            return OkJson(seq);
+        }
+
+        if (req.Cmd == "switchToFrame")
+            return HandleSwitchToFrame(seq, req.Hwnd, req.Value, req.ElementId);
+
+        // If a frame context is active use it directly — no top-level doc retry needed.
+        if (_frameDoc != null)
+        {
+            try { return DispatchCmd(req, seq, _frameDoc); }
+            catch (System.Runtime.InteropServices.COMException ex)
+                when (ex.HResult == RPC_SERVER_UNAVAILABLE)
+            { return ErrJson(seq, "FRAME_DOCUMENT_UNAVAILABLE"); }
+        }
+
         // IE11 LCIE replaces its tab process after initial load. The old
         // Internet_Explorer_Server window briefly lingers while the new one
         // starts, causing either RPC_SERVER_UNAVAILABLE (old process dying)
@@ -332,29 +357,7 @@ class Program
 
             try
             {
-                return req.Cmd switch
-                {
-                    "getTitle"            => OkJson(seq, "title",  (string)doc.title),
-                    "getUrl"              => OkJson(seq, "url",    (string)doc.url),
-                    "getSource"           => GetSource(seq, doc),
-                    "navigate"            => Navigate(seq, doc, req.Value!),
-                    "findElementById"     => FindById(seq, doc, req.Value!),
-                    "findElementsByCss"   => FindByCss(seq, doc, req.Value!, multi: false),
-                    "findElementsCssAll"  => FindByCss(seq, doc, req.Value!, multi: true),
-                    "findElementByXpath"  => FindByXpath(seq, doc, req.Value!, multi: false),
-                    "findElementsByXpath" => FindByXpath(seq, doc, req.Value!, multi: true),
-                    "click"               => ClickEl(seq, req.ElementId!),
-                    "getValue"            => GetVal(seq, req.ElementId!),
-                    "setValue"            => SetVal(seq, req.ElementId!, req.Value!),
-                    "clear"               => SetVal(seq, req.ElementId!, ""),
-                    "getText"             => GetText(seq, req.ElementId!),
-                    "getAttribute"        => GetAttr(seq, req.ElementId!, req.Name!),
-                    "isDisplayed"         => IsDisplayed(seq, req.ElementId!),
-                    "isEnabled"           => IsEnabled(seq, req.ElementId!),
-                    "isSelected"          => IsSelected(seq, req.ElementId!),
-                    "executeScript"       => ExecScript(seq, doc, req.Script!),
-                    _                     => ErrJson(seq, $"UNKNOWN_CMD:{req.Cmd}")
-                };
+                return DispatchCmd(req, seq, doc);
             }
             catch (System.Runtime.InteropServices.COMException ex)
                 when (ex.HResult == RPC_SERVER_UNAVAILABLE && attempt < MAX_DOC_RETRIES - 1)
@@ -364,6 +367,78 @@ class Program
         }
 
         return ErrJson(seq, "IE_DOCUMENT_NOT_FOUND");
+    }
+
+    static string DispatchCmd(Req req, int seq, dynamic doc)
+    {
+        return req.Cmd switch
+        {
+            "getTitle"            => OkJson(seq, "title",  (string)doc.title),
+            "getUrl"              => OkJson(seq, "url",    (string)doc.url),
+            "getSource"           => GetSource(seq, doc),
+            "navigate"            => Navigate(seq, doc, req.Value!),
+            "findElementById"     => FindById(seq, doc, req.Value!),
+            "findElementsByCss"   => FindByCss(seq, doc, req.Value!, multi: false),
+            "findElementsCssAll"  => FindByCss(seq, doc, req.Value!, multi: true),
+            "findElementByXpath"  => FindByXpath(seq, doc, req.Value!, multi: false),
+            "findElementsByXpath" => FindByXpath(seq, doc, req.Value!, multi: true),
+            "click"               => ClickEl(seq, req.ElementId!),
+            "getValue"            => GetVal(seq, req.ElementId!),
+            "setValue"            => SetVal(seq, req.ElementId!, req.Value!),
+            "clear"               => SetVal(seq, req.ElementId!, ""),
+            "getText"             => GetText(seq, req.ElementId!),
+            "getAttribute"        => GetAttr(seq, req.ElementId!, req.Name!),
+            "isDisplayed"         => IsDisplayed(seq, req.ElementId!),
+            "isEnabled"           => IsEnabled(seq, req.ElementId!),
+            "isSelected"          => IsSelected(seq, req.ElementId!),
+            "executeScript"       => ExecScript(seq, doc, req.Script!),
+            _                     => ErrJson(seq, $"UNKNOWN_CMD:{req.Cmd}")
+        };
+    }
+
+    static string HandleSwitchToFrame(int seq, long hwnd, string? value, string? elementId)
+    {
+        // By element reference: iframe/frame element already registered in _elems.
+        // Checked before the null/empty-value branch below — element-based switches
+        // carry value: '' (see session.ts), which would otherwise be misread as a
+        // switchToDefaultContent request.
+        if (elementId != null)
+        {
+            var (el, _) = Resolve(elementId);
+            if (el == null) return ErrJson(seq, "STALE_ELEMENT_REFERENCE");
+            try
+            {
+                _frameDoc = el.contentWindow.document;
+                FlushElements();
+                return OkJson(seq);
+            }
+            catch (Exception ex) { return ErrJson(seq, ex.Message); }
+        }
+
+        // null/empty value → switch to default content
+        if (string.IsNullOrEmpty(value) || value == "null")
+        {
+            _frameDoc = null;
+            FlushElements();
+            return OkJson(seq);
+        }
+
+        // By index or name — need the top-level document
+        dynamic? doc = GetDocument(new IntPtr(hwnd));
+        if (doc == null) return ErrJson(seq, "IE_DOCUMENT_NOT_FOUND");
+        try
+        {
+            dynamic win    = doc.parentWindow;
+            dynamic frames = win.frames;
+            dynamic frame  = int.TryParse(value, out int idx)
+                ? frames.item(idx)
+                : frames[value]; // named frame
+            if (frame == null) return ErrJson(seq, "NO_SUCH_FRAME");
+            _frameDoc = frame.document;
+            FlushElements();
+            return OkJson(seq);
+        }
+        catch (Exception ex) { return ErrJson(seq, $"NO_SUCH_FRAME: {ex.Message}"); }
     }
 
     // ── Find ────────────────────────────────────────────────────
@@ -747,8 +822,25 @@ class Program
     {
         try
         {
-            doc.parentWindow.execScript(script, "JScript");
-            return OkJson(seq, "result", null);
+            dynamic win = doc.parentWindow;
+            // execScript runs a top-level block, so bare "return" would throw — wrap in
+            // an IIFE. Result comes back via document.title (not a window expando,
+            // which .NET's dynamic COM binder can't read) since it's a real DISPID.
+            string originalTitle = (string)doc.title;
+            string json;
+            try
+            {
+                doc.title = "";
+                win.execScript(
+                    "document.title = (function(){ " +
+                    "var __r = (function(){ " + script + " })(); " +
+                    "return (__r === undefined) ? '' : JSON.stringify(__r); " +
+                    "})();",
+                    "JScript");
+                json = (string)doc.title;
+            }
+            finally { doc.title = originalTitle; }
+            return OkJsonRaw(seq, "result", json.Length == 0 ? null : json);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }
     }

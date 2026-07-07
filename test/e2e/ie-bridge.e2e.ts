@@ -273,3 +273,124 @@ describe('IE bridge — navigation', () => {
         expect(title.length).toBeGreaterThan(0);
     });
 });
+
+// ── frame switching ─────────────────────────────────────────────────────────
+// Uses /nested_frames, not /iframe — TinyMCE's iframe depends on cdn.tiny.cloud,
+// unreachable from this VM.
+
+describe('IE bridge — switchToFrame / switchToDefaultContent', () => {
+    let driver: Browser;
+
+    beforeAll(async () => {
+        driver = await createIEBridgeSession(`${BASE_URL}/nested_frames`);
+        await driver.pause(2000);
+    });
+
+    afterAll(async () => {
+        await quitSession(driver);
+    });
+
+    it('switchFrame(0) scopes finds to the first frame (frame-top)', async () => {
+        await driver.switchFrame(0 as never);
+        const nestedFrameset = await driver.$('//frameset');
+        expect(await nestedFrameset.isExisting()).toBe(true);
+        await driver.switchFrame(null);
+    });
+
+    it('switchFrame by name scopes finds to that frame\'s content', async () => {
+        const frameEl = await driver.$('//frame[@name="frame-bottom"]');
+        expect(await frameEl.isExisting()).toBe(true);
+        await driver.switchFrame(frameEl);
+        const body = await driver.$('//body');
+        expect(await body.isExisting()).toBe(true);
+        expect(await body.getText()).toContain('BOTTOM');
+        await driver.switchFrame(null);
+    });
+
+    it('top-level elements are not reachable while inside a frame', async () => {
+        const frameEl = await driver.$('//frame[@name="frame-bottom"]');
+        await driver.switchFrame(frameEl);
+        await driver.setTimeout({ implicit: 500 });
+        const topFrameset = await driver.$('//frameset');
+        expect(await topFrameset.isExisting()).toBe(false);
+        await driver.setTimeout({ implicit: 5000 });
+        await driver.switchFrame(null);
+    });
+
+    it('switchFrame(null) restores access to the top-level document', async () => {
+        const frameEl = await driver.$('//frame[@name="frame-bottom"]');
+        await driver.switchFrame(frameEl);
+        await driver.switchFrame(null);
+        const topFrameset = await driver.$('//frameset');
+        expect(await topFrameset.isExisting()).toBe(true);
+    });
+
+    it('switching directly between two frames (no default-content in between) scopes correctly each time', async () => {
+        const bottomEl = await driver.$('//frame[@name="frame-bottom"]');
+        await driver.switchFrame(bottomEl);
+        expect(await (await driver.$('//body')).getText()).toContain('BOTTOM');
+        await driver.switchFrame(null);
+
+        const topEl = await driver.$('//frame[@name="frame-top"]');
+        await driver.switchFrame(topEl);
+        const nestedFrameset = await driver.$('//frameset');
+        expect(await nestedFrameset.isExisting()).toBe(true);
+        await driver.switchFrame(null);
+    });
+
+    it('supports nested frame switching (frame-top -> frame-left)', async () => {
+        const topEl = await driver.$('//frame[@name="frame-top"]');
+        await driver.switchFrame(topEl);
+
+        const leftEl = await driver.$('//frame[@name="frame-left"]');
+        expect(await leftEl.isExisting()).toBe(true);
+        await driver.switchFrame(leftEl);
+
+        const body = await driver.$('//body');
+        expect(await body.getText()).toContain('LEFT');
+
+        await driver.switchFrame(null);
+        const topFrameset = await driver.$('//frameset');
+        expect(await topFrameset.isExisting()).toBe(true);
+    });
+
+    it('repeated in/out cycles do not leak stale frame state', async () => {
+        for (let i = 0; i < 3; i++) {
+            const bottomEl = await driver.$('//frame[@name="frame-bottom"]');
+            await driver.switchFrame(bottomEl);
+            expect(await (await driver.$('//body')).getText()).toContain('BOTTOM');
+            await driver.switchFrame(null);
+            const topFrameset = await driver.$('//frameset');
+            expect(await topFrameset.isExisting()).toBe(true);
+        }
+    });
+
+    it('setValue and click work on elements inside a frame', async () => {
+        const bottomEl = await driver.$('//frame[@name="frame-bottom"]');
+        await driver.switchFrame(bottomEl);
+
+        // /frame_bottom ships static text only — inject a real input + button so
+        // setValue/click exercise the full element-interaction path inside a frame.
+        await driver.execute(`
+            var input = document.createElement('input');
+            input.id = 'ieb-test-input';
+            document.body.appendChild(input);
+            var btn = document.createElement('button');
+            btn.id = 'ieb-test-btn';
+            btn.onclick = function () {
+                btn.setAttribute('data-clicked', input.value);
+            };
+            document.body.appendChild(btn);
+        `);
+
+        const input = await driver.$('#ieb-test-input');
+        await input.setValue('hello-frame');
+        expect(await input.getValue()).toBe('hello-frame');
+
+        const btn = await driver.$('#ieb-test-btn');
+        await btn.click();
+        expect(await btn.getAttribute('data-clicked')).toBe('hello-frame');
+
+        await driver.switchFrame(null);
+    });
+});

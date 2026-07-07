@@ -616,46 +616,32 @@ await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program 
 ## Internet Explorer
 
 `iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
-auto-detects IE windows by their Win32 class name (`IEFrame`) and
-transparently routes commands through IEDriverServer when the current
-window is IE, and back through UIA for all other windows. No special
-capability is needed.
+includes a built-in IE DOM Bridge — a 32-bit C# process
+(`IEBridge.exe`) that attaches to a running IE 11 window via the
+`WM_HTML_GETOBJECT` message, retrieves `IHTMLDocument2` through COM,
+and routes element commands over stdio JSON. No IEDriverServer, no
+WebDriver protocol proxy, and no special capability is needed.
 
 ### How it works
 
 1. A standard desktop session starts with UIA active.
 2. When `switchToWindow` or `windows: switchToWindowByTitle` targets an
-   IE window, the driver detects it automatically.
-3. `IEDriverServer.exe` starts lazily on the first IE window switch
-   (port 5555–5655). A W3C session is created on IEDriverServer.
-4. `JWProxy` activates — WebDriver commands forward to IEDriverServer,
-   which resolves them against the IE DOM via COM.
-5. Switching to a non-IE window deactivates the proxy; UIA resumes.
-   IEDriverServer stays running for subsequent IE switches.
-6. On `deleteSession`: IE session is closed, IEDriverServer is killed,
-   and all state is reset.
+   `IEFrame` window, the driver detects it automatically and spawns
+   `IEBridge.exe` for that window handle.
+3. Element commands (`findElement`, `click`, `getText`, `setValue`,
+   `executeScript`, `switchToFrame`, ...) are sent to the bridge
+   process as JSON over stdin/stdout and resolved against the live
+   `IHTMLDocument2`.
+4. Switching to a non-IE window tears down the IE session; UIA resumes.
+5. On `deleteSession`, the bridge process is killed and all state reset.
 
 ### Capabilities
 
-No capability is required to automate IE. The only optional override:
+No capability is required to automate IE.
 
 | Capability | Type | Description |
 | --- | --- | --- |
-| `appium:ieDriverServerPath` | string | Path to a local `IEDriverServer.exe`. Overrides the auto-downloaded binary. |
-
-### IEDriverServer auto-download
-
-On first IE window switch, the driver downloads
-`IEDriverServer_Win32_4.14.0.zip` from the Selenium GitHub releases
-and caches the extracted binary at:
-
-```text
-{driver-root}/iedriver/4.14.0/IEDriverServer.exe
-```
-
-Subsequent sessions skip the download. Requires internet access on
-first use only. Use `appium:ieDriverServerPath` in air-gapped
-environments.
+| `appium:ieDriverServerPath` | string | **Deprecated.** No longer used — IE is automated via the built-in DOM Bridge, not IEDriverServer. |
 
 ### IE configuration (required)
 
@@ -666,9 +652,6 @@ Before automating IE, apply these settings in Internet Options:
 - **Advanced tab** — uncheck "Enable Enhanced Protected Mode"
 - **View menu** — set Zoom to exactly 100%
 
-Mismatched Protected Mode across zones is the most common cause of
-IEDriverServer session creation failing.
-
 ### Mixed-window sessions
 
 IE and non-IE windows can be used in the same session:
@@ -678,7 +661,7 @@ IE and non-IE windows can be used in the same session:
 const driver = await remote({ capabilities: { platformName: 'Windows',
   'appium:automationName': 'DesktopDriver', 'appium:app': 'Root' } });
 
-// Switch to IE — proxy activates automatically
+// Switch to IE — IE Bridge activates automatically
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Internet Explorer' }]);
 const h1 = await driver.$('h1');
 console.log(await h1.getText()); // IE DOM result
@@ -687,31 +670,56 @@ console.log(await h1.getText()); // IE DOM result
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Notepad' }]);
 const src = await driver.getPageSource(); // UIA tree
 
-// Switch back to IE — proxy re-activates
+// Switch back to IE — bridge re-activates
 await driver.executeScript('windows: switchToWindowByTitle', [{ title: 'Internet Explorer' }]);
 ```
 
-### Troubleshooting
+### Switching into frames
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| IEDriverServer session fails on first IE switch | Protected Mode mismatch | Disable PM on all four zones in Internet Options → Security |
-| "did not become ready" | Wrong path or missing VC++ | Run `IEDriverServer.exe --port=5555` manually to confirm it starts |
-| Navigation fails | Enhanced Protected Mode on | Disable in Internet Options → Advanced |
-| `IEDriverServer.exe` not found | Auto-download failed | Check internet access; or supply `appium:ieDriverServerPath` |
+```js
+await driver.switchToFrame(0);           // by 0-based index
+await driver.switchToFrame(frameEl);     // by element (find first)
+await driver.switchToFrame(null);        // back to default content
+await driver.switchToParentFrame();      // also returns to default content
+```
 
-IEDriverServer is a native C++ binary. It requires the
-Visual C++ 2019 Redistributable (x86), available from
-<https://aka.ms/vs/17/release/vc_redist.x86.exe>.
+Only one level of nesting is tracked — `switchToParentFrame()` always
+returns to the top-level document rather than popping a frame stack.
+
+### Command support
+
+| Command | Status | Notes |
+|---|---|---|
+| `findElement` / `findElements` | ✅ | `css selector`, `id`, `xpath` |
+| `getTitle` | ✅ | |
+| `getUrl` | ✅ | |
+| `getPageSource` | ✅ | |
+| `url()` | ✅ | navigate to URL |
+| `getWindowHandle` | ✅ | returns HWND hex string |
+| `getText(el)` | ✅ | |
+| `getAttribute(el, name)` | ✅ | |
+| `clear(el)` | ✅ | input / textarea only |
+| `setValue(el, value)` | ✅ | input / textarea only |
+| `click(el)` | ✅ / ⚠️ | works for buttons, links; broken for checkboxes and radios |
+| `isDisplayed(el)` | ✅ | |
+| `isEnabled(el)` | ⚠️ | unreliable for elements without an `id` attribute |
+| `isSelected(el)` | ❌ | always returns `false` |
+| `executeScript(script, args)` | ✅ | runs JS in the IE tab |
+| `switchToFrame(id)` | ✅ | by index, element, or `null` for default content |
+| `switchToParentFrame()` | ✅ | returns to default content (single-level only) |
+| `getElementRect(el)` | ❌ | not implemented |
+| `getElementScreenshot(el)` | ❌ | not implemented |
+| `windows:` extension commands | ❌ | target the UIA tree, not the HTML DOM |
 
 ### Locator strategies in IE windows
 
-When the active window is IE, commands route through IEDriverServer.
-UIA-specific locators are not available — use standard WebDriver selectors:
+When the active window is IE, commands route through IEBridge.
+UIA-specific locators are not available — use:
 
-`css selector`, `xpath`, `id`, `name`, `tag name`, `link text`, `partial link text`
+`css selector`, `id`, `xpath`
 
-These are resolved by IEDriverServer against the IE DOM via COM.
+Supported XPath patterns: `//tag`, `//tag[@attr="val"]`,
+`//tag[contains(text(),"...")]`, `//tag[contains(@attr,"...")]`, `//tag[@attr]`
 
 ### Limitations
 
@@ -720,12 +728,11 @@ Java Swing agent, WebView2/CDP, screen recording, clipboard API,
 `appium:prerun`/`appium:postrun`, and UIA locator strategies
 (`accessibility id`, `-windows uiautomation`, `class name`).
 
-`windows:` extension commands other than `switchToWindowByTitle` and
-`getWindowHandles` are forwarded to IEDriverServer and will return an
-error if IEDriverServer does not support them. Use standard WebDriver
-equivalents (`element.click()`, `driver.url()`, etc.) for IE windows.
+`windows:` extension commands target the UIA tree and are not
+available while an IE window is active; use standard WebDriver
+equivalents (`element.click()`, `driver.url()`, `executeScript`) instead.
 
-Supported on Windows 10 with IE 11 only.
+Supported on Windows 10/11 with IE 11 only.
 
 ## Java Swing Automation
 

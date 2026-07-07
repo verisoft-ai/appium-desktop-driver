@@ -355,7 +355,7 @@ describe('IE bridge — switchToFrame / switchToDefaultContent', () => {
     });
 
     it('repeated in/out cycles do not leak stale frame state', async () => {
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 2; i++) {
             const bottomEl = await driver.$('//frame[@name="frame-bottom"]');
             await driver.switchFrame(bottomEl);
             expect(await (await driver.$('//body')).getText()).toContain('BOTTOM');

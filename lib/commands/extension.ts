@@ -69,6 +69,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     attachJavaSwing: 'executeAttachJavaSwing',
     switchToWindowByTitle: 'windowsSwitchToWindowByTitle',
     getWindows: 'windowsGetWindows',
+    getNativeChildren: 'executeGetNativeChildren',
 } as const);
 
 const ContentType = Object.freeze({

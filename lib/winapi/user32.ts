@@ -70,6 +70,13 @@ interface Point {
     y: number,
 }
 
+interface Rect {
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+}
+
 interface DeviceModeAnsi {
     dmDeviceName: string | null,
     dmSpecVersion: number,
@@ -138,6 +145,13 @@ type PointStruct = {
     y: unknown,
 }
 
+type RectStruct = {
+    left: unknown,
+    top: unknown,
+    right: unknown,
+    bottom: unknown,
+}
+
 type InputUnion = {
     ki: unknown,
     mi: unknown,
@@ -184,6 +198,13 @@ const POINT = struct('POINT', {
     x: 'long',
     y: 'long',
 } satisfies PointStruct);
+
+struct('RECT', {
+    left: 'long',
+    top: 'long',
+    right: 'long',
+    bottom: 'long',
+} satisfies RectStruct);
 
 const MOUSEINPUT = struct('MOUSEINPUT', {
     dx: 'long',
@@ -307,6 +328,8 @@ const GetClassNameW = user32.func(/* c */ `int __stdcall GetClassNameW(HWND hWnd
 const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
+const EnumChildWindows = user32.func(/* c */ `BOOL __stdcall EnumChildWindows(HWND hWndParent, EnumWindowsProc *lpEnumFunc, LPARAM lParam)`) as (hWndParent: HWND, lpEnumFunc: EnumWindowsProc, lParam: LPARAM) => BOOL;
+const GetWindowRect = user32.func(/* c */ `BOOL __stdcall GetWindowRect(HWND hWnd, _Out_ RECT *lpRect)`) as (hWnd: HWND, lpRect: Rect) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
 const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
@@ -959,6 +982,38 @@ export function getAllWindowsWithDetails(): Array<{ handle: string; title: strin
     return windows;
 }
 
+export function getChildWindows(hwnd: number): Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> {
+    const children: Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> = [];
+    try {
+        EnumChildWindows(hwnd, (hWnd) => {
+            try {
+                const titleBuf = Buffer.alloc(512);
+                const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
+                const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
+
+                const classBuf = Buffer.alloc(512);
+                const classLen = GetClassNameW(hWnd, classBuf, 256);
+                const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
+
+                const rectOut: Rect = { left: 0, top: 0, right: 0, bottom: 0 };
+                const gotRect = GetWindowRect(hWnd, rectOut);
+                const rect = gotRect
+                    ? { x: rectOut.left, y: rectOut.top, width: rectOut.right - rectOut.left, height: rectOut.bottom - rectOut.top }
+                    : { x: 0, y: 0, width: 0, height: 0 };
+
+                const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
+                children.push({ handle, className, title, rect });
+            } catch (err) {
+                log.error(`Exception in EnumChildWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumChildWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return children;
+}
+
 function isForeground(targetHWnd: HWND): boolean {
     try {
         const fg = GetForegroundWindow();
@@ -1006,7 +1061,9 @@ export async function trySetForegroundWindow(windowHandle: number): Promise<bool
         sendKeyInput(Key.CONTROL, false);
         SetForegroundWindow(targetHWnd);
         await sleep(50);
-        if (isForeground(targetHWnd)) return true;
+        if (isForeground(targetHWnd)) {
+            return true;
+        };
     } catch (err) {
         log.warn(`trySetForegroundWindow: strategy 1 (SendInput+SFW) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -1030,7 +1087,9 @@ export async function trySetForegroundWindow(windowHandle: number): Promise<bool
                 }
             }
             await sleep(50);
-            if (isForeground(targetHWnd)) return true;
+            if (isForeground(targetHWnd)) {
+                return true;
+            };
         }
     } catch (err) {
         log.warn(`trySetForegroundWindow: strategy 2 (AttachThreadInput) failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1040,7 +1099,9 @@ export async function trySetForegroundWindow(windowHandle: number): Promise<bool
     try {
         BringWindowToTop(targetHWnd);
         await sleep(50);
-        if (isForeground(targetHWnd)) return true;
+        if (isForeground(targetHWnd)) {
+            return true;
+        };
     } catch (err) {
         log.warn(`trySetForegroundWindow: strategy 3 (BringWindowToTop) failed: ${err instanceof Error ? err.message : String(err)}`);
     }

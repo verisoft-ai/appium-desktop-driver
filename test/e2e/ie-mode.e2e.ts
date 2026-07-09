@@ -368,6 +368,24 @@ describe('Edge UIA — the-internet.herokuapp.com', () => {
         });
     });
 
+    // ── Page source — verify traversal reflects navigation ────────────────────
+
+    describe('page source', () => {
+        it('getPageSource differs before and after navigation', async () => {
+            await navigateTo(driver, `${BASE_URL}/checkboxes`);
+            const sourceBefore = await driver.getPageSource();
+            expect(typeof sourceBefore).toBe('string');
+            expect(sourceBefore.length).toBeGreaterThan(0);
+
+            await navigateTo(driver, `${BASE_URL}/login`);
+            const sourceAfter = await driver.getPageSource();
+            expect(typeof sourceAfter).toBe('string');
+            expect(sourceAfter.length).toBeGreaterThan(0);
+
+            expect(sourceAfter).not.toBe(sourceBefore);
+        });
+    });
+
     // ── Data tables — /tables ─────────────────────────────────────────────────
 
     describe('data tables — /tables', () => {

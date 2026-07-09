@@ -131,10 +131,10 @@ public static class PageSourceCommands
                 parentXmlElement.AppendChild(newXmlElement);
             }
 
-            // Walk children using the session's tree filter (ControlView + !Chrome)
-            // if available; otherwise use the default control view.
-            var treeFilter = state.CacheRequest?.TreeFilter ?? state.Automation.ControlViewCondition;
-            var children = element.FindAll(TreeScope.Children, treeFilter);
+            // Walk all children unconditionally, matching the traversal FindCommands
+            // uses (native find ignores TreeFilter; its manual-walk fallback uses
+            // TrueCondition). Keeps page source and findElement seeing the same tree.
+            var children = element.FindAll(TreeScope.Children, state.Automation.CreateTrueCondition());
             foreach (var child in FindCommands.IterateArray(children))
             {
                 BuildPageSource(child, xmlDoc, newXmlElement, state, rootForCoords);

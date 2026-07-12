@@ -1,3 +1,4 @@
+import { W3C_ELEMENT_KEY } from '@appium/base-driver';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AppiumSession } from '../session.js';
@@ -20,7 +21,7 @@ export function registerNativeTools(server: McpServer, session: AppiumSession): 
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                const result = await driver.executeScript('windows: getNativeChildren', [{ elementId }]);
+                const result = await driver.executeScript('windows: getNativeChildren', [{ [W3C_ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };

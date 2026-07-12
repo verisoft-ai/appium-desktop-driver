@@ -60,9 +60,34 @@ public static class PatternCommands
             return null;
         }
 
-        var pattern = RequirePattern<IUIAutomationExpandCollapsePattern>(state, parameters, UIA.ExpandCollapsePatternId, "ExpandCollapsePattern");
-        pattern.Expand();
-        return null;
+        var element = GetElement(state, parameters);
+
+        if (element.GetCurrentPattern(UIA.ExpandCollapsePatternId) is IUIAutomationExpandCollapsePattern expandPattern)
+        {
+            expandPattern.Expand();
+            return null;
+        }
+
+        // Fallback for legacy controls without ExpandCollapsePattern. State poll
+        // below is log-only (many controls never set the bit) — must not gate
+        // success, or a false negative triggers ALT+Down and closes the popup.
+        if (element.GetCurrentPattern(UIA.LegacyIAccessiblePatternId) is IUIAutomationLegacyIAccessiblePattern legacy)
+        {
+            legacy.DoDefaultAction();
+
+            const int StateSystemExpanded = 0x1000;
+            Thread.Sleep(50);
+            if ((legacy.CurrentState & StateSystemExpanded) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"[Expand] DoDefaultAction fired on '{elementId}' but STATE_SYSTEM_EXPANDED never observed " +
+                    "(control may not report expanded state — not treated as a failure).");
+            }
+
+            return null;
+        }
+
+        throw new InvalidOperationException("Element does not support ExpandCollapsePattern.");
     }
 
     public static object? Collapse(SessionState state, JsonElement? parameters)

@@ -226,6 +226,26 @@ describe('windows: pattern extension commands', () => {
                 charmap.executeScript('windows: collapse', [comboBox])
             ).resolves.not.toThrow();
         });
+
+        it('selects a font from the expanded ComboBox and its value updates', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+
+            const items = await charmap.$$('//ListItem');
+            expect(items.length).toBeGreaterThan(0);
+
+            const item = items[0];
+            const fontName = await item.getAttribute('Name');
+
+            await expect(
+                charmap.executeScript('windows: select', [item])
+            ).resolves.not.toThrow();
+
+            await charmap.pause(200);
+            const value = await charmap.executeScript('windows: getValue', [comboBox]);
+            expect(value).toContain(fontName);
+        });
     });
 
     describe('windows: select / allSelectedItems / isMultiple / toggle', () => {

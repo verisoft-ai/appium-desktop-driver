@@ -24,6 +24,21 @@ public static class ElementCommands
             {
                 state.Java.GetFreshInfo(javaEl);
             }
+
+            // JAB has no ExpandCollapseState property — it reports expansion via the
+            // AccessibleState list instead (same shape GetToggleState reads for
+            // checked/indeterminate). A literal "ExpandCollapseState" key lookup always
+            // misses and silently returns "", which patternExpand's isExpanded() (extension.ts)
+            // reads as a confirmed "not expanded" rather than "can't verify".
+            if (propertyName.Equals("ExpandCollapseState", StringComparison.OrdinalIgnoreCase))
+            {
+                state.Java.GetFreshInfo(javaEl);
+                var states = state.Java.GetProperty(javaEl, "States")?.ToString() ?? "";
+                if (states.Contains("expanded", StringComparison.OrdinalIgnoreCase)) return "Expanded";
+                if (states.Contains("collapsed", StringComparison.OrdinalIgnoreCase)) return "Collapsed";
+                return "";
+            }
+
             return state.Java.GetProperty(javaEl, propertyName);
         }
 
@@ -73,6 +88,28 @@ public static class ElementCommands
             }
 
             throw new InvalidOperationException("Element does not have a clickable point.");
+        }
+
+        // Special case: ExpandCollapseState returns the readable enum name, used by the
+        // client to verify an Expand() call actually opened the control — some legacy
+        // Win32 controls report the pattern as available and Expand() succeeds without
+        // exception, yet never really open (see patternExpand in extension.ts). Ground
+        // truth is the live pattern state when reachable; fall back to the cached property
+        // for providers that only support property polling, not the full pattern interface.
+        if (propertyName.Equals("ExpandCollapseState", StringComparison.OrdinalIgnoreCase))
+        {
+            if (element.GetCurrentPattern(UIA.ExpandCollapsePatternId) is IUIAutomationExpandCollapsePattern pattern)
+            {
+                return pattern.CurrentExpandCollapseState.ToString();
+            }
+
+            var cached = element.GetCurrentPropertyValue(UIA.ExpandCollapseStatePropertyId);
+            if (cached is int cachedState && Enum.IsDefined(typeof(ExpandCollapseState), cachedState))
+            {
+                return ((ExpandCollapseState)cachedState).ToString();
+            }
+
+            throw new InvalidOperationException("Element does not support ExpandCollapsePattern.");
         }
 
         // Special case: BoundingRectangle returns JSON object

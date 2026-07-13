@@ -208,14 +208,15 @@ export async function createIEProxySession(url: string, extraCaps?: Record<strin
 
 export const EXPLORER_APP_PATH = 'C:\\Windows\\explorer.exe';
 export const CHARMAP_APP_PATH = 'C:\\Windows\\System32\\charmap.exe';
+export const WINFORM_COMBO_APP_PATH = resolve(process.cwd(), 'test-apps', 'winform-combo', 'bin', 'WinformCombo.exe');
 
-export async function createCharmapSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+async function createSimpleAppSession(appPath: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({
         ...APPIUM_SERVER,
         capabilities: {
             platformName: 'Windows',
             'appium:automationName': 'DesktopDriver',
-            'appium:app': CHARMAP_APP_PATH,
+            'appium:app': appPath,
             ...extraCaps,
         } as Caps,
     });
@@ -223,18 +224,16 @@ export async function createCharmapSession(extraCaps?: Record<string, unknown>):
     return driver;
 }
 
+export async function createCharmapSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    return createSimpleAppSession(CHARMAP_APP_PATH, extraCaps);
+}
+
+export async function createWinformComboSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
+    return createSimpleAppSession(WINFORM_COMBO_APP_PATH, extraCaps);
+}
+
 export async function createExplorerSession(extraCaps?: Record<string, unknown>): Promise<Browser> {
-    const driver = await remote({
-        ...APPIUM_SERVER,
-        capabilities: {
-            platformName: 'Windows',
-            'appium:automationName': 'DesktopDriver',
-            'appium:app': EXPLORER_APP_PATH,
-            ...extraCaps,
-        } as Caps,
-    });
-    await driver.setTimeout({ implicit: 3000 });
-    return driver;
+    return createSimpleAppSession(EXPLORER_APP_PATH, extraCaps);
 }
 
 export const JAVAW_EXE_PATH = process.env.JAVA_HOME

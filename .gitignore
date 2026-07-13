@@ -7,6 +7,10 @@ iebridge/IEBridge.exe
 iebridge/x86/
 native/
 
+# WinForms test-fixture app — built at test time via build:winform-test-app, not committed
+test-apps/winform-combo/bin/
+test-apps/winform-combo/obj/
+
 # Logs
 logs
 *.log

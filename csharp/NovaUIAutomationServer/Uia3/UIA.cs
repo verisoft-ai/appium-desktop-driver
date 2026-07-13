@@ -61,6 +61,14 @@ public enum ToggleState
     Indeterminate = 2,
 }
 
+public enum ExpandCollapseState
+{
+    Collapsed = 0,
+    Expanded = 1,
+    PartiallyExpanded = 2,
+    LeafNode = 3,
+}
+
 public enum WindowVisualState
 {
     Normal = 0,
@@ -129,6 +137,7 @@ public static class UIA
     public const int PositionInSetPropertyId = 30165;
     public const int HeadingLevelPropertyId = 30173;
     public const int IsDialogPropertyId = 30174;
+    public const int ExpandCollapseStatePropertyId = 30070;
 
     // Pattern IDs
     public const int InvokePatternId = 10000;
@@ -592,8 +601,8 @@ public interface IUIAutomationExpandCollapsePattern
 {
     void Expand();
     void Collapse();
-    int CurrentExpandCollapseState { get; }
-    int CachedExpandCollapseState { get; }
+    ExpandCollapseState CurrentExpandCollapseState { get; }
+    ExpandCollapseState CachedExpandCollapseState { get; }
 }
 
 [ComImport, Guid("B488300F-D015-4F19-9C29-BB595E3645EF"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

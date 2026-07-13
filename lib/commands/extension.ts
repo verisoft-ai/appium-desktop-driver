@@ -161,25 +161,115 @@ export async function patternInvoke(this: AppiumDesktopDriver, element: Element)
     await this.sendCommand('invokeElement', { elementId: element[W3C_ELEMENT_KEY] });
 }
 
+async function expandViaAltDown(this: AppiumDesktopDriver, elementId: string): Promise<void> {
+    await this.sendCommand('setFocus', { elementId });
+    await sleep(50);
+    keyDown(Key.ALT);
+    keyDown(Key.DOWN);
+    keyUp(Key.DOWN);
+    keyUp(Key.ALT);
+}
+
+// Legacy Win32 controls (e.g. WinForm ComboBox) sometimes expose ExpandCollapsePattern
+// to the managed UIA2 client (System.Windows.Automation, what this driver used before the
+// C# server migration) but not to the raw UIA3 COM interop the server uses now — same
+// underlying uiautomationcore.dll, but the managed client engages the legacy Win32->UIA
+// bridge more aggressively. Re-resolve the element by native window handle in a one-shot
+// PowerShell process and retry Expand() through the managed API before falling back to
+// simulated keyboard input.
+async function expandViaManagedUia2(this: AppiumDesktopDriver, elementId: string): Promise<void> {
+    const nativeWindowHandle = await this.sendCommand('getProperty', { elementId, property: 'NativeWindowHandle' }) as string;
+    const hwnd = Number(nativeWindowHandle);
+    if (!hwnd) {
+        throw new Error('Element has no NativeWindowHandle.');
+    }
+
+    const script = `
+        Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
+        $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]${hwnd})
+        $el.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    `;
+    await this.executePowerShellScript(script);
+}
+
+// Reads the live ExpandCollapseState (added alongside this fix — see ElementCommands.cs
+// GetProperty / UIA.ExpandCollapseStatePropertyId). Returns undefined when the state can't
+// be read at all (e.g. Java elements, or a control with no real ExpandCollapsePattern) —
+// callers must treat that as "can't verify" rather than "failed".
+async function isExpanded(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
+    try {
+        const state = await this.sendCommand('getProperty', { elementId, property: 'ExpandCollapseState' }) as string;
+        return state === 'Expanded' || state === 'PartiallyExpanded';
+    } catch {
+        return undefined;
+    }
+}
+
+async function waitForExpanded(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const expanded = await isExpanded.call(this, elementId);
+        if (expanded !== false) {
+            return expanded;
+        }
+        await sleep(100);
+    }
+    return false;
+}
+
+async function expandViaUia2ThenAltDown(this: AppiumDesktopDriver, elementId: string): Promise<void> {
+    try {
+        await expandViaManagedUia2.call(this, elementId);
+        if (await waitForExpanded.call(this, elementId) !== false) {
+            this.log.info('[patternExpand] managed-UIA2 fallback succeeded.');
+            return;
+        }
+        this.log.info('[patternExpand] managed-UIA2 fallback reported no error but ExpandCollapseState never became Expanded, falling back to ALT+Down.');
+    } catch (uia2Err: any) {
+        this.log.info(`[patternExpand] managed-UIA2 fallback failed (${String(uia2Err?.message ?? uia2Err)}), falling back to ALT+Down.`);
+    }
+
+    await expandViaAltDown.call(this, elementId);
+    if (await waitForExpanded.call(this, elementId) === false) {
+        throw new Error('windows: expand failed to open the control after native, managed-UIA2, and ALT+Down fallback attempts.');
+    }
+}
+
 export async function patternExpand(this: AppiumDesktopDriver, element: Element): Promise<void> {
     const elementId = element[W3C_ELEMENT_KEY];
+
     try {
         await this.sendCommand('expandElement', { elementId });
     } catch (err: any) {
         const msg = String(err?.message ?? err);
-        // Fall back to keyboard (focus + ALT+Down) when the element doesn't support
-        // ExpandCollapsePattern — covers both JAB elements (JAB_NO_EXPAND_ACTION) and
-        // regular UIA elements that expose no expand pattern.
+        // Covers both JAB elements (JAB_NO_EXPAND_ACTION) and regular UIA elements
+        // that expose no expand pattern — same fallback chain for both.
         if (msg.includes('JAB_NO_EXPAND_ACTION') || msg.includes('does not support ExpandCollapsePattern')) {
-            await this.sendCommand('setFocus', { elementId });
-            await sleep(50);
-            keyDown(Key.ALT);
-            keyDown(Key.DOWN);
-            keyUp(Key.DOWN);
-            keyUp(Key.ALT);
-            return;
+            this.log.info('[patternExpand] element has no expand pattern, falling back to managed-UIA2/ALT+Down.');
+            return expandViaUia2ThenAltDown.call(this, elementId);
         }
         throw err;
+    }
+
+    // expandElement reported success, but the C# server's own LegacyIAccessible fallback
+    // (PatternCommands.cs Expand) never gates on whether the popup actually opened —
+    // verify the real ExpandCollapseState before trusting it. `undefined` means we
+    // couldn't read the state at all; trust the reported success since there's no
+    // stronger signal available in that case.
+    if (await waitForExpanded.call(this, elementId) === false) {
+        // Only retry via managed-UIA2 here — Expand() is idempotent and safe to call
+        // again even if the control is already open. Do NOT fall through to ALT+Down:
+        // it's a toggle on many native combos, so sending it after an unverified (but
+        // possibly real) success risks closing a control that already opened correctly.
+        this.log.info('[patternExpand] expandElement reported success but ExpandCollapseState never became Expanded, retrying via managed-UIA2.');
+        try {
+            await expandViaManagedUia2.call(this, elementId);
+        } catch (uia2Err: any) {
+            this.log.info(`[patternExpand] managed-UIA2 retry failed (${String(uia2Err?.message ?? uia2Err)}), trusting original expandElement success.`);
+            return;
+        }
+        if (await waitForExpanded.call(this, elementId) === false) {
+            this.log.info('[patternExpand] managed-UIA2 retry did not confirm ExpandCollapseState either, trusting original expandElement success.');
+        }
     }
 }
 

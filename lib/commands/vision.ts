@@ -46,6 +46,9 @@ export async function executeFindByVision(
     this: AppiumDesktopDriver,
     args: { prompt: string; model: string },
 ): Promise<{ x: number; y: number; label: string }> {
+    if (!args.prompt) {
+        throw new Error('windows: findByVision requires a "prompt" argument.');
+    }
     if (!args.model) {
         throw new Error(
             'windows: findByVision requires a "model" argument. ' +

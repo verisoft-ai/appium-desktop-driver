@@ -236,7 +236,20 @@ export async function patternExpand(this: AppiumDesktopDriver, element: Element)
         }
         this.log.info('[patternExpand] expandElement reported success but ExpandCollapseState never became Expanded, falling back to ALT+Down.');
     } catch (err: any) {
-        this.log.info(`[patternExpand] expandElement failed (${String(err?.message ?? err)}), falling back to ALT+Down.`);
+        const msg = String(err?.message ?? err);
+        this.log.info(`[patternExpand] expandElement failed (${msg}), falling back to ALT+Down.`);
+
+        // JAB elements have no ExpandCollapsePattern at all — waitForExpanded's
+        // getProperty ExpandCollapseState poll (up to 3x100ms of JNI round trips) buys
+        // nothing but delay here, and that delay widens the window before the caller
+        // can find/select the popup's list items while they're only held by
+        // ComponentRegistry's WeakReference (see java-agent ComponentRegistry.get) —
+        // wide enough for the JVM to GC them out from under a subsequent windows: select
+        // ("Element GC'd: ..."). Trust the keyboard fallback and return immediately.
+        if (msg.includes('JAB_NO_EXPAND_ACTION')) {
+            await expandViaAltDown.call(this, elementId);
+            return;
+        }
     }
 
     await expandViaAltDown.call(this, elementId);

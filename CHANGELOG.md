@@ -1,3 +1,9 @@
+## [2.1.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.0.0...v2.1.0) (2026-07-14)
+
+### Features
+
+* align stable release with previously published 2.1.0 preview ([53e7cc1](https://github.com/verisoft-ai/appium-desktop-driver/commit/53e7cc11ac47a62f21be588ed67c59e20403a02f))
+
 ## [2.0.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.8.0...v2.0.0) (2026-07-14)
 
 ### ⚠ BREAKING CHANGES

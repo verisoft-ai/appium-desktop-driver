@@ -11,6 +11,9 @@ native/
 test-apps/winform-combo/bin/
 test-apps/winform-combo/obj/
 
+# Java Swing test-fixture app — compiled ad hoc at test time (javac), not committed
+test-apps/java-swing-form/*.class
+
 # Logs
 logs
 *.log

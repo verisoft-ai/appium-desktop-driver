@@ -56,6 +56,29 @@ public class TestForm extends JFrame {
         };
         add(department);
 
+        add(new JLabel("Broken Field:"));
+        // Regression fixture: simulates a 3rd-party component whose AccessibleContext
+        // throws when the tree walker asks for its children (as some real Swing L&F /
+        // custom renderers do). A broad traversal (getPageSource, XPath //* scans,
+        // tag-name searches) must skip this node and still find everything else —
+        // it must NOT blow up the whole find/getChildren call with an unguarded NPE.
+        JPanel brokenField = new JPanel() {
+            @Override
+            public AccessibleContext getAccessibleContext() {
+                if (accessibleContext == null) {
+                    accessibleContext = new AccessibleJPanel() {
+                        @Override
+                        public int getAccessibleChildrenCount() {
+                            throw new NullPointerException("simulated broken AccessibleContext (regression fixture)");
+                        }
+                    };
+                    accessibleContext.setAccessibleName("brokenField");
+                }
+                return accessibleContext;
+            }
+        };
+        add(brokenField);
+
         JCheckBox agree = new JCheckBox("I agree");
         agree.getAccessibleContext().setAccessibleName("agreeCheckbox");
         add(agree);

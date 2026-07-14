@@ -25,6 +25,8 @@ public class CommandHandler {
             Object result = dispatch(command, params, registry);
             return Json.response(id, result, null);
         } catch (Exception e) {
+            System.err.println("[java-agent] command failed (id=" + id + "): " + e);
+            e.printStackTrace();
             return Json.response(id, null, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
     }
@@ -153,18 +155,28 @@ public class CommandHandler {
         }
 
         if (ac == null) return result;
-        int count = ac.getAccessibleChildrenCount();
+        int count;
+        try {
+            count = ac.getAccessibleChildrenCount();
+        } catch (Throwable t) {
+            logNodeFailure("getChildren.childrenCount(id=" + id + ")", 0, t);
+            return result;
+        }
         for (int i = 0; i < count; i++) {
-            Accessible child = ac.getAccessibleChild(i);
-            if (child == null) continue;
-            if (child instanceof Component) {
-                Component cc = (Component) child;
-                String cid = registry.save(cc);
-                result.add(buildInfo(cc, cid));
-            } else {
-                // Virtual child (e.g. JList items, table cells) — not a Component but still Accessible
-                String cid = registry.saveAccessible(child);
-                result.add(buildInfoFromAccessible(child, cid));
+            try {
+                Accessible child = ac.getAccessibleChild(i);
+                if (child == null) continue;
+                if (child instanceof Component) {
+                    Component cc = (Component) child;
+                    String cid = registry.save(cc);
+                    result.add(buildInfo(cc, cid));
+                } else {
+                    // Virtual child (e.g. JList items, table cells) — not a Component but still Accessible
+                    String cid = registry.saveAccessible(child);
+                    result.add(buildInfoFromAccessible(child, cid));
+                }
+            } catch (Throwable t) {
+                logNodeFailure("getChildren.child[" + i + "](id=" + id + ")", 0, t);
             }
         }
         return result;
@@ -398,15 +410,25 @@ public class CommandHandler {
 
     private static String findInDirectChildren(AccessibleContext ac, Map<String, Object> condition, ComponentRegistry registry) {
         if (ac == null) return null;
-        int count = ac.getAccessibleChildrenCount();
+        int count;
+        try {
+            count = ac.getAccessibleChildrenCount();
+        } catch (Throwable t) {
+            logNodeFailure("findInDirectChildren.childrenCount", 0, t);
+            return null;
+        }
         for (int i = 0; i < count; i++) {
-            Accessible child = ac.getAccessibleChild(i);
-            if (child == null) continue;
-            if (child instanceof Component) {
-                Component cc = (Component) child;
-                if (matchesCondition(cc, condition)) return registry.save(cc);
-            } else {
-                if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
+            try {
+                Accessible child = ac.getAccessibleChild(i);
+                if (child == null) continue;
+                if (child instanceof Component) {
+                    Component cc = (Component) child;
+                    if (matchesCondition(cc, condition)) return registry.save(cc);
+                } else {
+                    if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
+                }
+            } catch (Throwable t) {
+                logNodeFailure("findInDirectChildren.child[" + i + "]", 0, t);
             }
         }
         return null;
@@ -414,15 +436,25 @@ public class CommandHandler {
 
     private static void collectDirectChildren(AccessibleContext ac, Map<String, Object> condition, ComponentRegistry registry, List<String> results) {
         if (ac == null) return;
-        int count = ac.getAccessibleChildrenCount();
+        int count;
+        try {
+            count = ac.getAccessibleChildrenCount();
+        } catch (Throwable t) {
+            logNodeFailure("collectDirectChildren.childrenCount", 0, t);
+            return;
+        }
         for (int i = 0; i < count; i++) {
-            Accessible child = ac.getAccessibleChild(i);
-            if (child == null) continue;
-            if (child instanceof Component) {
-                Component cc = (Component) child;
-                if (matchesCondition(cc, condition)) results.add(registry.save(cc));
-            } else {
-                if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
+            try {
+                Accessible child = ac.getAccessibleChild(i);
+                if (child == null) continue;
+                if (child instanceof Component) {
+                    Component cc = (Component) child;
+                    if (matchesCondition(cc, condition)) results.add(registry.save(cc));
+                } else {
+                    if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
+                }
+            } catch (Throwable t) {
+                logNodeFailure("collectDirectChildren.child[" + i + "]", 0, t);
             }
         }
     }
@@ -442,21 +474,31 @@ public class CommandHandler {
             if (matches) return selfId;
         }
         if (ac == null) return null;
-        int count = ac.getAccessibleChildrenCount();
+        int count;
+        try {
+            count = ac.getAccessibleChildrenCount();
+        } catch (Throwable t) {
+            logNodeFailure("findFirstRecursive.childrenCount", depth, t);
+            return null;
+        }
         for (int i = 0; i < count; i++) {
-            Accessible child = ac.getAccessibleChild(i);
-            if (child == null) continue;
-            if (child instanceof Component) {
-                Component cc = (Component) child;
-                if (matchesCondition(cc, condition)) return registry.save(cc);
-                String found = findFirstRecursive(cc.getAccessibleContext(), null, null,
-                        condition, registry, depth + 1);
-                if (found != null) return found;
-            } else {
-                if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
-                AccessibleContext childAc = child.getAccessibleContext();
-                String found = findFirstRecursive(childAc, null, null, condition, registry, depth + 1);
-                if (found != null) return found;
+            try {
+                Accessible child = ac.getAccessibleChild(i);
+                if (child == null) continue;
+                if (child instanceof Component) {
+                    Component cc = (Component) child;
+                    if (matchesCondition(cc, condition)) return registry.save(cc);
+                    String found = findFirstRecursive(cc.getAccessibleContext(), null, null,
+                            condition, registry, depth + 1);
+                    if (found != null) return found;
+                } else {
+                    if (matchesAccessible(child, condition)) return registry.saveAccessible(child);
+                    AccessibleContext childAc = child.getAccessibleContext();
+                    String found = findFirstRecursive(childAc, null, null, condition, registry, depth + 1);
+                    if (found != null) return found;
+                }
+            } catch (Throwable t) {
+                logNodeFailure("findFirstRecursive.child[" + i + "]", depth, t);
             }
         }
         return null;
@@ -472,19 +514,34 @@ public class CommandHandler {
             if (matches) results.add(selfId);
         }
         if (ac == null) return;
-        int count = ac.getAccessibleChildrenCount();
+        int count;
+        try {
+            count = ac.getAccessibleChildrenCount();
+        } catch (Throwable t) {
+            logNodeFailure("findAllRecursive.childrenCount", depth, t);
+            return;
+        }
         for (int i = 0; i < count; i++) {
-            Accessible child = ac.getAccessibleChild(i);
-            if (child == null) continue;
-            if (child instanceof Component) {
-                Component cc = (Component) child;
-                if (matchesCondition(cc, condition)) results.add(registry.save(cc));
-                findAllRecursive(cc.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
-            } else {
-                if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
-                findAllRecursive(child.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
+            try {
+                Accessible child = ac.getAccessibleChild(i);
+                if (child == null) continue;
+                if (child instanceof Component) {
+                    Component cc = (Component) child;
+                    if (matchesCondition(cc, condition)) results.add(registry.save(cc));
+                    findAllRecursive(cc.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
+                } else {
+                    if (matchesAccessible(child, condition)) results.add(registry.saveAccessible(child));
+                    findAllRecursive(child.getAccessibleContext(), null, null, condition, registry, results, depth + 1);
+                }
+            } catch (Throwable t) {
+                logNodeFailure("findAllRecursive.child[" + i + "]", depth, t);
             }
         }
+    }
+
+    private static void logNodeFailure(String where, int depth, Throwable t) {
+        System.err.println("[java-agent] " + where + " at depth=" + depth + " failed: " + t);
+        t.printStackTrace();
     }
 
     // ── Condition matching ─────────────────────────────────────────────────────

@@ -605,6 +605,33 @@ describe('Java Swing Form', () => {
         });
     });
 
+    describe('regression: broken AccessibleContext node is skipped, not fatal', () => {
+        // Covers the java-agent NPE where a single node with a throwing
+        // AccessibleContext (getAccessibleChildrenCount) aborted the entire
+        // getChildren/findFirst/findAll walk instead of being skipped.
+        it('getPageSource succeeds and still contains unrelated elements', async () => {
+            const source = await driver.getPageSource();
+            expect(source).toContain('submitButton');
+            expect(source).toContain('agreeCheckbox');
+        });
+
+        it('broad tag name search still finds all Edit fields despite the broken sibling', async () => {
+            const fields = await driver.findElements('tag name', 'Edit');
+            expect(fields.length).toBe(3);
+        });
+
+        it('//*[@JavaSimpleClass="JTextField"] full-tree scan still finds all three fields', async () => {
+            const fields = await driver.$$('//*[@JavaSimpleClass="JTextField"]');
+            expect(fields.length).toBe(3);
+        });
+
+        it('//*[@JavaSimpleClass="JCheckBox"] full-tree scan still finds agreeCheckbox', async () => {
+            const checkboxes = await driver.$$('//*[@JavaSimpleClass="JCheckBox"]');
+            expect(checkboxes.length).toBe(1);
+            expect(await checkboxes[0].getAttribute('Name')).toBe('agreeCheckbox');
+        });
+    });
+
     describe('JavaClass XPath attribute', () => {
         it('//*[@JavaClass="javax.swing.JTextField"] finds all three text fields', async () => {
             const fields = await driver.$$('//*[@JavaClass="javax.swing.JTextField"]');

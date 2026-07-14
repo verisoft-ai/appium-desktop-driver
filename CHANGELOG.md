@@ -1,3 +1,13 @@
+## [2.0.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.8.0...v2.0.0) (2026-07-14)
+
+### ⚠ BREAKING CHANGES
+
+* C# server changes the structure of the driver from powershell to C#
+
+### Features
+
+* implement Java agent, webview, C# server and IE support ([8b8a514](https://github.com/verisoft-ai/appium-desktop-driver/commit/8b8a514b6795b827ea9d58ee3a7ad17a6dc38e23))
+
 ## [1.8.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v1.7.2...v1.8.0) (2026-07-14)
 
 ### Features

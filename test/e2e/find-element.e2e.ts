@@ -8,6 +8,9 @@ describe('Element finding strategies', () => {
     beforeAll(async () => {
         closeAllTestApps;
         driver = await createCalculatorSession();
+        // Let the app finish rendering before any test runs — first-launch UIA
+        // tree can lag the process window by a second or more.
+        await driver.$('~CalculatorResults').waitForExist({ timeout: 10_000 });
     });
 
     afterAll(async () => {
@@ -17,7 +20,7 @@ describe('Element finding strategies', () => {
     describe('by accessibility id', () => {
         it('finds the result display by accessibility id', async () => {
             const el = await driver.$('~CalculatorResults');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('throws NoSuchElementError for a non-existent accessibility id', async () => {
@@ -52,12 +55,12 @@ describe('Element finding strategies', () => {
     describe('by xpath', () => {
         it('finds a button element using XPath tag name predicate', async () => {
             const el = await driver.$('//Button');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('finds a specific button using XPath Name attribute predicate', async () => {
             const el = await driver.$('//Button[@Name="One"]');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('findElements with XPath returns multiple buttons', async () => {
@@ -67,24 +70,24 @@ describe('Element finding strategies', () => {
 
         it('finds element by XPath index expression', async () => {
             const el = await driver.$('//Custom/Group/Group[5]/Button[1]');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('finds a descendant scoped with relative XPath', async () => {
             const parent = await driver.$('//Custom/Group/Group[4]');
             const child = await parent.$('.//Button');
-            expect(await child.isExisting()).toBe(true);
+            expect(await child.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('finds element using contains() on Name attribute', async () => {
             // "One" button Name contains "ne"
             const el = await driver.$('//*[contains(@Name, "ne")]');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('finds element using starts-with() on Name attribute', async () => {
             const el = await driver.$('//Button[starts-with(@Name, "On")]');
-            expect(await el.isExisting()).toBe(true);
+            expect(await el.waitForExist({ timeout: 3000 })).toBe(true);
         });
 
         it('finds elements using boolean AND predicate', async () => {

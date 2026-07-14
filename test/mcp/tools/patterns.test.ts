@@ -1,20 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { registerPatternTools } from '../../../lib/mcp/tools/patterns.js';
+import { ELEMENT_KEY } from '../../../lib/mcp/constants.js';
 import { createMockServer } from '../fixtures/server.js';
 import { createMockSession } from '../fixtures/session.js';
 
 const ELEM_ID = 'pattern-el-1';
+const W3C_ELEM = { [ELEMENT_KEY]: ELEM_ID };
 
 describe('pattern tools', () => {
     describe('invoke_element', () => {
-        it('calls driver.executeScript("windows: invoke", [{elementId}]) and returns "invoked"', async () => {
+        it('calls driver.executeScript("windows: invoke", [{ELEMENT_KEY}]) and returns "invoked"', async () => {
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             registerPatternTools(server, session);
 
             const result = await server.call('invoke_element', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: invoke', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: invoke', [W3C_ELEM]);
             expect(result.content[0].text).toBe('invoked');
             expect(result.isError).toBeUndefined();
         });
@@ -39,7 +41,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('expand_element', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: expand', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: expand', [W3C_ELEM]);
             expect(result.content[0].text).toBe('expanded');
         });
     });
@@ -52,7 +54,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('collapse_element', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: collapse', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: collapse', [W3C_ELEM]);
             expect(result.content[0].text).toBe('collapsed');
         });
     });
@@ -65,7 +67,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('toggle_element', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: toggle', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: toggle', [W3C_ELEM]);
             expect(result.content[0].text).toBe('toggled');
         });
     });
@@ -78,7 +80,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('set_element_value', { elementId: ELEM_ID, value: '42' }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: setValue', [{ elementId: ELEM_ID, value: '42' }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: setValue', [W3C_ELEM, '42']);
             expect(result.content[0].text).toBe('value set');
         });
 
@@ -103,7 +105,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('get_element_value', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: getValue', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: getValue', [W3C_ELEM]);
             expect(result.content[0].text).toBe('75');
         });
 
@@ -119,30 +121,6 @@ describe('pattern tools', () => {
         });
     });
 
-    describe('get_toggle_state', () => {
-        it('calls driver.executeScript("windows: getToggleState") and returns state string', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.executeScript = vi.fn().mockResolvedValue('On');
-            registerPatternTools(server, session);
-
-            const result = await server.call('get_toggle_state', { elementId: ELEM_ID }) as any;
-
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: getToggleState', [{ elementId: ELEM_ID }]);
-            expect(result.content[0].text).toBe('On');
-        });
-
-        it('returns isError on failure', async () => {
-            const server = createMockServer();
-            const { session, mockBrowser } = createMockSession();
-            mockBrowser.executeScript = vi.fn().mockRejectedValue(new Error('getToggleState failed'));
-            registerPatternTools(server, session);
-
-            const result = await server.call('get_toggle_state', { elementId: ELEM_ID }) as any;
-
-            expect(result.isError).toBe(true);
-        });
-    });
 
     describe('focus_element', () => {
         it('calls driver.executeScript("windows: setFocus") and returns "focused"', async () => {
@@ -152,7 +130,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('focus_element', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: setFocus', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: setFocus', [W3C_ELEM]);
             expect(result.content[0].text).toBe('focused');
         });
 
@@ -176,7 +154,7 @@ describe('pattern tools', () => {
 
             const result = await server.call('select_item', { elementId: ELEM_ID }) as any;
 
-            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: select', [{ elementId: ELEM_ID }]);
+            expect(mockBrowser.executeScript).toHaveBeenCalledWith('windows: select', [W3C_ELEM]);
             expect(result.content[0].text).toBe('selected');
         });
 

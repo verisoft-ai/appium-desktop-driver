@@ -1,5 +1,18 @@
-# Claude Code local settings
-.claude/
+# C# build artifacts
+csharp/**/bin/
+csharp/**/obj/
+
+# IEBridge built binary and intermediate output — built at publish time, not committed
+iebridge/IEBridge.exe
+iebridge/x86/
+native/
+
+# WinForms test-fixture app — built at test time via build:winform-test-app, not committed
+test-apps/winform-combo/bin/
+test-apps/winform-combo/obj/
+
+# Java Swing test-fixture app — compiled ad hoc at test time (javac), not committed
+test-apps/java-swing-form/*.class
 
 # Logs
 logs
@@ -143,3 +156,15 @@ build/
 
 # Ignore package-lock.json in favour of npm-shrinkwrap.json for npm publishing
 package-lock.json*
+
+# .NET fixture build output
+test/fixtures/**/bin/
+test/fixtures/**/obj/
+
+# Ignore downloaded chromedriver/edgedriver/ffmpeg binaries
+chromedriver/
+edgedriver/
+ffmpeg/
+
+.claude/
+.vscode/

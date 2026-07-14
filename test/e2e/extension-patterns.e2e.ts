@@ -4,6 +4,8 @@ import {
     createCalculatorSession,
     createNotepadSession,
     createTodoSession,
+    createExplorerSession,
+    createCharmapSession,
     getNotepadTextArea,
     quitSession,
     resetCalculator,
@@ -159,6 +161,90 @@ describe('windows: pattern extension commands', () => {
             await notepad.executeScript('windows: setValue', [textArea, 'pattern value test']);
             const result = await notepad.executeScript('windows: getValue', [textArea]);
             expect(result).toContain('pattern value test');
+        });
+    });
+
+    describe('windows: expand / collapse', () => {
+        let explorer: Browser;
+
+        beforeAll(async () => {
+            explorer = await createExplorerSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(explorer);
+        });
+
+        it('expands This PC and child drives become visible', async () => {
+            const thisPC = await explorer.$('//TreeItem[@Name="This PC"]');
+            await explorer.executeScript('windows: collapse', [thisPC]);
+            await explorer.pause(300);
+
+            await explorer.executeScript('windows: expand', [thisPC]);
+            await explorer.pause(300);
+
+            const children = await explorer.$$('//TreeItem[@Name="This PC"]/TreeItem');
+            expect(children.length).toBeGreaterThan(0);
+        });
+
+        it('collapses This PC and child drives are no longer visible', async () => {
+            const thisPC = await explorer.$('//TreeItem[@Name="This PC"]');
+            await explorer.executeScript('windows: expand', [thisPC]);
+            await explorer.pause(300);
+
+            await explorer.executeScript('windows: collapse', [thisPC]);
+            await explorer.pause(300);
+
+            const children = await explorer.$$('//TreeItem[@Name="This PC"]/TreeItem');
+            expect(children.length).toBe(0);
+        });
+    });
+
+    describe('windows: expand / collapse (ComboBox)', () => {
+        let charmap: Browser;
+
+        beforeAll(async () => {
+            charmap = await createCharmapSession();
+        });
+
+        afterAll(async () => {
+            await quitSession(charmap);
+        });
+
+        it('expands the font ComboBox without error', async () => {
+            const comboBox = await charmap.$('~105');
+            await expect(
+                charmap.executeScript('windows: expand', [comboBox])
+            ).resolves.not.toThrow();
+        });
+
+        it('collapses the font ComboBox without error', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+            await expect(
+                charmap.executeScript('windows: collapse', [comboBox])
+            ).resolves.not.toThrow();
+        });
+
+        it('selects a font from the expanded ComboBox and its value updates', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+
+            const items = await charmap.$$('//ListItem');
+            expect(items.length).toBeGreaterThan(0);
+
+            const item = items[0];
+            const fontName = await item.getAttribute('Name');
+
+            await expect(
+                charmap.executeScript('windows: select', [item])
+            ).resolves.not.toThrow();
+
+            await charmap.pause(200);
+            const value = await charmap.executeScript('windows: getValue', [comboBox]);
+            expect(value).toContain(fontName);
         });
     });
 

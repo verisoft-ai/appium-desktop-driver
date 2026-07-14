@@ -2,6 +2,7 @@
 
 import { defineConfig } from 'eslint/config';
 import eslint from '@eslint/js';
+import globals from 'globals';
 import appiumConfig from '@appium/eslint-config-appium-ts';
 
 
@@ -12,19 +13,20 @@ export default defineConfig(
     files: ['test/e2e/**/*.ts'],
   },
   {
+    files: ['scripts/**/*.js'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'import/no-unresolved': ['error', { ignore: ['^@modelcontextprotocol/sdk/'] }],
+      'no-console': 'off',
     },
   },
   {
     files: ['docs/**/*.js'],
     languageOptions: {
-      globals: {
-        document: 'readonly',
-        navigator: 'readonly',
-        setTimeout: 'readonly',
-      },
+      globals: globals.browser,
+    },
+  },
+  {
+    rules: {
+      'import/no-unresolved': ['error', { ignore: ['^@modelcontextprotocol/'] }],
     },
   },
 );

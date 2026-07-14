@@ -1,5 +1,5 @@
 import * as http from 'node:http';
-import { remote } from 'webdriverio';
+import { remote, attach } from 'webdriverio';
 import type { Browser } from 'webdriverio';
 import type { McpConfig } from './config.js';
 
@@ -23,7 +23,7 @@ function checkAppiumReachable(host: string, port: number): Promise<boolean> {
 
 /** Session parameters provided by the agent via the create_session tool. */
 export interface SessionParams {
-    app: string;
+    app?: string;
     appArguments?: string;
     appWorkingDir?: string;
     waitForAppLaunch?: number;
@@ -32,6 +32,13 @@ export interface SessionParams {
     delayAfterClick?: number;
     delayBeforeClick?: number;
     smoothPointerMove?: string;
+    webviewEnabled?: boolean;
+    webviewDevtoolsPort?: number;
+    javaSwing?: boolean;
+    jdkPath?: string;
+    appTopLevelWindow?: string;
+    newSessionCommandTimeout?: number;
+    ieDriverServerPath?: string;
 }
 
 export class AppiumSession {
@@ -49,13 +56,14 @@ export class AppiumSession {
             throw new Error(`Appium not running on ${host}:${port}. Start it first with: appium --port ${port}`);
         }
 
-        process.stderr.write(`[MCP] Creating Appium session for app: ${params.app}\n`);
+        process.stderr.write(`[MCP] Creating Appium session for: ${params.app ?? params.appTopLevelWindow ?? 'desktop root'}\n`);
 
         const caps: Record<string, unknown> = {
             platformName: 'Windows',
             'appium:automationName': 'DesktopDriver',
-            'appium:app': params.app,
         };
+
+        if (params.app !== undefined) {caps['appium:app'] = params.app;}
 
         if (params.appArguments !== undefined) {caps['appium:appArguments'] = params.appArguments;}
         if (params.appWorkingDir !== undefined) {caps['appium:appWorkingDir'] = params.appWorkingDir;}
@@ -64,6 +72,13 @@ export class AppiumSession {
         if (params.delayAfterClick !== undefined) {caps['appium:delayAfterClick'] = params.delayAfterClick;}
         if (params.delayBeforeClick !== undefined) {caps['appium:delayBeforeClick'] = params.delayBeforeClick;}
         if (params.smoothPointerMove !== undefined) {caps['appium:smoothPointerMove'] = params.smoothPointerMove;}
+        if (params.webviewEnabled !== undefined) {caps['appium:webviewEnabled'] = params.webviewEnabled;}
+        if (params.webviewDevtoolsPort !== undefined) {caps['appium:webviewDevtoolsPort'] = params.webviewDevtoolsPort;}
+        if (params.javaSwing !== undefined) {caps['appium:javaSwing'] = params.javaSwing;}
+        if (params.jdkPath !== undefined) {caps['appium:jdkPath'] = params.jdkPath;}
+        if (params.appTopLevelWindow !== undefined) {caps['appium:appTopLevelWindow'] = params.appTopLevelWindow;}
+        if (params.ieDriverServerPath !== undefined) {caps['appium:ieDriverServerPath'] = params.ieDriverServerPath;}
+        caps['appium:newCommandTimeout'] = params.newSessionCommandTimeout ?? 3600;
 
         this.driver = await remote({
             hostname: this.appiumConfig.appiumHost,
@@ -75,6 +90,21 @@ export class AppiumSession {
 
         await this.driver.setTimeout({ implicit: params.implicitTimeout });
         process.stderr.write('[MCP] Session created successfully\n');
+    }
+
+    async attach(sessionId: string): Promise<void> {
+        if (this.driver) {
+            throw new Error('A session is already active. Call delete_session first.');
+        }
+
+        const { appiumHost: hostname, appiumPort: port } = this.appiumConfig;
+        if (!await checkAppiumReachable(hostname, port)) {
+            throw new Error(`Appium not running on ${hostname}:${port}`);
+        }
+
+        process.stderr.write(`[MCP] Attaching to existing session: ${sessionId}\n`);
+        this.driver = await attach({ sessionId, hostname, port, path: '/', logLevel: 'silent' });
+        process.stderr.write('[MCP] Attached successfully\n');
     }
 
     async delete(): Promise<void> {

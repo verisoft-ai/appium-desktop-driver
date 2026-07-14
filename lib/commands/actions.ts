@@ -5,7 +5,6 @@ import {
     NullActionSequence,
     PointerActionSequence,
     PointerMoveAction,
-    Rect,
     ScrollAction,
     WheelActionSequence,
 } from '@appium/types';
@@ -14,12 +13,10 @@ import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { AppiumDesktopDriver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
 import { sleep } from '../util';
-import { AutomationElement, FoundAutomationElement } from '../powershell';
-import { fetchElementRect } from './element';
+import type { RectResult } from '../server/protocol';
 import { Key } from '../enums';
 
 export async function performActions(this: AppiumDesktopDriver, actionSequences: ActionSequence[]): Promise<void> {
-    // Validate all sequences upfront before executing any actions
     for (const actionSequence of actionSequences) {
         if (actionSequence.type === 'pointer' &&
             (actionSequence.parameters?.pointerType === 'touch' || actionSequence.parameters?.pointerType === 'pen')) {
@@ -37,7 +34,7 @@ export async function performActions(this: AppiumDesktopDriver, actionSequences:
 
         for (const actionSequence of actionSequences) {
             const action = actionSequence.actions[tick];
-            if (!action) { continue; };
+            if (!action) { continue; }
 
             switch (actionSequence.type) {
                 case 'key':
@@ -51,7 +48,7 @@ export async function performActions(this: AppiumDesktopDriver, actionSequences:
                     break;
                 case 'none': {
                     const duration = (action as NullActionSequence['actions'][number]).duration;
-                    if (duration) { tickPromises.push(sleep(duration)); };
+                    if (duration) { tickPromises.push(sleep(duration)); }
                     break;
                 }
             }
@@ -59,15 +56,13 @@ export async function performActions(this: AppiumDesktopDriver, actionSequences:
 
         await Promise.all(tickPromises);
     }
-};
+}
 
 export async function handleKeyActionSequence(this: AppiumDesktopDriver, actionSequence: KeyActionSequence): Promise<void> {
-    const actions = actionSequence.actions;
-    for (const action of actions) {
+    for (const action of actionSequence.actions) {
         await this.handleKeyAction(action);
     }
 }
-
 
 export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, action: PointerActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
@@ -92,7 +87,6 @@ export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, 
     }
 }
 
-
 export async function handleSingleWheelAction(this: AppiumDesktopDriver, action: WheelActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
         case 'scroll':
@@ -112,7 +106,6 @@ export async function handleSingleWheelAction(this: AppiumDesktopDriver, action:
     }
 }
 
-
 export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: PointerMoveAction | ScrollAction): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
     switch (action.origin) {
@@ -121,22 +114,20 @@ export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: P
             break;
         case undefined:
         case 'viewport': {
-            const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
-            const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+            const rootRect = await this.sendCommand('getRootRect', {}) as RectResult;
             await mouseMoveAbsolute(action.x + rootRect.x, action.y + rootRect.y, action.duration, easingFunction);
             break;
         }
         default:
             if (action.origin?.[W3C_ELEMENT_KEY]) {
-                const element = new FoundAutomationElement(action.origin[W3C_ELEMENT_KEY]);
-                let rect = await fetchElementRect(this, element);
+                const elementId = action.origin[W3C_ELEMENT_KEY];
+                let rect = await this.sendCommand('getRect', { elementId }) as RectResult;
 
                 if (Object.values(rect).some((x) => x === 0x7FFFFFFF)) {
-                    await this.sendPowerShellCommand(element.buildScrollIntoViewCommand());
-                    rect = await fetchElementRect(this, element);
+                    await this.sendCommand('scrollElementIntoView', { elementId });
+                    rect = await this.sendCommand('getRect', { elementId }) as RectResult;
                 }
 
-                // W3C spec: x and y are offsets from the element's centre point.
                 await mouseMoveAbsolute(rect.x + rect.width / 2 + (action.x ?? 0), rect.y + rect.height / 2 + (action.y ?? 0), action.duration, easingFunction);
                 break;
             }

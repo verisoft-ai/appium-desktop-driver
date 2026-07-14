@@ -12,8 +12,12 @@ import {
 } from '../../../lib/commands/app';
 import { createMockDriver } from '../../fixtures/driver';
 
+const mockGetAllWindowHandles = vi.fn().mockReturnValue([]);
+
 vi.mock('../../../lib/winapi/user32', () => ({
+    getAllWindowHandles: (...args: unknown[]) => mockGetAllWindowHandles(...args),
     getWindowAllHandlesForProcessIds: vi.fn().mockReturnValue([]),
+    isIEWindowHwnd: vi.fn().mockReturnValue(false),
     trySetForegroundWindow: vi.fn().mockReturnValue(true),
 }));
 
@@ -22,10 +26,10 @@ describe('getPageSource', () => {
 
     it('returns XML page source string', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue('<Root><Child /></Root>');
+        driver.sendCommand.mockResolvedValue('<Root><Child /></Root>');
         const result = await getPageSource.call(driver);
+        expect(driver.sendCommand).toHaveBeenCalledWith('getPageSource', {});
         expect(result).toBe('<Root><Child /></Root>');
-        expect(driver.sendPowerShellCommand).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -34,14 +38,18 @@ describe('getWindowHandle', () => {
 
     it('returns hex-formatted window handle', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue('12648430'); // 0x00C0FFEE
+        driver.sendCommand
+            .mockResolvedValueOnce('root-id')
+            .mockResolvedValueOnce('12648430'); // 0x00C0FFEE
         const result = await getWindowHandle.call(driver);
         expect(result).toBe('0x00c0ffee');
     });
 
     it('pads handle to 8 hex digits', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue('1'); // 0x00000001
+        driver.sendCommand
+            .mockResolvedValueOnce('root-id')
+            .mockResolvedValueOnce('1'); // 0x00000001
         const result = await getWindowHandle.call(driver);
         expect(result).toBe('0x00000001');
     });
@@ -50,98 +58,71 @@ describe('getWindowHandle', () => {
 describe('getWindowHandles', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('returns array of hex window handles for each child window', async () => {
+    it('returns array of hex window handles for each visible window', async () => {
+        mockGetAllWindowHandles.mockReturnValue([100, 200]);
         const driver = createMockDriver() as any;
-        // First call: findAll children of rootElement → two element IDs
-        // Subsequent calls: getNativeWindowHandle for each child
-        driver.sendPowerShellCommand
-            .mockResolvedValueOnce('1.1.1\n2.2.2') // findAll
-            .mockResolvedValueOnce('100') // handle for element 1
-            .mockResolvedValueOnce('200'); // handle for element 2
-
         const result = await getWindowHandles.call(driver);
         expect(result).toHaveLength(2);
-        expect(result[0]).toBe('0x00000064'); // 100 = 0x64
-        expect(result[1]).toBe('0x000000c8'); // 200 = 0xC8
+        expect(result[0]).toBe('0x00000064');
+        expect(result[1]).toBe('0x000000c8');
     });
 
-    it('returns empty array when no child windows found', async () => {
+    it('returns empty array when no windows found', async () => {
+        mockGetAllWindowHandles.mockReturnValue([]);
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue(''); // no elements
         const result = await getWindowHandles.call(driver);
         expect(result).toEqual([]);
     });
+
 });
 
 describe('getWindowRect', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('returns parsed rect object', async () => {
+    it('returns rect object from C# server', async () => {
         const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue('{"x":10,"y":20,"width":800,"height":600}');
+        driver.sendCommand.mockResolvedValue({ x: 10, y: 20, width: 800, height: 600 });
         const result = await getWindowRect.call(driver);
+        expect(driver.sendCommand).toHaveBeenCalledWith('getRootRect', {});
         expect(result).toEqual({ x: 10, y: 20, width: 800, height: 600 });
-    });
-
-    it('replaces Infinity with max int32', async () => {
-        const driver = createMockDriver() as any;
-        driver.sendPowerShellCommand.mockResolvedValue('{"x":Infinity,"y":0,"width":Infinity,"height":0}');
-        const result = await getWindowRect.call(driver);
-        expect(result.x).toBe(0x7FFFFFFF);
-        expect(result.width).toBe(0x7FFFFFFF);
     });
 });
 
 describe('setWindow', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('sets root element by numeric handle', async () => {
+    it('sets root element by numeric handle via setRootElementFromHandle (no tree search)', async () => {
         const driver = createMockDriver() as any;
         const { trySetForegroundWindow } = await import('../../../lib/winapi/user32');
 
-        // findFirst returns a valid element ID
-        driver.sendPowerShellCommand.mockResolvedValue('1.2.3');
+        driver.sendCommand.mockResolvedValueOnce('1.2.3');
+
         await setWindow.call(driver, '12345');
-        expect(driver.sendPowerShellCommand).toHaveBeenCalled();
-        // The last PS command should set $rootElement
-        const calls = driver.sendPowerShellCommand.mock.calls;
-        const setRootCall = calls.find((c: any[]) => c[0].includes('$rootElement ='));
-        expect(setRootCall).toBeDefined();
+
+        expect(driver.sendCommand).toHaveBeenCalledWith('setRootElementFromHandle', { handle: 12345 });
         expect(trySetForegroundWindow).toHaveBeenCalledWith(12345);
     });
 
-    it('sets root element by window name', async () => {
+    it('sets root element by window name when name is not numeric', async () => {
         const driver = createMockDriver() as any;
 
-        driver.sendPowerShellCommand
-            .mockResolvedValueOnce('') // numeric handle search fails (NaN)
-            .mockResolvedValueOnce('5.6.7'); // name search succeeds
+        driver.sendCommand
+            .mockResolvedValueOnce('5.6.7')
+            .mockResolvedValueOnce(undefined);
 
         await setWindow.call(driver, 'Calculator');
-        const calls = driver.sendPowerShellCommand.mock.calls;
-        const setRootCall = calls.find((c: any[]) => c[0].includes('$rootElement ='));
-        expect(setRootCall).toBeDefined();
+
+        expect(driver.sendCommand).toHaveBeenCalledWith(
+            'findElement',
+            expect.objectContaining({ scope: 'children' })
+        );
+        expect(driver.sendCommand).toHaveBeenCalledWith('setRootElementFromElementId', { elementId: '5.6.7' });
     });
 
-    it('throws NoSuchWindowError when window is not found after retries', async () => {
+    it('throws NoSuchWindowError when window is never found', async () => {
         const driver = createMockDriver() as any;
-        driver.caps['ms:windowSwitchRetries'] = 1;
-        driver.caps['ms:windowSwitchInterval'] = 0;
-        // All calls return empty (window not found)
-        driver.sendPowerShellCommand.mockResolvedValue('');
+        driver.sendCommand.mockResolvedValue(null);
 
-        await expect(setWindow.call(driver, 'NonExistentWindow')).rejects.toThrow('No window was found');
-    });
-
-    it('respects ms:windowSwitchRetries cap', async () => {
-        const driver2 = createMockDriver() as any;
-        driver2.caps['ms:windowSwitchRetries'] = 2;
-        driver2.caps['ms:windowSwitchInterval'] = 0;
-        driver2.sendPowerShellCommand.mockResolvedValue('');
-
-        // Use a numeric handle string so both the handle search and name search run per iteration (2 PS calls each)
-        await expect(setWindow.call(driver2, '99999')).rejects.toThrow('No window was found');
-        // 2 retries × 2 PS commands (handle search + name search) = 4 calls
-        expect(driver2.sendPowerShellCommand.mock.calls.length).toBe(4);
-    });
+        await expect(setWindow.call(driver, 'Nonexistent')).rejects.toThrow('No window was found');
+    }, 30000);
 });

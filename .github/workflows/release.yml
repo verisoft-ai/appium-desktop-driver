@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 permissions:
   contents: write
@@ -14,32 +15,43 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment: Release
     steps:
     - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+    - name: Fetch all tags
+      run: git fetch --tags --force
     - name: Use Node.js
       uses: actions/setup-node@v6
       with:
         node-version: 24.x
         registry-url: 'https://registry.npmjs.org'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '8'
     - run: npm install --no-package-lock
       name: Install dependencies
-    - run: npm run build
-      name: Run NPM Build
+    - run: npm run build:all
+      name: Build all (Java agent, native server, TypeScript)
     - run: npm run lint
       name: Run NPM Lint
     - run: |
-        rm -rf package-lock.json node_modules
-        # Remove dev and peer dependencies from node_modules
+        Remove-Item -Recurse -Force package-lock.json, node_modules -ErrorAction SilentlyContinue
         npm prune --omit=dev --omit=peer --no-package-lock
       name: Remove dev dependencies and appium peer dependencies
     - run: npm shrinkwrap --omit=dev --omit=peer
       name: Create shrinkwrap
     - run: npm install --only=dev --no-package-lock
       name: Install dev dependencies for the release
-    - run: npx semantic-release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    # - run: npx semantic-release
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       name: Release

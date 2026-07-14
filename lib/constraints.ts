@@ -36,26 +36,54 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     isolatedScriptExecution: {
         isBoolean: true,
     },
-    appEnvironment: {
-        isObject: true,
+    deviceName: {
+        isString: true,
+    },
+    systemPort: {
+        isNumber: true,
     },
     'ms:waitForAppLaunch': {
         isNumber: true,
     },
+    'ms:experimental-webdriver': {
+        isBoolean: true,
+    },
     'ms:forcequit': {
         isBoolean: true,
     },
-    returnAllWindowHandles: {
+    logFile: {},
+    webviewEnabled: {
         isBoolean: true,
     },
-    'ms:windowSwitchRetries': {
+    webviewDevtoolsPort: {
         isNumber: true,
     },
-    'ms:windowSwitchInterval': {
-        isNumber: true,
+    chromedriverCdnUrl: {
+        isString: true,
+    },
+    edgedriverCdnUrl: {
+        isString: true,
+    },
+    chromedriverExecutablePath: {
+        isString: true,
+    },
+    edgedriverExecutablePath: {
+        isString: true,
+    },
+    ffmpegExecutablePath: {
+        isString: true,
+    },
+    javaSwing: {
+        isBoolean: true,
+    },
+    jdkPath: {
+        isString: true,
+    },
+    ieDriverServerPath: {
+        isString: true,
     },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
-export type AppiumDesktopDriverConstraints = typeof UI_AUTOMATION_DRIVER_CONSTRAINTS;
+export type NovaWindowsDriverConstraints = typeof UI_AUTOMATION_DRIVER_CONSTRAINTS;

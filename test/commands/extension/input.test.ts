@@ -81,18 +81,11 @@ describe('executeClick', () => {
     it('clicks with elementId when element exists', async () => {
         const driver = createMockDriver() as any;
         (driver as any).caps = {};
-        const rectJson = '{"x":10,"y":20,"width":100,"height":50}';
-        let callCount = 0;
-        driver.sendPowerShellCommand.mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) {
-                return Promise.resolve('True');
-            }
-            if (callCount === 2) {
-                return Promise.resolve('1.2.3.4.5');
-            }
-            return Promise.resolve(rectJson);
-        });
+        const rect = { x: 10, y: 20, width: 100, height: 50 };
+        // lookupElement returns true, getRect returns rect object
+        driver.sendCommand
+            .mockResolvedValueOnce(true)
+            .mockResolvedValueOnce(rect);
         const { mouseMoveAbsolute } = await import('../../../lib/winapi/user32');
         await executeClick.call(driver, { elementId: '1.2.3.4.5' });
         expect(mouseMoveAbsolute).toHaveBeenCalledWith(60, 45, 0); // center of rect

@@ -1,4 +1,7 @@
 import { Orientation } from '@appium/types';
+import { logger } from '@appium/support';
+
+const log = logger.getLogger('user32');
 import {
     load,
     struct,
@@ -65,6 +68,13 @@ interface MouseEvent extends Event {
 interface Point {
     x: number,
     y: number,
+}
+
+interface Rect {
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
 }
 
 interface DeviceModeAnsi {
@@ -135,6 +145,13 @@ type PointStruct = {
     y: unknown,
 }
 
+type RectStruct = {
+    left: unknown,
+    top: unknown,
+    right: unknown,
+    bottom: unknown,
+}
+
 type InputUnion = {
     ki: unknown,
     mi: unknown,
@@ -173,14 +190,21 @@ const easingFunctions = Object.freeze({
 } as const);
 
 const UINT32_MAX = 0xFFFFFFFF;
-const UINT16_MAX = 0xFFFF;
 
 const user32 = load('user32.dll');
+const kernel32 = load('kernel32.dll');
 
 const POINT = struct('POINT', {
     x: 'long',
     y: 'long',
 } satisfies PointStruct);
+
+struct('RECT', {
+    left: 'long',
+    top: 'long',
+    right: 'long',
+    bottom: 'long',
+} satisfies RectStruct);
 
 const MOUSEINPUT = struct('MOUSEINPUT', {
     dx: 'long',
@@ -271,7 +295,8 @@ const LONG_PTR = pointer('LONG_PTR', types.long);
 const LPDWORD = pointer('LPDWORD', DWORD);
 const HWND = alias('HWND', HANDLE);
 const LPARAM = alias('LPARAM', LONG_PTR);
-const LPSTR = pointer('LPSTR', 'char');
+// const LPSTR = pointer('LPSTR', 'char');
+const LPWSTR = pointer('LPWSTR', 'wchar_t');
 
 const EnumWindowsProc = proto('BOOL __stdcall EnumWindowsProc (HWND hwnd, LPARAM lParam)');
 
@@ -282,7 +307,8 @@ type LONG_PTR = number;
 type LPDWORD = number;
 type HWND = unknown;
 type LPARAM = number;
-type LPSTR = Buffer;
+// type LPSTR = Buffer;
+type LPWSTR = Buffer;
 
 type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;
 
@@ -292,14 +318,28 @@ const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int
 const SetProcessDPIAware = user32.func(/* c */ `bool __stdcall SetProcessDPIAware()`) as () => boolean;
 const GetDpiForSystem = user32.func(/* c */ `unsigned int __stdcall GetDpiForSystem()`) as () => number;
 const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (lpPoint: Point) => boolean;
+const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (x: number, y: number) => boolean;
 const EnumDisplaySettingsA = user32.func(/* c */ `bool __stdcall EnumDisplaySettingsA(str lpszDeviceName, uint iModeNum, _Out_ DEVMODEA *lpDevMode)`) as (lpszDeviceName: string | null, iModeNum: number, lpDevMode: Buffer) => boolean;
 // end TODO
 
 const GetWindowThreadProcessId = user32.func(/* c */ `DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ LPDWORD lpdwProcessId)`) as (hWnd: HWND, lpdwProcessId: [LPDWORD | null]) => DWORD;
-const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
+const GetClassNameW = user32.func(/* c */ `int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)`) as (hWnd: HWND, lpClassName: LPWSTR, nMaxCount: number) => number;
+// const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
+const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
+const EnumChildWindows = user32.func(/* c */ `BOOL __stdcall EnumChildWindows(HWND hWndParent, EnumWindowsProc *lpEnumFunc, LPARAM lParam)`) as (hWndParent: HWND, lpEnumFunc: EnumWindowsProc, lParam: LPARAM) => BOOL;
+const GetWindowRect = user32.func(/* c */ `BOOL __stdcall GetWindowRect(HWND hWnd, _Out_ RECT *lpRect)`) as (hWnd: HWND, lpRect: Rect) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
+const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
+const GetCurrentThreadId = kernel32.func(/* c */ `DWORD __stdcall GetCurrentThreadId()`) as () => DWORD;
+const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int nCmdShow)`) as (hWnd: HWND, nCmdShow: number) => BOOL;
+const IsIconic = user32.func(/* c */ `BOOL __stdcall IsIconic(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const BringWindowToTop = user32.func(/* c */ `BOOL __stdcall BringWindowToTop(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const SetFocus = user32.func(/* c */ `HWND __stdcall SetFocus(HWND hWnd)`) as (hWnd: HWND) => HWND;
+
+const SW_RESTORE = 9;
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -420,56 +460,31 @@ function makeMouseUpEvents(button: number): MouseEvent[] {
     return [mouseEvent];
 }
 
-function makeMouseMoveEvents(args: {
-        /** The absolute position of the mouse, or the amount of motion since the last mouse event was generated, depending on the value of the dwFlags member. Absolute data is specified as the x coordinate of the mouse; relative data is specified as the number of pixels moved. */
-        x: number,
-        /** The absolute position of the mouse, or the amount of motion since the last mouse event was generated, depending on the value of the dwFlags member. Absolute data is specified as the y coordinate of the mouse; relative data is specified as the number of pixels moved. */
-        y: number,
-        /** Set to true if the event is a mouse wheel move, and false if it's a mouse move. */
-        wheel: boolean,
-        /** Set to true if the event is a mouse move with relative coordinates. This argument is ignored for mouse wheel move. */
-        relative?: boolean,
-    }
-): MouseEvent[] {
-    const { x, y, wheel, relative } = args;
+// Builds the SendInput payload for a wheel scroll. Cursor movement no longer
+// goes through this function — `setCursorAbsolute` (SetCursorPos) handles all
+// positioning; an earlier MOUSEEVENTF_ABSOLUTE|VIRTUALDESK path was removed
+// because SetCursorPos is simpler and DPI-agnostic.
+function makeMouseWheelEvents(x: number, y: number): MouseEvent[] {
+    const mouseEvents: MouseEvent[] = [];
 
-    if (wheel) {
-        const mouseEvents: MouseEvent[] = [];
-
-        if (x !== 0) {
-            const horizontalScrollEvent = makeEmptyMouseEvent();
-            horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
-            horizontalScrollEvent.u.mi.mouseData = x;
-            mouseEvents.push(horizontalScrollEvent);
-        }
-
-        if (y !== 0) {
-            const verticalScrollEvent = makeEmptyMouseEvent();
-            verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
-            verticalScrollEvent.u.mi.mouseData = y;
-            mouseEvents.push(verticalScrollEvent);
-        }
-
-        return mouseEvents;
+    if (x !== 0) {
+        const horizontalScrollEvent = makeEmptyMouseEvent();
+        horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
+        horizontalScrollEvent.u.mi.mouseData = x;
+        mouseEvents.push(horizontalScrollEvent);
     }
 
-    const mouseEvent: MouseEvent = makeEmptyMouseEvent();
-
-    if (relative) {
-        mouseEvent.u.mi.dx = Math.trunc(x);
-        mouseEvent.u.mi.dy = Math.trunc(y);
-        mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MOVE;
-    } else {
-        const virt = getVirtualScreenBounds();
-        mouseEvent.u.mi.dx = Math.trunc(((x - virt.left) * UINT16_MAX) / virt.width);
-        mouseEvent.u.mi.dy = Math.trunc(((y - virt.top) * UINT16_MAX) / virt.height);
-        mouseEvent.u.mi.dwFlags =
-            MouseEventFlags.MOUSEEVENTF_MOVE |
-            MouseEventFlags.MOUSEEVENTF_ABSOLUTE |
-            MouseEventFlags.MOUSEEVENTF_VIRTUALDESK;
+    if (y !== 0) {
+        const verticalScrollEvent = makeEmptyMouseEvent();
+        verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
+        // Win32 WHEEL_DELTA sign is opposite the W3C wheel-action deltaY convention
+        // (DOM WheelEvent): positive Win32 mouseData scrolls content up, but W3C
+        // positive deltaY means scroll down.
+        verticalScrollEvent.u.mi.mouseData = -y;
+        mouseEvents.push(verticalScrollEvent);
     }
 
-    return [mouseEvent];
+    return mouseEvents;
 }
 
 function charToKeyboardEvents(char: string, down: boolean, forceUnicode: boolean = false): KeyboardEvent[] {
@@ -646,9 +661,25 @@ function sendMouseButtonInput(button: number, down: boolean) {
     assertSuccessSendInputReturnCode(returnCode);
 }
 
+function setCursorAbsolute(x: number, y: number): void {
+    const ix = Math.trunc(x);
+    const iy = Math.trunc(y);
+    SetCursorPos(ix, iy);
+    // Known Windows quirk — on a multi-monitor setup where the monitors have
+    // different sizes (or DPI scale factors), the first SetCursorPos call
+    // after the cursor crosses from one monitor to another can land at x=0
+    // on the target monitor instead of the requested coord. Verify via
+    // GetCursorPos and retry once. Credit: FlaUI.Core/Input/Mouse.cs Position
+    // setter — see https://stackoverflow.com/questions/58753372
+    const verify: Point = { x: 0, y: 0 };
+    if (GetCursorPos(verify) && (verify.x !== ix || verify.y !== iy)) {
+        SetCursorPos(ix, iy);
+    }
+}
+
 async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string }): Promise<void> {
-    const { duration } = args;
-    let { x, y, easingFunction, relative } = args;
+    const { duration, relative } = args;
+    let { x, y, easingFunction } = args;
     const refreshRate = getRefreshRate();
     const updateInterval = 1000 / refreshRate;
     const iterations = Math.max(Math.floor(duration / updateInterval), 1);
@@ -658,17 +689,28 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
         y: 0,
     } satisfies Point;
 
-    if (GetCursorPos(cursorPosition) && iterations > 1) {
-        if (relative) {
+    // Cursor movement goes through SetCursorPos rather than
+    // SendInput(MOUSEEVENTF_MOVE|MOUSEEVENTF_ABSOLUTE). SendInput in absolute
+    // mode normalizes coords into [0, 65535] and — without
+    // MOUSEEVENTF_VIRTUALDESK — clips to the primary monitor. Even with
+    // VIRTUALDESK, legacy-DPI-aware processes hit edge cases when monitors
+    // have different scale factors. SetCursorPos takes raw physical pixel
+    // coordinates across the entire virtual screen and Just Works on
+    // multi-monitor setups, which is what FlaUI uses (Mouse.cs:118-139).
+    // Kept SendInput only for button events (mouseDown / mouseUp).
+    const hasCurrentCursorPos = GetCursorPos(cursorPosition);
+    if (relative) {
+        if (hasCurrentCursorPos) {
             x += cursorPosition.x;
             y += cursorPosition.y;
+        } else {
+            // Without a current cursor position we can't turn a relative move
+            // into an absolute SetCursorPos. Fall back to single teleport.
+            easingFunction = undefined;
         }
+    }
 
-        // setting relative to false since coordinates are now absolute
-        relative = false;
-    } else {
-        // ignore easing function of it can't retrieve current cursor position
-        // this is preventing the method from failing
+    if (!hasCurrentCursorPos || iterations <= 1) {
         easingFunction = undefined;
     }
 
@@ -692,24 +734,18 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
                 const interpolatedX = cursorPosition.x + (x - cursorPosition.x) * easedProgress;
                 const interpolatedY = cursorPosition.y + (y - cursorPosition.y) * easedProgress;
 
-                const events = makeMouseMoveEvents({ x: interpolatedX, y: interpolatedY, wheel: false });
-                const returnCode = SendInput(events.length, events, sizeof(INPUT));
-
-                assertSuccessSendInputReturnCode(returnCode);
+                setCursorAbsolute(interpolatedX, interpolatedY);
             }, i * updateInterval);
         }
     } else {
-        const events = makeMouseMoveEvents({ x, y, wheel: false });
-        const returnCode = SendInput(events.length, events, sizeof(INPUT));
-
-        assertSuccessSendInputReturnCode(returnCode);
+        setCursorAbsolute(x, y);
     }
 
     await sleep(duration);
 }
 
 function sendMouseScrollInput(x: number, y: number) {
-    const events = makeMouseMoveEvents({ x, y, wheel: true });
+    const events = makeMouseWheelEvents(x, y);
     const returnCode = SendInput(events.length, events, sizeof(INPUT));
 
     assertSuccessSendInputReturnCode(returnCode);
@@ -729,6 +765,13 @@ export function getResolutionScalingFactor(): number {
     getResolutionScalingFactor = () => scalingFactor;
 
     return scalingFactor;
+}
+
+function getScreenResolution(): [number, number] {
+    return [
+        GetSystemMetrics(SystemMetric.SM_CXSCREEN),
+        GetSystemMetrics(SystemMetric.SM_CYSCREEN),
+    ];
 }
 
 function getRefreshRate(): number {
@@ -751,36 +794,6 @@ function getRefreshRate(): number {
     return refreshRate;
 }
 
-function getScreenResolution(): [number, number] {
-    const width = GetSystemMetrics(SystemMetric.SM_CXSCREEN);
-    const height = GetSystemMetrics(SystemMetric.SM_CYSCREEN);
-
-    const resolution = [width, height] satisfies ReturnType<typeof getScreenResolution>;
-
-    const nonMemoizedMethod = getScreenResolution;
-    const currentTime = new Date().getTime();
-
-    // @ts-expect-error memoizing the function to prevent repeated calls that might crash Node.js
-    getScreenResolution = () => {
-        if (new Date().getTime() - currentTime > 1000) {
-            // @ts-expect-error reset memoization after 1 second
-            getScreenResolution = nonMemoizedMethod;
-        }
-        return resolution;
-    };
-
-    return resolution;
-}
-
-export function getVirtualScreenBounds(): { left: number; top: number; width: number; height: number } {
-    return {
-        left: GetSystemMetrics(SystemMetric.SM_XVIRTUALSCREEN),
-        top: GetSystemMetrics(SystemMetric.SM_YVIRTUALSCREEN),
-        width: GetSystemMetrics(SystemMetric.SM_CXVIRTUALSCREEN),
-        height: GetSystemMetrics(SystemMetric.SM_CYVIRTUALSCREEN),
-    };
-}
-
 export function keyDown(char: string, forceUnicode: boolean = false): void {
     sendKeyInput(char, true, forceUnicode);
 }
@@ -797,8 +810,22 @@ export function mouseScroll(x: number, y: number): void {
     sendMouseScrollInput(x, y);
 }
 
-export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {
+// `duration = 0` → single SetCursorPos teleport (fastest; the default path).
+// Callers that need interpolated cursor movement (WPF ContextMenu / MenuItem
+// hover tracking — see FlaUI.Core/Input/Mouse.cs:118-139) pass an explicit
+// duration; the path is then walked in per-frame SetCursorPos steps.
+// `easingFunction` defaults to `'linear'` so callers get a straight
+// interpolated path without also needing to pass an easing curve.
+export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction: string = 'linear'): Promise<void> {
     await sendMouseMoveInput({x, y, relative: false, duration, easingFunction});
+}
+
+export function getCursorPos(): { x: number; y: number } | null {
+    const point: Point = { x: 0, y: 0 };
+    if (GetCursorPos(point)) {
+        return { x: point.x, y: point.y };
+    }
+    return null;
 }
 
 export function mouseDown(button: number = 0): void {
@@ -810,8 +837,8 @@ export function mouseUp(button: number = 0): void {
 }
 
 export function getDisplayOrientation(): Orientation {
-    const resolution = getScreenResolution();
-    return resolution[0] > resolution[1] ? 'LANDSCAPE' : 'PORTRAIT';
+    const [width, height] = getScreenResolution();
+    return width > height ? 'LANDSCAPE' : 'PORTRAIT';
 }
 
 export function setDpiAwareness() {
@@ -820,37 +847,269 @@ export function setDpiAwareness() {
     };
 }
 
+export function getWindowThreadProcessId(hwnd: number, pidOut: [number | null]): number {
+    const ptr: [LPDWORD | null] = [null];
+    const threadId = GetWindowThreadProcessId(hwnd, ptr);
+    pidOut[0] = ptr[0] ?? null;
+    return threadId;
+}
+
+export function getWindowTitle(hwnd: number): string {
+    try {
+        const buffer = Buffer.alloc(512);
+        const len = GetWindowTextW(hwnd, buffer, 256);
+        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+    } catch {
+        return '';
+    }
+}
+
+export function getWindowClassName(hwnd: number): string {
+    try {
+        const buffer = Buffer.alloc(512);
+        const len = GetClassNameW(hwnd, buffer, 256);
+        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+    } catch {
+        return '';
+    }
+}
+
+export function isIEWindowHwnd(hwnd: number): boolean {
+    return getWindowClassName(hwnd) === 'IEFrame';
+}
+
 export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {
     const handles: number[] = [];
-    EnumWindows((hWnd) => {
-        const ptr: [LPDWORD | null] = [null];
-        GetWindowThreadProcessId(hWnd, ptr);
-        const pid = ptr[0];
-        if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
-            const buffer = Buffer.alloc(256); // Adjust size as needed
-            GetWindowTextA(hWnd, buffer, buffer.length);
-            const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
-
-            if (windowTitle) {
-                handles.push(Number(address(hWnd)));
+    log.debug(`getWindowAllHandlesForProcessIds called with processIds: ${processIds.join(', ')}`);
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                const ptr: [LPDWORD | null] = [null];
+                GetWindowThreadProcessId(hWnd, ptr);
+                const pid = ptr[0];
+                if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+                    if (windowTitle) {
+                        handles.push(Number(address(hWnd)));
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
             }
-        }
 
-        return true;
-    }, 0);
-
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    log.debug(`getWindowAllHandlesForProcessIds returning ${handles.length} handles`);
     return handles;
 }
 
-export function trySetForegroundWindow(windowHandle: number): boolean {
-    return EnumWindows((hWnd) => {
-        if (windowHandle === Number(address(hWnd))) {
-            SetForegroundWindow(hWnd);
-            return false;
-        }
+export function getAllWindowHandles(): number[] {
+    const handles: number[] = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+                    if (windowTitle) {
+                        handles.push(Number(address(hWnd)));
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return handles;
+}
 
-        return true;
-    }, 0);
+export function getVisibleWindowsWithTitles(): Array<{ handle: number; title: string }> {
+    const windows: Array<{ handle: number; title: string }> = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const buffer = Buffer.alloc(512);
+                    const len = GetWindowTextW(hWnd, buffer, 256);
+                    const title = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+                    if (title) {
+                        windows.push({ handle: Number(address(hWnd)), title });
+                    }
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return windows;
+}
+
+export function getAllWindowsWithDetails(): Array<{ handle: string; title: string; className: string }> {
+    const windows: Array<{ handle: string; title: string; className: string }> = [];
+    try {
+        EnumWindows((hWnd) => {
+            try {
+                if (IsWindowVisible(hWnd)) {
+                    const titleBuf = Buffer.alloc(512);
+                    const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
+                    const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
+
+                    const classBuf = Buffer.alloc(512);
+                    const classLen = GetClassNameW(hWnd, classBuf, 256);
+                    const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
+
+                    const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
+                    windows.push({ handle, title, className });
+                }
+            } catch (err) {
+                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return windows;
+}
+
+export function getChildWindows(hwnd: number): Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> {
+    const children: Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> = [];
+    try {
+        EnumChildWindows(hwnd, (hWnd) => {
+            try {
+                const titleBuf = Buffer.alloc(512);
+                const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
+                const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
+
+                const classBuf = Buffer.alloc(512);
+                const classLen = GetClassNameW(hWnd, classBuf, 256);
+                const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
+
+                const rectOut: Rect = { left: 0, top: 0, right: 0, bottom: 0 };
+                const gotRect = GetWindowRect(hWnd, rectOut);
+                const rect = gotRect
+                    ? { x: rectOut.left, y: rectOut.top, width: rectOut.right - rectOut.left, height: rectOut.bottom - rectOut.top }
+                    : { x: 0, y: 0, width: 0, height: 0 };
+
+                const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
+                children.push({ handle, className, title, rect });
+            } catch (err) {
+                log.error(`Exception in EnumChildWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.error(`EnumChildWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+    }
+    return children;
+}
+
+function isForeground(targetHWnd: HWND): boolean {
+    try {
+        const fg = GetForegroundWindow();
+        return fg !== null && Number(address(fg)) === Number(address(targetHWnd));
+    } catch {
+        return false;
+    }
+}
+
+export async function trySetForegroundWindow(windowHandle: number): Promise<boolean> {
+    let targetHWnd: HWND | null = null;
+
+    try {
+        EnumWindows((hWnd) => {
+            if (windowHandle === Number(address(hWnd))) {
+                targetHWnd = hWnd;
+                return false;
+            }
+            return true;
+        }, 0);
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: EnumWindows failed: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+    }
+
+    if (!targetHWnd) {
+        return false;
+    }
+
+    // Strategy 0: restore minimized window — SetForegroundWindow silently fails when target is iconic.
+    try {
+        if (IsIconic(targetHWnd)) {
+            ShowWindow(targetHWnd, SW_RESTORE);
+            await sleep(50);
+        }
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: restore-minimized failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Strategy 1: SendInput trick + SetForegroundWindow.
+    // Any SendInput event grants our thread foreground-set permission.
+    // Use Control (not Alt) to avoid activating menu-bar accelerator hints.
+    try {
+        sendKeyInput(Key.CONTROL, true);
+        sendKeyInput(Key.CONTROL, false);
+        SetForegroundWindow(targetHWnd);
+        await sleep(50);
+        if (isForeground(targetHWnd)) {
+            return true;
+        };
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 1 (SendInput+SFW) failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Strategy 2: AttachThreadInput + SetForegroundWindow + SetFocus.
+    try {
+        const hForeground = GetForegroundWindow();
+        if (hForeground) {
+            const ourThreadId = GetCurrentThreadId();
+            const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
+            const attached = ourThreadId !== foregroundThreadId &&
+                AttachThreadInput(ourThreadId, foregroundThreadId, true);
+            try {
+                SetForegroundWindow(targetHWnd);
+                if (attached) {
+                    SetFocus(targetHWnd);
+                }
+            } finally {
+                if (attached) {
+                    AttachThreadInput(ourThreadId, foregroundThreadId, false);
+                }
+            }
+            await sleep(50);
+            if (isForeground(targetHWnd)) {
+                return true;
+            };
+        }
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 2 (AttachThreadInput) failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Strategy 3: BringWindowToTop — different internal z-order path than SetForegroundWindow.
+    try {
+        BringWindowToTop(targetHWnd);
+        await sleep(50);
+        if (isForeground(targetHWnd)) {
+            return true;
+        };
+    } catch (err) {
+        log.warn(`trySetForegroundWindow: strategy 3 (BringWindowToTop) failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    log.warn(`trySetForegroundWindow: all strategies exhausted for handle 0x${windowHandle.toString(16).padStart(8, '0')}`);
+    return false;
 }
 
 export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number {

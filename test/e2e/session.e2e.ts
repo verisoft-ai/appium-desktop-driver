@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -23,7 +23,7 @@ describe('Session creation and capabilities', () => {
             expect(sessionId.length).toBeGreaterThan(0);
             // Display should be accessible
             const display = await driver.$('~CalculatorResults');
-            expect(await display.isExisting()).toBe(true);
+            await display.waitForExist({ timeout: 1000 });
         } finally {
             await quitSession(driver);
         }
@@ -134,22 +134,6 @@ describe('Session creation and capabilities', () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
         expect(existsSync(markerPath)).toBe(true);
         if (existsSync(markerPath)) { unlinkSync(markerPath); }
-    });
-
-    it('passes appEnvironment variables into the PowerShell session', async () => {
-        const markerPath = join(tmpdir(), `appiumdesktop-session-env-${Date.now()}.txt`);
-        const driver = await createRootSession({
-            'appium:appEnvironment': { APPPIUM_TEST_VAR: 'hello_from_env' },
-            'appium:prerun': {
-                script: `[System.IO.File]::WriteAllText('${markerPath}', $env:APPPIUM_TEST_VAR)`,
-            },
-        });
-        try {
-            expect(readFileSync(markerPath, 'utf8')).toBe('hello_from_env');
-        } finally {
-            await quitSession(driver);
-            if (existsSync(markerPath)) { unlinkSync(markerPath); }
-        }
     });
 
     it('throws when an unknown automationName is specified', async () => {

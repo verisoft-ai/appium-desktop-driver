@@ -22,7 +22,7 @@ describe('windows: findByVision command)', () => {
         // Ask vision to locate the "7" button, then click its coordinates and verify
         // the calculator display updates — this proves the coordinate math is correct.
         const { x, y } = await calc.executeScript('windows: findByVision', [
-            { prompt: 'the number 7 button on the calculator keypad' },
+            { prompt: 'the number 7 button on the calculator keypad', model: 'gpt-4o' },
         ]) as { x: number; y: number; label: string };
 
         await calc.executeScript('windows: click', [{ x, y }]);
@@ -33,7 +33,7 @@ describe('windows: findByVision command)', () => {
 
     it('returns {x, y, label} with screen coordinates for a visible element', async () => {
         const result = await calc.executeScript('windows: findByVision', [
-            { prompt: 'the number 5 button on the calculator keypad' },
+            { prompt: 'the number 5 button on the calculator keypad', model: 'gpt-4o' },
         ]) as { x: number; y: number; label: string };
 
         expect(typeof result.x).toBe('number');
@@ -46,7 +46,7 @@ describe('windows: findByVision command)', () => {
 
     it('returns coordinates within screen bounds', async () => {
         const result = await calc.executeScript('windows: findByVision', [
-            { prompt: 'the equals button' },
+            { prompt: 'the equals button', model: 'gpt-4o' },
         ]) as { x: number; y: number; label: string };
 
         // Coordinates must be plausible screen pixel values (not negative, not absurdly large)
@@ -59,20 +59,8 @@ describe('windows: findByVision command)', () => {
     it('throws when the requested element is not visible', async () => {
         await expect(
             calc.executeScript('windows: findByVision', [
-                { prompt: 'a purple elephant in the calculator window' },
+                { prompt: 'a purple elephant in the calculator window', model: 'gpt-4o' },
             ])
         ).rejects.toThrow();
-    });
-
-    it('accepts a custom model parameter without throwing', async () => {
-        const result = await calc.executeScript('windows: findByVision', [
-            {
-                prompt: 'the clear button (C)',
-                model: 'claude-haiku-4-5-20251001',
-            },
-        ]) as { x: number; y: number; label: string };
-
-        expect(result.x).toBeGreaterThan(0);
-        expect(result.y).toBeGreaterThan(0);
     });
 });

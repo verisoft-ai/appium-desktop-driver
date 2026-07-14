@@ -29,12 +29,17 @@ describe('App lifecycle commands', () => {
         });
 
         it('windows: closeApp closes the active window', async () => {
-            const driver = await createCalculatorSession({ 'appium:shouldCloseApp': false });
+            const driver = await createCalculatorSession();
             try {
                 const handleBefore = await driver.getWindowHandle();
                 await driver.executeScript('windows: closeApp', []);
-                const handles = await driver.getWindowHandles();
-                expect(handles).not.toContain(handleBefore);
+                await driver.waitUntil(
+                    async () => {
+                        const handles = await driver.getWindowHandles();
+                        return !handles.includes(handleBefore);
+                    },
+                    { timeoutMsg: `window handle ${handleBefore} still present after closeApp` },
+                );
             } finally {
                 await quitSession(driver);
             }

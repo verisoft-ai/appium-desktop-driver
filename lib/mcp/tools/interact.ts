@@ -101,7 +101,7 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
                 const driver = session.getDriver();
                 const el = await driver.$({ [ELEMENT_KEY]: elementId });
                 const value = await el.getAttribute(attribute);
-                return { content: [{ type: 'text' as const, text: value ?? '' }] };
+                return { content: [{ type: 'text' as const, text: String(value ?? '') }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }
@@ -140,6 +140,25 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
                 const el = await driver.$({ [ELEMENT_KEY]: elementId });
                 const enabled = await el.isEnabled();
                 return { content: [{ type: 'text' as const, text: String(enabled) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'is_element_selected',
+        {
+            description: 'Check whether a checkbox, radio button, or toggle is checked/selected. Works for both UIA and Java Swing elements. Returns "true" or "false". Note: tri-state (indeterminate) checkboxes return "false" — indeterminate cannot be distinguished from unchecked via this tool.',
+            inputSchema: { elementId: elementIdSchema },
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const el = await driver.$({ [ELEMENT_KEY]: elementId });
+                const selected = await el.isSelected();
+                return { content: [{ type: 'text' as const, text: String(selected) }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }

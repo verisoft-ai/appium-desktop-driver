@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AppiumSession } from '../session.js';
 import { formatError } from '../errors.js';
+import { ELEMENT_KEY } from '../constants.js';
 
 const elementIdSchema = z.string().min(1).describe('Element ID returned by find_element');
 const elementIdInput = { elementId: elementIdSchema };
@@ -10,13 +11,13 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'invoke_element',
         {
-            description: 'Invoke the default action of an element via the UIA Invoke pattern (e.g. click a button programmatically without mouse input).',
+            description: 'Invoke the default action of an element via the UIA Invoke pattern without simulating mouse input. Use for elements that do not respond to mouse clicks.',
             inputSchema: elementIdInput,
         },
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: invoke', [{ elementId }]);
+                await driver.executeScript('windows: invoke', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'invoked' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -34,7 +35,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: expand', [{ elementId }]);
+                await driver.executeScript('windows: expand', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'expanded' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -52,7 +53,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: collapse', [{ elementId }]);
+                await driver.executeScript('windows: collapse', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'collapsed' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -63,32 +64,14 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
     server.registerTool(
         'toggle_element',
         {
-            description: 'Toggle a checkbox or toggle button via the UIA Toggle pattern. To confirm the resulting state, call get_toggle_state after this.',
+            description: 'Toggle a checkbox or toggle button via the UIA Toggle pattern. To confirm the resulting state, call is_element_selected after this.',
             inputSchema: elementIdInput,
         },
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: toggle', [{ elementId }]);
+                await driver.executeScript('windows: toggle', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'toggled' }] };
-            } catch (err) {
-                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
-            }
-        }
-    );
-
-    server.registerTool(
-        'get_toggle_state',
-        {
-            description: 'Get the toggle state of a checkbox or toggle button via the UIA Toggle pattern. Returns "On", "Off", or "Indeterminate".',
-            inputSchema: elementIdInput,
-            annotations: { readOnlyHint: true },
-        },
-        async ({ elementId }) => {
-            try {
-                const driver = session.getDriver();
-                const result = await driver.executeScript('windows: getToggleState', [{ elementId }]);
-                return { content: [{ type: 'text' as const, text: String(result) }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }
@@ -108,7 +91,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId, value }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: setValue', [{ elementId, value }]);
+                await driver.executeScript('windows: setValue', [{ [ELEMENT_KEY]: elementId }, value]);
                 return { content: [{ type: 'text' as const, text: 'value set' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -126,7 +109,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                const result = await driver.executeScript('windows: getValue', [{ elementId }]);
+                const result = await driver.executeScript('windows: getValue', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: String(result) }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -144,7 +127,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: setFocus', [{ elementId }]);
+                await driver.executeScript('windows: setFocus', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'focused' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
@@ -161,7 +144,7 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
         async ({ elementId }) => {
             try {
                 const driver = session.getDriver();
-                await driver.executeScript('windows: select', [{ elementId }]);
+                await driver.executeScript('windows: select', [{ [ELEMENT_KEY]: elementId }]);
                 return { content: [{ type: 'text' as const, text: 'selected' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };

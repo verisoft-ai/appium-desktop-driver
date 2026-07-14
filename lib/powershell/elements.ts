@@ -319,12 +319,16 @@ const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `${0}.SetFocus()`;
 
 const GET_ELEMENT_TEXT = pwsh$ /* ps1 */ `
     try {
-        ${0}.GetCurrentPattern([TextPattern]::Pattern).DocumentRange.GetText(-1)
+        ${0}.GetCurrentPattern([ValuePattern]::Pattern).Current.Value
     } catch {
         try {
-            ${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection().Current.Name
+            ${0}.GetCurrentPattern([TextPattern]::Pattern).DocumentRange.GetText(-1)
         } catch {
-            ${0}.Current.Name
+            try {
+                ${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection().Current.Name
+            } catch {
+                ${0}.Current.Name
+            }
         }
     }
 `;

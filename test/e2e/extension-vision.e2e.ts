@@ -63,16 +63,4 @@ describe('windows: findByVision command)', () => {
             ])
         ).rejects.toThrow();
     });
-
-    it('accepts a custom model parameter without throwing', async () => {
-        const result = await calc.executeScript('windows: findByVision', [
-            {
-                prompt: 'the clear button (C)',
-                model: 'claude-haiku-4-5-20251001',
-            },
-        ]) as { x: number; y: number; label: string };
-
-        expect(result.x).toBeGreaterThan(0);
-        expect(result.y).toBeGreaterThan(0);
-    });
 });

@@ -12,6 +12,7 @@ export interface MockDriver {
     appProcessIds: number[];
     caps: Record<string, unknown>;
     isIEContext: ReturnType<typeof vi.fn>;
+    handleKeyAction: ReturnType<typeof vi.fn>;
 }
 
 export function createMockDriver(overrides?: Partial<MockDriver>): MockDriver {
@@ -20,6 +21,7 @@ export function createMockDriver(overrides?: Partial<MockDriver>): MockDriver {
     const log = { debug: vi.fn(), info: vi.fn() };
     const assertFeatureEnabled = vi.fn();
     const isIEContext = vi.fn().mockReturnValue(false);
+    const handleKeyAction = vi.fn().mockResolvedValue(undefined);
     const driver: MockDriver = {
         sendCommand,
         sendPowerShellCommand,
@@ -28,6 +30,7 @@ export function createMockDriver(overrides?: Partial<MockDriver>): MockDriver {
         appProcessIds: [],
         caps: {},
         isIEContext,
+        handleKeyAction,
         ...overrides,
     };
     return driver;

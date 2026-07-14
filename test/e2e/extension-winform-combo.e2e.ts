@@ -3,10 +3,10 @@ import type { Browser } from 'webdriverio';
 import { createWinformComboSession, quitSession } from './helpers/session.js';
 
 // Reproduces a real-world bug: a plain WinForms ComboBox (DropDownList style, native
-// Win32 combo under the hood) exposes ExpandCollapsePattern to the managed UIA2 client
-// but not to the raw UIA3 COM interop the C# server uses. `windows: expand` must fall
-// back through expandViaManagedUia2 (lib/commands/extension.ts) and actually open the
-// dropdown — not merely resolve without throwing.
+// Win32 combo under the hood) can report ExpandCollapsePattern support without actually
+// opening the dropdown. `windows: expand` must detect that and fall back to ALT+Down
+// (lib/commands/extension.ts patternExpand) and actually open the dropdown — not merely
+// resolve without throwing.
 describe('windows: expand (WinForms ComboBox managed-UIA2 fallback)', () => {
     let app: Browser;
 

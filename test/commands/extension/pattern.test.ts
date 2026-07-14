@@ -25,11 +25,19 @@ import {
 import { W3C_ELEMENT_KEY } from '@appium/base-driver';
 import { createMockDriver, MOCK_ELEMENT } from '../../fixtures/driver';
 
+vi.mock('../../../lib/winapi/user32', () => ({
+    keyDown: vi.fn(),
+    keyUp: vi.fn(),
+    mouseMoveAbsolute: vi.fn().mockResolvedValue(undefined),
+    mouseDown: vi.fn(),
+    mouseUp: vi.fn(),
+    getCursorPos: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+}));
+
 const ELEMENT_ID = MOCK_ELEMENT[W3C_ELEMENT_KEY];
 
 const PATTERN_COMMANDS = [
     { name: 'patternInvoke', fn: patternInvoke, expectedMethod: 'invokeElement' },
-    { name: 'patternExpand', fn: patternExpand, expectedMethod: 'expandElement' },
     { name: 'patternCollapse', fn: patternCollapse, expectedMethod: 'collapseElement' },
     { name: 'patternScrollIntoView', fn: patternScrollIntoView, expectedMethod: 'scrollElementIntoView' },
     { name: 'patternClose', fn: patternClose, expectedMethod: 'closeWindow' },
@@ -51,6 +59,70 @@ describe('pattern commands', () => {
         const driver = createMockDriver() as any;
         await fn.call(driver, MOCK_ELEMENT);
         expect(driver.sendCommand).toHaveBeenCalledWith(expectedMethod, { elementId: ELEMENT_ID });
+    });
+
+    it('patternExpand trusts expandElement when ExpandCollapseState confirms Expanded', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'expandElement') {return null;}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Expanded';}
+            return null;
+        });
+        await patternExpand.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('expandElement', { elementId: ELEMENT_ID });
+        expect(driver.sendCommand).not.toHaveBeenCalledWith('setFocus', expect.anything());
+    });
+
+    it('patternExpand falls back to ALT+Down when expandElement throws', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'expandElement') {throw new Error('does not support ExpandCollapsePattern');}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Expanded';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await patternExpand.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+    });
+
+    it('patternExpand falls back to ALT+Down when expandElement succeeds but state never confirms', async () => {
+        const driver = createMockDriver() as any;
+        let expanded = false;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'expandElement') {return null;}
+            if (method === 'setFocus') { expanded = true; return null; }
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return expanded ? 'Expanded' : 'Collapsed';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await patternExpand.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+    });
+
+    it('patternExpand falls back to a real click when SetFocus does not confirm keyboard focus', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'expandElement') {throw new Error('does not support ExpandCollapsePattern');}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Expanded';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return false;}
+            if (method === 'getProperty' && args.property === 'ClickablePoint') {return { x: 10, y: 20 };}
+            return null;
+        });
+        await patternExpand.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+        expect(driver.sendCommand).toHaveBeenCalledWith('getProperty', { elementId: ELEMENT_ID, property: 'ClickablePoint' });
+    });
+
+    it('patternExpand throws when native and ALT+Down both fail to open the control', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Collapsed';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await expect(patternExpand.call(driver, MOCK_ELEMENT)).rejects.toThrow(
+            'windows: expand failed to open the control after native and ALT+Down fallback attempts.'
+        );
     });
 
     it('patternIsMultiple returns true when result is true', async () => {

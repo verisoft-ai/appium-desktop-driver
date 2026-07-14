@@ -21,7 +21,7 @@ public class MainForm : Form
         CmbCategories = new ComboBox
         {
             Name = "cmbCategories",
-            DropDownStyle = ComboBoxStyle.DropDownList,
+            DropDownStyle = ComboBoxStyle.DropDown,
             Left = 20,
             Top = 20,
             Width = 300,

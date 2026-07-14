@@ -33,8 +33,13 @@ describe('App lifecycle commands', () => {
             try {
                 const handleBefore = await driver.getWindowHandle();
                 await driver.executeScript('windows: closeApp', []);
-                const handles = await driver.getWindowHandles();
-                expect(handles).not.toContain(handleBefore);
+                await driver.waitUntil(
+                    async () => {
+                        const handles = await driver.getWindowHandles();
+                        return !handles.includes(handleBefore);
+                    },
+                    { timeoutMsg: `window handle ${handleBefore} still present after closeApp` },
+                );
             } finally {
                 await quitSession(driver);
             }

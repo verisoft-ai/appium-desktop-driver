@@ -295,7 +295,6 @@ async function handleLocationNode(location: LocationNode, context: XPathElement,
                 }
                 return removeDuplicateElements(combinedResults);
             }
-            context = result[0] ?? rootElement();
             return removeDuplicateElements(result);
         }
         context = result;

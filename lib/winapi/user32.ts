@@ -678,8 +678,8 @@ function setCursorAbsolute(x: number, y: number): void {
 }
 
 async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string }): Promise<void> {
-    const { duration } = args;
-    let { x, y, easingFunction, relative } = args;
+    const { duration, relative } = args;
+    let { x, y, easingFunction } = args;
     const refreshRate = getRefreshRate();
     const updateInterval = 1000 / refreshRate;
     const iterations = Math.max(Math.floor(duration / updateInterval), 1);
@@ -703,7 +703,6 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
         if (hasCurrentCursorPos) {
             x += cursorPosition.x;
             y += cursorPosition.y;
-            relative = false;
         } else {
             // Without a current cursor position we can't turn a relative move
             // into an absolute SetCursorPos. Fall back to single teleport.

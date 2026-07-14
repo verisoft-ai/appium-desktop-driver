@@ -477,7 +477,10 @@ function makeMouseWheelEvents(x: number, y: number): MouseEvent[] {
     if (y !== 0) {
         const verticalScrollEvent = makeEmptyMouseEvent();
         verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
-        verticalScrollEvent.u.mi.mouseData = y;
+        // Win32 WHEEL_DELTA sign is opposite the W3C wheel-action deltaY convention
+        // (DOM WheelEvent): positive Win32 mouseData scrolls content up, but W3C
+        // positive deltaY means scroll down.
+        verticalScrollEvent.u.mi.mouseData = -y;
         mouseEvents.push(verticalScrollEvent);
     }
 

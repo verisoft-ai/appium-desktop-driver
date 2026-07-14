@@ -196,7 +196,7 @@ describe('W3C Actions API', () => {
 
             // Step 2: scroll to the top; duration gives the viewport time to settle
             await notepad.actions([
-                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000 }),
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000 }),
             ]);
 
             // Step 3: click the first visible line and mark it
@@ -209,7 +209,7 @@ describe('W3C Actions API', () => {
 
             // Step 4: scroll to the bottom
             await notepad.actions([
-                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000 }),
+                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000 }),
             ]);
 
             // Step 5: click the last visible line and mark it

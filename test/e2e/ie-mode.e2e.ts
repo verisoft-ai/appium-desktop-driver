@@ -476,8 +476,24 @@ describe('Edge UIA — the-internet.herokuapp.com', () => {
     // ── Scrolling — home page ─────────────────────────────────────────────────
 
     describe('scrolling — home page', () => {
+        // Wheel origin is a fixed point inside the viewport (window-rect center),
+        // not a page element — an element used as origin can scroll itself
+        // offscreen (negative y), which sends the cursor outside the window and
+        // the wheel event never reaches the page.
+        let cx: number;
+        let cy: number;
+
         beforeAll(async () => {
             await navigateTo(driver, BASE_URL);
+            // Ctrl+L navigation leaves focus in the address bar; UIA setFocus on a
+            // link didn't move it back to the page. Clicking the Document root
+            // (the page content area) does.
+            const doc = await driver.$('//Document');
+            await doc.click();
+
+            const rect = await driver.getWindowRect();
+            cx = Math.round(rect.x + rect.width / 2);
+            cy = Math.round(rect.y + rect.height / 2);
         });
 
         it('W3C wheel scroll down moves elements up in viewport', async () => {
@@ -485,11 +501,12 @@ describe('Edge UIA — the-internet.herokuapp.com', () => {
             const yBefore = (await item.getLocation()).y;
 
             await driver.action('wheel').scroll({
-                origin: item,
+                x: cx,
+                y: cy,
                 deltaX: 0,
                 deltaY: 500,
+                duration: 500
             }).perform();
-            await driver.pause(400);
 
             const yAfter = (await item.getLocation()).y;
             expect(yAfter).toBeLessThan(yBefore);
@@ -500,27 +517,28 @@ describe('Edge UIA — the-internet.herokuapp.com', () => {
             const yScrolled = (await item.getLocation()).y;
 
             await driver.action('wheel').scroll({
-                origin: item,
+                x: cx,
+                y: cy,
                 deltaX: 0,
                 deltaY: -500,
+                duration: 500
             }).perform();
-            await driver.pause(400);
 
             const yRestored = (await item.getLocation()).y;
             expect(yRestored).toBeGreaterThan(yScrolled);
         });
 
         it('windows: scroll command scrolls the page', async () => {
-            await navigateTo(driver, BASE_URL);
             const item = await driver.$('//ListItem[@Name="Checkboxes"]');
             const yBefore = (await item.getLocation()).y;
 
             await driver.executeScript('windows: scroll', [{
-                elementId: item.elementId,
+                x: cx,
+                y: cy,
                 deltaX: 0,
                 deltaY: 500,
+                duration: 500
             }]);
-            await driver.pause(400);
 
             const yAfter = (await item.getLocation()).y;
             expect(yAfter).toBeLessThan(yBefore);

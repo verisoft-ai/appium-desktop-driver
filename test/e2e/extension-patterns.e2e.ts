@@ -47,16 +47,25 @@ describe('windows: pattern extension commands', () => {
             const oneBtn = await calc.$('~num1Button');
             await calc.executeScript('windows: invoke', [oneBtn]);
             const display = await calc.$('~CalculatorResults');
-            const text = await display.getText();
-            expect(text).toContain('1');
+
+            await calc.waitUntil(
+                async () => (await display.getText()).includes('1'),
+                { timeoutMsg: 'CalculatorResults did not show 1 after invoking One' }
+            );
         });
 
-        it('invokes the Equals button without error', async () => {
+        it('invokes the Equals button and result display shows the sum', async () => {
             await (calc.$('~num2Button')).click();
+            await (calc.$('~plusButton')).click();
+            await (calc.$('~num3Button')).click();
             const equalsBtn = await calc.$('~equalButton');
-            await expect(
-                calc.executeScript('windows: invoke', [equalsBtn])
-            ).resolves.not.toThrow();
+            await calc.executeScript('windows: invoke', [equalsBtn]);
+
+            const display = await calc.$('~CalculatorResults');
+            await calc.waitUntil(
+                async () => (await display.getText()).includes('5'),
+                { timeoutMsg: 'CalculatorResults did not show 5 after invoking Equals' }
+            );
         });
     });
 
@@ -80,11 +89,22 @@ describe('windows: pattern extension commands', () => {
             }
         });
 
-        it('maximizes the Calculator window without error', async () => {
+        it('maximizes the Calculator window and its rect grows', async () => {
             const windowEl = await calc.executeScript('windows: getWindowElement', []);
-            await expect(
-                calc.executeScript('windows: maximize', [windowEl])
-            ).resolves.not.toThrow();
+            // Ensure a known-normal baseline — if the window is already maximized
+            // (e.g. carried over from a prior run), the rect can't grow further.
+            await calc.executeScript('windows: restore', [windowEl]);
+            const rectBefore = await calc.getWindowRect();
+
+            await calc.executeScript('windows: maximize', [windowEl]);
+
+            await calc.waitUntil(
+                async () => {
+                    const rect = await calc.getWindowRect();
+                    return rect.width > rectBefore.width || rect.height > rectBefore.height;
+                },
+                { timeoutMsg: 'Calculator window rect did not grow after maximize' }
+            );
         });
 
         it('minimizes then restores the Calculator window', async () => {
@@ -96,11 +116,14 @@ describe('windows: pattern extension commands', () => {
             expect(await display.isExisting()).toBe(true);
         });
 
-        it('restore on an already-normal window does not throw', async () => {
+        it('restore on an already-normal window is a no-op: rect is unchanged', async () => {
             const windowEl = await calc.executeScript('windows: getWindowElement', []);
-            await expect(
-                calc.executeScript('windows: restore', [windowEl])
-            ).resolves.not.toThrow();
+            const rectBefore = await calc.getWindowRect();
+
+            await calc.executeScript('windows: restore', [windowEl]);
+
+            const rectAfter = await calc.getWindowRect();
+            expect(rectAfter).toEqual(rectBefore);
         });
     });
 
@@ -117,32 +140,57 @@ describe('windows: pattern extension commands', () => {
             await resetCalculator(calc);
         });
 
-        it('sets focus on the result display element without error', async () => {
+        it('sets focus on the result display element: HasKeyboardFocus becomes true', async () => {
+            // Move focus elsewhere first so the check proves setFocus did something
+            const clearBtn = await calc.$('~clearButton');
+            await clearBtn.click();
+
             const display = await calc.$('~CalculatorResults');
-            await expect(
-                calc.executeScript('windows: setFocus', [display])
-            ).resolves.not.toThrow();
+            await calc.executeScript('windows: setFocus', [display]);
+
+            await calc.waitUntil(
+                async () => {
+                    const focused = await display.getAttribute('HasKeyboardFocus');
+                    return String(focused).toLowerCase() === 'true';
+                },
+                { timeoutMsg: 'CalculatorResults did not receive keyboard focus after setFocus' }
+            );
         });
     });
 
     describe('windows: scrollIntoView', () => {
+        let charmap: Browser;
+
         beforeAll(async () => {
-            calc = await createCalculatorSession();
+            charmap = await createCharmapSession();
         });
 
         afterAll(async () => {
-            await quitSession(calc);
+            await quitSession(charmap);
         });
 
-        afterEach(async () => {
-            await resetCalculator(calc);
-        });
+        it('scrolls an off-screen font list item into view: IsOffscreen flips to false', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
 
-        it('scrolls a visible element into view without error', async () => {
-            const btn = await calc.$('~num1Button');
-            await expect(
-                calc.executeScript('windows: scrollIntoView', [btn])
-            ).resolves.not.toThrow();
+            const items = await charmap.$$('//ListItem').getElements();
+            expect(items.length).toBeGreaterThan(20);
+
+            // Pick an item far enough down the list that the combo's viewport
+            // doesn't already show it.
+            const target = items[items.length - 1];
+            const wasOffscreen = await target.getAttribute('IsOffscreen');
+            expect(String(wasOffscreen).toLowerCase()).toBe('true');
+
+            await charmap.executeScript('windows: scrollIntoView', [target]);
+            await charmap.waitUntil(
+                async () => {
+                    const isOffscreen = await target.getAttribute('IsOffscreen');
+                    return String(isOffscreen).toLowerCase() === 'false';
+                },
+                { timeoutMsg: 'target list item was still off-screen after scrollIntoView' }
+            );
         });
     });
 
@@ -211,20 +259,36 @@ describe('windows: pattern extension commands', () => {
             await quitSession(charmap);
         });
 
-        it('expands the font ComboBox without error', async () => {
-            const comboBox = await charmap.$('~105');
-            await expect(
-                charmap.executeScript('windows: expand', [comboBox])
-            ).resolves.not.toThrow();
-        });
-
-        it('collapses the font ComboBox without error', async () => {
+        it('expands the font ComboBox: ExpandCollapseState becomes Expanded', async () => {
             const comboBox = await charmap.$('~105');
             await charmap.executeScript('windows: expand', [comboBox]);
-            await charmap.pause(200);
-            await expect(
-                charmap.executeScript('windows: collapse', [comboBox])
-            ).resolves.not.toThrow();
+
+            await charmap.waitUntil(
+                async () => {
+                    const state = await comboBox.getAttribute('ExpandCollapseState');
+                    return state === 'Expanded' || state === 'PartiallyExpanded';
+                },
+                { timeoutMsg: 'font ComboBox did not report Expanded state' }
+            );
+        });
+
+        it('collapses the font ComboBox: ExpandCollapseState becomes Collapsed', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.waitUntil(
+                async () => {
+                    const state = await comboBox.getAttribute('ExpandCollapseState');
+                    return state === 'Expanded' || state === 'PartiallyExpanded';
+                },
+                { timeoutMsg: 'font ComboBox did not report Expanded state before collapsing' }
+            );
+
+            await charmap.executeScript('windows: collapse', [comboBox]);
+
+            await charmap.waitUntil(
+                async () => (await comboBox.getAttribute('ExpandCollapseState')) === 'Collapsed',
+                { timeoutMsg: 'font ComboBox did not report Collapsed state' }
+            );
         });
 
         it('selects a font from the expanded ComboBox and its value updates', async () => {

@@ -338,8 +338,42 @@ const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int
 const IsIconic = user32.func(/* c */ `BOOL __stdcall IsIconic(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const BringWindowToTop = user32.func(/* c */ `BOOL __stdcall BringWindowToTop(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const SetFocus = user32.func(/* c */ `HWND __stdcall SetFocus(HWND hWnd)`) as (hWnd: HWND) => HWND;
+const GetKeyState = user32.func(/* c */ `short __stdcall GetKeyState(int nVirtKey)`) as (nVirtKey: number) => number;
 
 const SW_RESTORE = 9;
+
+// Per SendInput/keybd_event docs, these VKs share a scan code with a numpad
+// key and are disambiguated only by the extended-key bit (0xE0 scan prefix).
+// A physical keypress always sets this bit; SendInput does not unless told
+// to — omitting it makes Windows resolve the VK using current NumLock state,
+// so e.g. VK_DOWN silently becomes VK_NUMPAD2 while NumLock is on and the
+// receiving app's key filter (rightly) ignores it.
+const EXTENDED_KEYS: ReadonlySet<VirtualKey> = new Set([
+    VirtualKey.VK_UP,
+    VirtualKey.VK_DOWN,
+    VirtualKey.VK_LEFT,
+    VirtualKey.VK_RIGHT,
+    VirtualKey.VK_HOME,
+    VirtualKey.VK_END,
+    VirtualKey.VK_PRIOR,
+    VirtualKey.VK_NEXT,
+    VirtualKey.VK_INSERT,
+    VirtualKey.VK_DELETE,
+    VirtualKey.VK_DIVIDE,
+    VirtualKey.VK_NUMLOCK,
+    VirtualKey.VK_SNAPSHOT,
+    VirtualKey.VK_RCONTROL,
+    VirtualKey.VK_RMENU,
+    VirtualKey.VK_LWIN,
+    VirtualKey.VK_RWIN,
+    VirtualKey.VK_APPS,
+]);
+
+// Pure so it's unit-testable without mocking the koffi FFI layer (SendInput,
+// struct/union defs, etc.) that the rest of this module touches at load time.
+export function isExtendedKeyVk(vk: VirtualKey | undefined): boolean {
+    return vk !== undefined && EXTENDED_KEYS.has(vk);
+}
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -372,6 +406,10 @@ function makeKeyboardEvent(args: {
 
     if (!args.down) {
         flags |= KeyEventFlags.KEYEVENTF_KEYUP;
+    }
+
+    if (isExtendedKeyVk(args.vk)) {
+        flags |= KeyEventFlags.KEYEVENTF_EXTENDEDKEY;
     }
 
     return {
@@ -800,6 +838,25 @@ export function keyDown(char: string, forceUnicode: boolean = false): void {
 
 export function keyUp(char: string, forceUnicode: boolean = false): void {
     sendKeyInput(char, false, forceUnicode);
+}
+
+// NumLock is a toggle key — GetKeyState's low-order bit reflects its current
+// on/off state (as opposed to GetAsyncKeyState's high-order "is physically
+// held" bit, which doesn't apply to a toggle).
+export function isNumLockOn(): boolean {
+    return (GetKeyState(VirtualKey.VK_NUMLOCK) & 1) === 1;
+}
+
+// Toggling NumLock is itself a real keypress (down+up of VK_NUMLOCK), so it
+// goes through the same extended-key-flagged SendInput path as any other key.
+export function setNumLockState(on: boolean): void {
+    if (isNumLockOn() === on) {
+        return;
+    }
+    const downEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: true });
+    const upEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: false });
+    assertSuccessSendInputReturnCode(SendInput(1, [downEvent], sizeof(INPUT)));
+    assertSuccessSendInputReturnCode(SendInput(1, [upEvent], sizeof(INPUT)));
 }
 
 export async function mouseMoveRelative(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {

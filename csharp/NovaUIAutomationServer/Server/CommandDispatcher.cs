@@ -64,6 +64,9 @@ public class CommandDispatcher
             ["moveWindow"] = PatternCommands.MoveWindow,
             ["resizeWindow"] = PatternCommands.ResizeWindow,
 
+            // Accessibility (MSAA fallback)
+            ["getAccessibleChildren"] = AccessibilityCommands.GetAccessibleChildren,
+
             // Page source & screenshots
             ["getPageSource"] = PageSourceCommands.GetPageSource,
             ["getScreenshot"] = ScreenshotCommands.GetScreenshot,

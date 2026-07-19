@@ -9,12 +9,13 @@ export function registerNativeTools(server: McpServer, session: AppiumSession): 
         'get_native_children',
         {
             description: [
-                'Fallback for legacy WinForms controls that expose zero UIA children (verify with get_page_source / Inspect.exe first).',
-                'Bypasses UI Automation and enumerates the real Win32 child-window tree (EnumChildWindows) under the given element, returning each child\'s handle, ClassName, window text, and screen rect.',
-                'If this also returns an empty array, the control paints its own content with no child windows either, and there is no structural data to recover — use find_by_vision / analyze_screen plus advanced_click instead.',
+                'Fallback for legacy WinForms/ActiveX controls that expose zero UIA children (verify with get_page_source / Inspect.exe first).',
+                'Bypasses UI Automation and walks the control\'s raw IAccessible (MSAA) tree instead — many of these controls were built with hand-written MSAA support for screen readers, exposing rows/cells as "simple children" (plain integer childIds with no HWND) that UIA and Win32 child-window enumeration can never see.',
+                'Returns a tree of {name, role, value, description, state, defaultAction, rect, childCount, children}.',
+                'If `supported` is false, or the root node has zero children, the control paints its own content with no accessibility tree either, and there is no structural data left to recover — use find_by_vision / analyze_screen plus advanced_click instead.',
             ].join(' '),
             inputSchema: {
-                elementId: z.string().min(1).describe('Element ID (e.g. from find_element) whose native window handle should be walked for child HWNDs'),
+                elementId: z.string().min(1).describe('Element ID (e.g. from find_element) whose native window handle should be walked via IAccessible'),
             },
             annotations: { readOnlyHint: true },
         },

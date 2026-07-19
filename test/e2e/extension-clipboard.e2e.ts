@@ -31,11 +31,13 @@ describe('windows: clipboard extension commands', () => {
             expect(textOut).toContain(text);
         });
 
-        it('sets clipboard with explicit contentType: plaintext', async () => {
-            const b64 = Buffer.from('explicit type test').toString('base64');
-            await expect(
-                notepad.executeScript('windows: setClipboard', [{ contentType: 'plaintext', b64Content: b64 }])
-            ).resolves.not.toThrow();
+        it('sets clipboard with explicit contentType: plaintext and getClipboard reads it back', async () => {
+            const text = 'explicit type test';
+            const b64 = Buffer.from(text).toString('base64');
+            await notepad.executeScript('windows: setClipboard', [{ contentType: 'plaintext', b64Content: b64 }]);
+
+            const b64Out = await notepad.executeScript('windows: getClipboard', [{ contentType: 'plaintext' }]) as string;
+            expect(Buffer.from(b64Out, 'base64').toString()).toContain(text);
         });
 
         it('clipboard value survives between get calls (unchanged)', async () => {

@@ -539,8 +539,33 @@ class Program
                 if (single == null) return ErrJson(seq, "NO_SUCH_ELEMENT");
                 return OkJson(seq, "elementId", Register(single, TryGetSourceIndex(single)));
             }
+
+            // Prefer calling querySelectorAll directly over COM: some legacy IE
+            // document/compat modes hide the Selectors API from the page's own
+            // script engine (window.document.querySelectorAll throws
+            // "Object doesn't support property or method") while still exposing
+            // it on the COM-level document object used here, same as querySelector
+            // above. Only fall back to the execScript/sourceIndex path if the COM
+            // call itself is unavailable.
+            try
+            {
+                dynamic list = doc.querySelectorAll(css);
+                var ids = new List<string>();
+                int len = (int)list.length;
+                for (int i = 0; i < len; i++)
+                {
+                    dynamic el = list.item(i);
+                    ids.Add(Register(el, TryGetSourceIndex(el)));
+                }
+                return OkJsonList(seq, "elementIds", ids);
+            }
+            catch { /* fall through to execScript-based lookup below */ }
+
             string escaped   = JsEscape(css);
-            string findScript = $"var els=document.querySelectorAll({escaped});for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);";
+            string findScript = "try{" +
+                $"var els=document.querySelectorAll({escaped});" +
+                "for(var i=0;i<els.length;i++)window.__ieb_idx.push(els[i].sourceIndex);" +
+                "}catch(e){window.__ieb_err='querySelectorAll threw: '+e.message;}";
             return FindBySourceIndex(seq, doc, doc.parentWindow, findScript, multi: true);
         }
         catch (Exception ex) { return ErrJson(seq, ex.Message); }

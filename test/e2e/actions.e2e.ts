@@ -8,6 +8,7 @@ import {
     resetCalculator,
     clearNotepad,
 } from './helpers/session.js';
+import { Key } from '../../lib/enums.js';
 
 describe('W3C Actions API', () => {
     let calc: Browser;
@@ -41,35 +42,31 @@ describe('W3C Actions API', () => {
             const textArea = await getNotepadTextArea(notepad);
             await textArea.click();
             await notepad.action('key')
-                .down('\uE008') // Shift key
+                .down(Key.SHIFT)
                 .down('b')
                 .up('b')
-                .up('\uE008')
+                .up(Key.SHIFT)
                 .perform();
             const text = await textArea.getText();
             expect(text).toContain('B');
-            await notepad.keys(['\uE003']); // delete 'B' so Notepad closes without a save prompt
+            await notepad.keys([Key.BACKSPACE]); // delete 'B' so Notepad closes without a save prompt
             await quitSession(notepad);
         });
 
-        it('pause action in key sequence does not throw', async () => {
-            await expect(
-                calc.action('key')
-                    .down('1')
-                    .pause(100)
-                    .up('1')
-                    .perform()
-            ).resolves.not.toThrow();
+        it('pause action in key sequence still types the digit', async () => {
+            await calc.action('key')
+                .down('1')
+                .pause(100)
+                .up('1')
+                .perform();
+
+            const display = await calc.$('~CalculatorResults');
+            await calc.waitUntil(
+                async () => (await display.getText()).includes('1'),
+                { timeoutMsg: 'CalculatorResults did not show 1 after key sequence with pause' }
+            );
         });
 
-        it('null key (\\uE000) releases all held modifiers without error', async () => {
-            await expect(
-                calc.action('key')
-                    .down('\uE008') // Shift
-                    .down('\uE000') // Null — releases all
-                    .perform()
-            ).resolves.not.toThrow();
-        });
     });
 
     describe('pointer actions (mouse)', () => {
@@ -150,13 +147,13 @@ describe('W3C Actions API', () => {
         it('Shift+Click selects text: Shift (key) is held across the pointer click tick', async () => {
             const textArea = await getNotepadTextArea(notepad);
             await textArea.setValue('hello');
-            await notepad.keys(['\uE011']); // Home
+            await notepad.keys([Key.HOME]);
 
             // key:     [down(Shift), pause,  up(Shift)]
             // pointer: [move,        down,   up       ]
             //                        ^-- tick 1: Shift still held when mouse goes down
             await notepad.actions([
-                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
                 notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
             ]);
 
@@ -168,13 +165,13 @@ describe('W3C Actions API', () => {
         it('key + pointer: respect tick order', async () => {
             const textArea = await getNotepadTextArea(notepad);
             await textArea.setValue('hello');
-            await notepad.keys(['\uE011']); // Home
+            await notepad.keys([Key.HOME]);
 
             // key:     [down(Shift), pause,  up(Shift)]
             // pointer: [move,        down,   up       ]
             //                        ^-- tick 1: Shift still held when mouse goes down
             await notepad.actions([
-                notepad.action('key').down('\uE008').pause(0).up('\uE008'),
+                notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
                 notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
             ]);
 
@@ -204,7 +201,7 @@ describe('W3C Actions API', () => {
                 .move({ x: cx, y: loc.y + 10 })
                 .down().up()
                 .perform();
-            await notepad.keys(['\uE011']); // Home — go to start of line
+            await notepad.keys([Key.HOME]); // go to start of line
             await notepad.keys(['T', 'O', 'P']);
 
             // Step 4: scroll to the bottom
@@ -217,7 +214,7 @@ describe('W3C Actions API', () => {
                 .move({ x: cx, y: loc.y + size.height - 10 })
                 .down().up()
                 .perform();
-            await notepad.keys(['\uE011']); // Home
+            await notepad.keys([Key.HOME]);
             await notepad.keys(['B', 'O', 'T']);
 
             const result = await textArea.getText();

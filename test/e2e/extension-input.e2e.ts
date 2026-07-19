@@ -3,6 +3,7 @@ import type { Browser } from 'webdriverio';
 import {
     createCalculatorSession,
     createNotepadSession,
+    createCharmapSession,
     getNotepadTextArea,
     quitSession,
     resetCalculator,
@@ -205,26 +206,87 @@ describe('windows: keys, click, hover, scroll, clickAndDrag extension commands',
     });
 
     describe('windows: scroll', () => {
-        it('scrolls at element center with deltaY: 3 without error', async () => {
-            const btn = await calc.$('~num1Button');
-            await expect(
-                calc.executeScript('windows: scroll', [{
-                    elementId: await btn.elementId,
-                    deltaY: 3,
-                }])
-            ).resolves.not.toThrow();
+        let charmap: Browser;
+
+        beforeAll(async () => {
+            charmap = await createCharmapSession();
         });
 
-        it('scrolls at absolute coordinates', async () => {
-            const btn = await calc.$('~num1Button');
-            const loc = await btn.getLocation();
-            await expect(
-                calc.executeScript('windows: scroll', [{
-                    x: loc.x,
-                    y: loc.y,
-                    deltaX: 2,
-                }])
-            ).resolves.not.toThrow();
+        afterAll(async () => {
+            await quitSession(charmap);
+        });
+
+        it('scrolls the font list via elementId + deltaY: last item reachable, then back', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+
+            // Anchor on the popup's own list container (ComboLBox), not a
+            // ListItem — items virtualize as the list scrolls and a cached
+            // item reference goes stale, but the list container itself is a
+            // fixed element for the lifetime of the open popup.
+            const listContainer = await charmap.$('//List');
+
+            const items = await charmap.$$('//ListItem').getElements();
+            expect(items.length).toBeGreaterThan(20);
+            const first = items[0];
+            const last = items[items.length - 1];
+            expect(String(await last.getAttribute('IsOffscreen')).toLowerCase()).toBe('true');
+
+            // Positive deltaY scrolls down (W3C convention — see user32.ts
+            // makeMouseWheelEvents).
+            await charmap.executeScript('windows: scroll', [{
+                elementId: await listContainer.elementId,
+                deltaY: 36000,
+            }]);
+            await charmap.waitUntil(
+                async () => String(await last.getAttribute('IsOffscreen')).toLowerCase() === 'false',
+                { timeoutMsg: 'last font item did not scroll into view via elementId scroll' }
+            );
+
+            await charmap.executeScript('windows: scroll', [{
+                elementId: await listContainer.elementId,
+                deltaY: -36000,
+            }]);
+            await charmap.waitUntil(
+                async () => String(await first.getAttribute('IsOffscreen')).toLowerCase() === 'false',
+                { timeoutMsg: 'first font item did not scroll back into view via elementId scroll' }
+            );
+        });
+
+        it('scrolls the font list via absolute x/y + deltaX/deltaY coordinates', async () => {
+            const comboBox = await charmap.$('~105');
+            await charmap.executeScript('windows: expand', [comboBox]);
+            await charmap.pause(200);
+
+            const listContainer = await charmap.$('//List');
+
+            const items = await charmap.$$('//ListItem').getElements();
+            const last = items[items.length - 1];
+            expect(String(await last.getAttribute('IsOffscreen')).toLowerCase()).toBe('true');
+
+            // getLocation()/getSize() return coordinates relative to the app's
+            // root window (see getElementRect in lib/commands/element.ts),
+            // but windows: scroll's x/y are absolute screen coordinates fed
+            // straight to SetCursorPos — add the window's own screen offset
+            // back in to convert.
+            const windowRect = await charmap.getWindowRect();
+            const loc = await listContainer.getLocation();
+            const size = await listContainer.getSize();
+            const cx = Math.round(windowRect.x + loc.x + size.width / 2);
+            const cy = Math.round(windowRect.y + loc.y + 10);
+
+            await charmap.executeScript('windows: scroll', [{
+                x: cx,
+                y: cy,
+                deltaX: 0,
+                deltaY: 36000,
+            }]);
+
+            await charmap.waitUntil(
+                async () => String(await last.getAttribute('IsOffscreen')).toLowerCase() === 'false',
+                { timeoutMsg: 'last font item did not scroll into view via x/y scroll' }
+            );
         });
     });
 

@@ -10,7 +10,7 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'click_element',
         {
-            description: 'Click a UI element by its element ID.',
+            description: 'Click a UI element by its element ID. Targets the element directly — does not require the window to be focused or in the foreground.',
             inputSchema: { elementId: elementIdSchema },
             annotations: { destructiveHint: false },
         },
@@ -29,7 +29,7 @@ export function registerInteractTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'set_value',
         {
-            description: 'Set the text value of an input element (clears first then types).',
+            description: 'Set the text value of an input element (clears first then types). Sets the value directly on the element — does not require the window to be focused or in the foreground.',
             inputSchema: {
                 elementId: elementIdSchema,
                 value: z.string().describe('The text value to set'),

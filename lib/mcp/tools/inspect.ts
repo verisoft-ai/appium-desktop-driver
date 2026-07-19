@@ -136,4 +136,85 @@ export function registerInspectTools(server: McpServer, session: AppiumSession):
             }
         }
     );
+
+    server.registerTool(
+        'get_active_element',
+        {
+            description: 'Get the element ID of the element that currently has keyboard focus.',
+            annotations: { readOnlyHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const el = await driver.getActiveElement() as Record<string, string> | null;
+                const elementId = el?.[ELEMENT_KEY];
+                if (!elementId) {
+                    return { isError: true, content: [{ type: 'text' as const, text: 'No element currently has focus' }] };
+                }
+                return { content: [{ type: 'text' as const, text: elementId }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_element_tag_name',
+        {
+            description: 'Get an element\'s tag name (its UIA ControlType in native context, or HTML tag name in IE/webview context).',
+            inputSchema: {
+                elementId: z.string().min(1).describe('Element ID returned by find_element'),
+            },
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const tagName = await driver.getElementTagName(elementId);
+                return { content: [{ type: 'text' as const, text: tagName }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_element_rect',
+        {
+            description: 'Get the position (relative to the app window) and size of an element.',
+            inputSchema: {
+                elementId: z.string().min(1).describe('Element ID returned by find_element'),
+            },
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const rect = await driver.getElementRect(elementId);
+                return { content: [{ type: 'text' as const, text: JSON.stringify(rect) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_element_screenshot',
+        {
+            description: 'Take a screenshot cropped to a single element, returned as base64 PNG. Not supported in IE context.',
+            inputSchema: {
+                elementId: z.string().min(1).describe('Element ID returned by find_element'),
+            },
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const base64 = await driver.takeElementScreenshot(elementId);
+                return { content: [{ type: 'image' as const, data: base64, mimeType: 'image/png' as const }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
 }

@@ -113,16 +113,15 @@ describe('pattern commands', () => {
         expect(driver.sendCommand).toHaveBeenCalledWith('getProperty', { elementId: ELEMENT_ID, property: 'ClickablePoint' });
     });
 
-    it('patternExpand throws when native and ALT+Down both fail to open the control', async () => {
+    it('patternExpand resolves without throwing when native and ALT+Down both fail to confirm expansion', async () => {
         const driver = createMockDriver() as any;
         driver.sendCommand.mockImplementation(async (method: string, args: any) => {
             if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Collapsed';}
             if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
             return null;
         });
-        await expect(patternExpand.call(driver, MOCK_ELEMENT)).rejects.toThrow(
-            'windows: expand failed to open the control after native and ALT+Down fallback attempts.'
-        );
+        await expect(patternExpand.call(driver, MOCK_ELEMENT)).resolves.toBeUndefined();
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
     });
 
     it('patternIsMultiple returns true when result is true', async () => {

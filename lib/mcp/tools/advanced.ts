@@ -9,7 +9,7 @@ export function registerAdvancedTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'advanced_click',
         {
-            description: 'Perform a click at an element or absolute screen coordinates, with optional modifier keys, multiple clicks, or custom duration. Use for right-click, double-click, Ctrl+click, or coordinate-based clicks.',
+            description: 'Perform a click at an element or absolute screen coordinates, with optional modifier keys, multiple clicks, or custom duration. Use for right-click, double-click, Ctrl+click, or coordinate-based clicks. Simulates a real mouse event at screen coordinates, so the target window must be visible and in the foreground.',
             annotations: { destructiveHint: false },
             inputSchema: {
                 elementId: z.string().optional().describe('Element to click (its center). Provide either elementId or x+y.'),
@@ -36,7 +36,7 @@ export function registerAdvancedTools(server: McpServer, session: AppiumSession)
     server.registerTool(
         'send_keys',
         {
-            description: 'Send keyboard input. Each action can be a pause (ms delay), text to type, or a virtual key code press/release.',
+            description: 'Send keyboard input. Each action can be a pause (ms delay), text to type, or a virtual key code press/release. Simulates real OS-level key events sent to whatever window currently has keyboard focus — the target window must be focused, and this cannot target a specific element. Use for key combos (Ctrl+C, Alt+Tab), navigation keys, or typing into controls that have no addressable element.',
             annotations: { destructiveHint: false },
             inputSchema: {
                 actions: z.array(z.object({
@@ -103,6 +103,51 @@ export function registerAdvancedTools(server: McpServer, session: AppiumSession)
                 const driver = session.getDriver();
                 await driver.executeScript('windows: scroll', [args]);
                 return { content: [{ type: 'text' as const, text: 'scrolled' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'perform_actions',
+        {
+            description:
+                'Perform a raw W3C WebDriver Actions sequence (pointer/key/wheel input sources). ' +
+                'Lower-level than advanced_click/hover/scroll/send_keys — use only when you need multi-source synchronized input ' +
+                '(e.g. a key held down during a pointer drag) that those higher-level tools cannot express.',
+            annotations: { destructiveHint: false },
+            inputSchema: {
+                actions: z.array(z.record(z.string(), z.any())).describe(
+                    'Array of W3C action sequence objects, each with { type: "pointer"|"key"|"wheel"|"none", id: string, actions: [...] }. ' +
+                    'See https://www.w3.org/TR/webdriver/#actions for the action object shapes.'
+                ),
+            },
+        },
+        async ({ actions }) => {
+            try {
+                const driver = session.getDriver();
+                await driver.performActions(actions as never);
+                return { content: [{ type: 'text' as const, text: 'actions performed' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'release_actions',
+        {
+            description:
+                'Release all keys and pointer buttons currently held down by a prior perform_actions call. ' +
+                'Call this to reset input state if a perform_actions sequence left keys/buttons stuck down (e.g. after an error mid-sequence).',
+            annotations: { destructiveHint: false, idempotentHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.releaseActions();
+                return { content: [{ type: 'text' as const, text: 'actions released' }] };
             } catch (err) {
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }

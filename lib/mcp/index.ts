@@ -42,6 +42,10 @@ You are a Windows desktop automation agent using the Appium DesktopDriver via UI
 2. If click_element does not trigger the expected action, try invoke_element (UIA Invoke pattern).
 3. For right-click, double-click, modifier keys, or coordinate-based clicks, use advanced_click.
 
+## Typing and clicking
+- Prefer element-scoped tools (set_value, click_element) whenever you have an elementId — they act on the element directly and work even if the window is not focused or in the foreground.
+- Only use send_keys or advanced_click when there is no addressable element (key combos, coordinate-only clicks, controls with no UIA representation) — these simulate real input and require the target window to be focused/foreground.
+
 ## Multiple windows
 Call get_window_handles to list open windows, then switch_to_window to focus the target.
 

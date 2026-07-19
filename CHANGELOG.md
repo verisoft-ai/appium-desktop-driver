@@ -1,3 +1,17 @@
+## [2.2.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0...v2.2.0-preview.1) (2026-07-19)
+
+### Features
+
+* **native:** replace EnumChildWindows fallback with MSAA (IAccessible) tree walk ([d905fc7](https://github.com/verisoft-ai/appium-desktop-driver/commit/d905fc7f066121a778c5a1452f6e4ed478774d81))
+
+### Bug Fixes
+
+* arrow down virtual key not trigger NUM_PAD_2 ([82ae967](https://github.com/verisoft-ai/appium-desktop-driver/commit/82ae967283c474ff53797dffa7e43fb41ad60c1f))
+* ie classic fallback for query selector all ([4f57527](https://github.com/verisoft-ai/appium-desktop-driver/commit/4f57527b48cba6d26a481966c5e83876bd19d7fc))
+* **mcp:** added missing commands and improved instructions ([d4fb0b7](https://github.com/verisoft-ai/appium-desktop-driver/commit/d4fb0b797fb57554bf398e9acefe7e0fac5767b1))
+* **test:** update patternExpand test for no-throw fallback behavior ([1d38995](https://github.com/verisoft-ai/appium-desktop-driver/commit/1d38995b00b1c313212d62b56ffe1a03e698ad24))
+* trust fallback ALT + Down expand ([061bd8e](https://github.com/verisoft-ai/appium-desktop-driver/commit/061bd8e29081f2481ad8cd6e59f27b2ac625a87c))
+
 ## [2.1.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.0.0...v2.1.0) (2026-07-14)
 
 ### Features

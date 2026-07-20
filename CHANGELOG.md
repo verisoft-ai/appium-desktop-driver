@@ -1,3 +1,10 @@
+## [2.2.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.1...v2.2.0-preview.2) (2026-07-20)
+
+### Features
+
+* add fallback to collapse function ([ff81b41](https://github.com/verisoft-ai/appium-desktop-driver/commit/ff81b4192068c4993c76aa8e18a763f334529fb7))
+* **vision:** replace bbox+quadrant findByVision with Set-of-Mark pipeline ([983be48](https://github.com/verisoft-ai/appium-desktop-driver/commit/983be482d18cf27d0409925597b7b5fc072ed56d))
+
 ## [2.2.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0...v2.2.0-preview.1) (2026-07-19)
 
 ### Features

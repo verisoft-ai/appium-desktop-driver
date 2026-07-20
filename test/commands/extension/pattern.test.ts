@@ -124,6 +124,69 @@ describe('pattern commands', () => {
         expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
     });
 
+    it('patternCollapse trusts collapseElement when ExpandCollapseState confirms Collapsed', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'collapseElement') {return null;}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Collapsed';}
+            return null;
+        });
+        await patternCollapse.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('collapseElement', { elementId: ELEMENT_ID });
+        expect(driver.sendCommand).not.toHaveBeenCalledWith('setFocus', expect.anything());
+    });
+
+    it('patternCollapse falls back to ALT+Down when collapseElement throws', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'collapseElement') {throw new Error('does not support ExpandCollapsePattern');}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Collapsed';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await patternCollapse.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+    });
+
+    it('patternCollapse falls back to ALT+Down when collapseElement succeeds but state never confirms', async () => {
+        const driver = createMockDriver() as any;
+        let collapsed = false;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'collapseElement') {return null;}
+            if (method === 'setFocus') { collapsed = true; return null; }
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return collapsed ? 'Collapsed' : 'Expanded';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await patternCollapse.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+    });
+
+    it('patternCollapse falls back to a real click when SetFocus does not confirm keyboard focus', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'collapseElement') {throw new Error('does not support ExpandCollapsePattern');}
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Collapsed';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return false;}
+            if (method === 'getProperty' && args.property === 'ClickablePoint') {return { x: 10, y: 20 };}
+            return null;
+        });
+        await patternCollapse.call(driver, MOCK_ELEMENT);
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+        expect(driver.sendCommand).toHaveBeenCalledWith('getProperty', { elementId: ELEMENT_ID, property: 'ClickablePoint' });
+    });
+
+    it('patternCollapse resolves without throwing when native and ALT+Down both fail to confirm collapse', async () => {
+        const driver = createMockDriver() as any;
+        driver.sendCommand.mockImplementation(async (method: string, args: any) => {
+            if (method === 'getProperty' && args.property === 'ExpandCollapseState') {return 'Expanded';}
+            if (method === 'getProperty' && args.property === 'HasKeyboardFocus') {return true;}
+            return null;
+        });
+        await expect(patternCollapse.call(driver, MOCK_ELEMENT)).resolves.toBeUndefined();
+        expect(driver.sendCommand).toHaveBeenCalledWith('setFocus', { elementId: ELEMENT_ID });
+    });
+
     it('patternIsMultiple returns true when result is true', async () => {
         const driver = createMockDriver() as any;
         driver.sendCommand.mockResolvedValue(true);

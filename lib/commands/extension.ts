@@ -221,6 +221,17 @@ async function waitForExpanded(this: AppiumDesktopDriver, elementId: string): Pr
     return false;
 }
 
+async function waitForCollapsed(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const expanded = await isExpanded.call(this, elementId);
+        if (expanded !== true) {
+            return expanded;
+        }
+        await sleep(100);
+    }
+    return true;
+}
+
 export async function patternExpand(this: AppiumDesktopDriver, element: Element): Promise<void> {
     const elementId = element[W3C_ELEMENT_KEY];
 
@@ -246,7 +257,22 @@ export async function patternExpand(this: AppiumDesktopDriver, element: Element)
 }
 
 export async function patternCollapse(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('collapseElement', { elementId: element[W3C_ELEMENT_KEY] });
+    const elementId = element[W3C_ELEMENT_KEY];
+
+    try {
+        await this.sendCommand('collapseElement', { elementId });
+        if (await waitForCollapsed.call(this, elementId) !== true) {
+            return;
+        }
+        this.log.info('[patternCollapse] collapseElement reported success but ExpandCollapseState never left Expanded, falling back to ALT+Down.');
+    } catch (err: any) {
+        const msg = String(err?.message ?? err);
+        this.log.info(`[patternCollapse] collapseElement failed (${msg}), falling back to ALT+Down.`);
+    }
+
+    // ALT+Down is just the toggle trigger for the dropdown, not a directional key —
+    // same key closes it as opened it, so reuse expandViaAltDown here.
+    await expandViaAltDown.call(this, elementId);
 }
 
 export async function patternScrollIntoView(this: AppiumDesktopDriver, element: Element): Promise<void> {

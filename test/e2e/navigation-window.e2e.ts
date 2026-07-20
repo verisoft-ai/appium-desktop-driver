@@ -135,6 +135,7 @@ describe('getElementScreenshot', () => {
 
     it('returns a non-empty base64 string for an element', async () => {
         const btn = await calc.$('~num1Button');
+        await btn.waitForExist();
         const screenshot = await calc.takeElementScreenshot(await btn.elementId);
         expect(typeof screenshot).toBe('string');
         expect(screenshot.length).toBeGreaterThan(0);
@@ -142,6 +143,7 @@ describe('getElementScreenshot', () => {
 
     it('decoded bytes start with PNG magic bytes (89 50 4E 47)', async () => {
         const btn = await calc.$('~num1Button');
+        await btn.waitForExist();
         const screenshot = await calc.takeElementScreenshot(await btn.elementId);
         const buffer = Buffer.from(screenshot, 'base64');
         expect(buffer[0]).toBe(0x89);
@@ -152,6 +154,7 @@ describe('getElementScreenshot', () => {
 
     it('screenshot dimensions are non-zero', async () => {
         const btn = await calc.$('~num1Button');
+        await btn.waitForExist();
         const screenshot = await calc.takeElementScreenshot(await btn.elementId);
         const buffer = Buffer.from(screenshot, 'base64');
         // PNG IHDR chunk starts at byte 16; width at 16-19, height at 20-23

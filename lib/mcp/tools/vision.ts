@@ -6,13 +6,12 @@ import { formatError } from '../errors.js';
 import { getPngDimensions } from '../../util';
 import {
     CoordMapping,
-    applyCoordMapping,
-    buildVisionPrompt,
     callVisionLLM,
     computeCoordMapping,
     getApiKeyEnvVar,
     getProviderForModel,
-    parseVisionCoords,
+    locateElementByVision,
+    VisionError,
 } from '../../vision-utils';
 
 async function buildCoordMapping(driver: Browser, ssW: number, ssH: number): Promise<CoordMapping | undefined> {
@@ -107,10 +106,14 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                     'claude-* → ANTHROPIC_API_KEY, gpt-*/o-series → OPENAI_API_KEY, ' +
                     'gemini-* → GEMINI_API_KEY, amazon.nova-* → AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY.'
                 ),
+                includeAnnotatedImage: z.boolean().optional().default(false).describe(
+                    'When true, also returns the numbered-badge screenshot actually sent to the vision model, ' +
+                    'as an image content block - useful for debugging why a particular tag was picked.'
+                ),
             },
             annotations: { readOnlyHint: true },
         },
-        async ({ prompt, responseFormat, model }) => {
+        async ({ prompt, responseFormat, model, includeAnnotatedImage }) => {
             try {
                 if (!model) {
                     throw new Error(
@@ -134,7 +137,6 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
 
                 const driver = session.getDriver();
                 const base64 = await driver.takeScreenshot() as string;
-                const { width: ssW, height: ssH } = getPngDimensions(base64);
 
                 if (responseFormat === 'text') {
                     const textPrompt = `Answer the following about this screenshot: "${prompt}"\nRespond with plain text.`;
@@ -142,21 +144,37 @@ export function registerVisionTools(server: McpServer, session: AppiumSession): 
                     return { content: [{ type: 'text' as const, text }] };
                 }
 
-                // coordinates: call vision LLM → parse image-pixel coords → apply mapping server-side
-                const raw = await callVisionLLM(base64, buildVisionPrompt(prompt, ssW, ssH), visionModel, apiKey);
-                const parsed = parseVisionCoords(raw, prompt);
-                const mapping = await buildCoordMapping(driver, ssW, ssH);
-                const coords = mapping
-                    ? applyCoordMapping(mapping, parsed.x, parsed.y)
-                    : { x: parsed.x, y: parsed.y };
+                // coordinates: Set-of-Mark detect -> annotate -> single VLM tag pick -> map to screen coords
+                const result = await locateElementByVision({
+                    prompt,
+                    model: visionModel,
+                    apiKey,
+                    screenshotBase64: base64,
+                    buildMapping: (ssW, ssH) => buildCoordMapping(driver, ssW, ssH),
+                    includeAnnotatedImage,
+                });
 
                 return {
-                    content: [{
-                        type: 'text' as const,
-                        text: JSON.stringify({ ...coords, label: parsed.label }),
-                    }],
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: JSON.stringify({ x: result.x, y: result.y, label: result.label, steps: result.steps }),
+                        },
+                        ...(result.annotatedImageBase64
+                            ? [{ type: 'image' as const, data: result.annotatedImageBase64, mimeType: 'image/png' as const }]
+                            : []),
+                    ],
                 };
             } catch (err) {
+                if (err instanceof VisionError) {
+                    return {
+                        isError: true,
+                        content: [{
+                            type: 'text' as const,
+                            text: JSON.stringify({ error: err.message, steps: err.steps, rawResponse: err.rawResponse }),
+                        }],
+                    };
+                }
                 return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
             }
         }

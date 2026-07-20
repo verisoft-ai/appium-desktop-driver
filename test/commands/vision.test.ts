@@ -24,8 +24,26 @@ vi.mock('../../lib/util', () => ({
     getPngDimensions: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
 }));
 
+const ONE_MARK = [{ x1: 495, y1: 295, x2: 505, y2: 305 }];
+
+vi.mock('../../lib/vision/mark-detect', () => ({
+    detectMarks: vi.fn().mockImplementation(async () =>
+        ONE_MARK.map((b, i) => ({
+            id: i + 1,
+            x: Math.round((b.x1 + b.x2) / 2),
+            y: Math.round((b.y1 + b.y2) / 2),
+            ...b,
+        }))
+    ),
+}));
+
+vi.mock('../../lib/vision/annotate', () => ({
+    annotateMarksOnImage: vi.fn().mockResolvedValue(Buffer.from('fake-annotated-png')),
+}));
+
 import { executeFindByVision } from '../../lib/commands/vision';
 import { getResolutionScalingFactor } from '../../lib/winapi/user32';
+import { detectMarks } from '../../lib/vision/mark-detect';
 
 const FAKE_SCREENSHOT = 'fake-base64-png';
 
@@ -40,10 +58,21 @@ function makeMockDriver(overrides: Record<string, unknown> = {}) {
     };
 }
 
-function makeLLMResponse(x: number, y: number, label: string) {
+function makeLLMResponse(tag: number, label: string) {
     return {
-        content: [{ type: 'text', text: JSON.stringify({ x, y, label }) }],
+        content: [{ type: 'text', text: JSON.stringify({ tag, label }) }],
     };
+}
+
+function setMarks(boxes: Array<{ x1: number; y1: number; x2: number; y2: number }>) {
+    vi.mocked(detectMarks).mockResolvedValue(
+        boxes.map((b, i) => ({
+            id: i + 1,
+            x: Math.round((b.x1 + b.x2) / 2),
+            y: Math.round((b.y1 + b.y2) / 2),
+            ...b,
+        }))
+    );
 }
 
 describe('executeFindByVision', () => {
@@ -52,6 +81,7 @@ describe('executeFindByVision', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         process.env.ANTHROPIC_API_KEY = 'test-key';
+        setMarks(ONE_MARK);
     });
 
     afterEach(() => {
@@ -104,13 +134,12 @@ describe('executeFindByVision', () => {
     });
 
     it('returns screen coordinates for app session at 100% DPI', async () => {
-        // At 100% DPI: rect.width === ssW, dpiScale = 1.0, isLogical = false
-        // scaleX = ssW / rect.width = 1920 / 1920 = 1.0
-        // actual_x = offsetX + pixel_x * scaleX = 100 + 500 * 1.0 = 600
+        // Mark center is (500, 300). At 100% DPI: scaleX = 1920/1920 = 1.0, offset = (100, 200)
+        // actual_x = 100 + 500 * 1.0 = 600, actual_y = 200 + 300 * 1.0 = 500
         const driver = makeMockDriver({
             getWindowRect: vi.fn().mockResolvedValue({ x: 100, y: 200, width: 1920, height: 1080 }),
         });
-        mockCreate.mockResolvedValue(makeLLMResponse(500, 300, 'OK button'));
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'OK button'));
 
         const result = await executeFindByVision.call(driver as any, { prompt: 'OK button', model: 'claude-opus-4-6' });
 
@@ -120,16 +149,14 @@ describe('executeFindByVision', () => {
     });
 
     it('returns screen coordinates for root/desktop session', async () => {
-        // width > 10000 triggers root path; uses monitor bounds with offset = 0
-        // scaleX = actualW / ssW = 1920 / 1920 = 1.0
-        // actual_x = 0 + 960 * 1.0 = 960
+        setMarks([{ x1: 955, y1: 535, x2: 965, y2: 545 }]);
         const driver = makeMockDriver({
             getWindowRect: vi.fn().mockResolvedValue({ x: 0, y: 0, width: 2147483647, height: 2147483647 }),
             windowsGetMonitors: vi.fn().mockResolvedValue([
                 { primary: true, bounds: { width: 1920, height: 1080 } },
             ]),
         });
-        mockCreate.mockResolvedValue(makeLLMResponse(960, 540, 'desktop center'));
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'desktop center'));
 
         const result = await executeFindByVision.call(driver as any, { prompt: 'desktop center', model: 'claude-opus-4-6' });
 
@@ -140,14 +167,12 @@ describe('executeFindByVision', () => {
 
     it('applies DPI scale correction for logical pixel rects', async () => {
         // At 150% DPI: logical rect is 1280×720, physical ssW is 1920×1080
-        // dpiScale=1.5, isLogical = 1.5 > 1.01 && |1280*1.5-1920|/1920 ≈ 0 < 0.15 → true
-        // offsetX = Math.round(0 * 1.5) = 0
-        // physW = 1280 * 1.5 = 1920, scaleX = 1920/1920 = 1.0
+        setMarks([{ x1: 395, y1: 295, x2: 405, y2: 305 }]);
         vi.mocked(getResolutionScalingFactor).mockReturnValue(1.5);
         const driver = makeMockDriver({
             getWindowRect: vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1280, height: 720 }),
         });
-        mockCreate.mockResolvedValue(makeLLMResponse(400, 300, 'button'));
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'button'));
 
         const result = await executeFindByVision.call(driver as any, { prompt: 'button', model: 'claude-opus-4-6' });
 
@@ -155,9 +180,9 @@ describe('executeFindByVision', () => {
         expect(result.y).toBe(300);
     });
 
-    it('throws when element is not found (x === -1)', async () => {
+    it('throws when element is not found (tag === -1)', async () => {
         const driver = makeMockDriver();
-        mockCreate.mockResolvedValue(makeLLMResponse(-1, -1, 'not found'));
+        mockCreate.mockResolvedValue(makeLLMResponse(-1, 'not found'));
 
         await expect(
             executeFindByVision.call(driver as any, { prompt: 'nonexistent element', model: 'claude-opus-4-6' })
@@ -175,10 +200,37 @@ describe('executeFindByVision', () => {
         ).rejects.toThrow('Unexpected LLM response');
     });
 
+    it('throws when LLM returns an out-of-range tag', async () => {
+        const driver = makeMockDriver();
+        mockCreate.mockResolvedValue(makeLLMResponse(7, 'hallucinated'));
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'something', model: 'claude-opus-4-6' })
+        ).rejects.toThrow('but only 1 marks exist');
+    });
+
+    it('throws when no candidate marks are detected', async () => {
+        setMarks([]);
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'something', model: 'claude-opus-4-6' })
+        ).rejects.toThrow('no candidate UI elements detected');
+    });
+
+    it('surfaces the real error when CV mark detection itself fails, not the generic zero-marks message', async () => {
+        vi.mocked(detectMarks).mockRejectedValue(new Error('WASM init failed'));
+        const driver = makeMockDriver();
+
+        await expect(
+            executeFindByVision.call(driver as any, { prompt: 'something', model: 'claude-opus-4-6' })
+        ).rejects.toThrow('CV mark detection failed: WASM init failed');
+    });
+
     it('extracts JSON from LLM response that has surrounding text', async () => {
         const driver = makeMockDriver();
         mockCreate.mockResolvedValue({
-            content: [{ type: 'text', text: 'Sure! Here is the result: {"x":200,"y":150,"label":"Submit"}' }],
+            content: [{ type: 'text', text: 'Sure! Here is the result: {"tag":1,"label":"Submit"}' }],
         });
 
         const result = await executeFindByVision.call(driver as any, { prompt: 'Submit button', model: 'claude-opus-4-6' });
@@ -197,7 +249,7 @@ describe('executeFindByVision', () => {
 
     it('uses custom model when provided', async () => {
         const driver = makeMockDriver();
-        mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
 
         await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-haiku-4-5-20251001' });
 
@@ -206,9 +258,9 @@ describe('executeFindByVision', () => {
         );
     });
 
-    it('passes screenshot as base64 image in LLM request', async () => {
+    it('passes the annotated image as base64 in the LLM request', async () => {
         const driver = makeMockDriver();
-        mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
 
         await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-opus-4-6' });
 
@@ -219,13 +271,35 @@ describe('executeFindByVision', () => {
                         content: expect.arrayContaining([
                             expect.objectContaining({
                                 type: 'image',
-                                source: expect.objectContaining({ data: FAKE_SCREENSHOT }),
+                                source: expect.objectContaining({ data: Buffer.from('fake-annotated-png').toString('base64') }),
                             }),
                         ]),
                     }),
                 ]),
             })
         );
+    });
+
+    it('does not include annotatedImageBase64 by default', async () => {
+        const driver = makeMockDriver();
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
+
+        const result = await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-opus-4-6' });
+
+        expect(result.annotatedImageBase64).toBeUndefined();
+    });
+
+    it('includes annotatedImageBase64 when opted in', async () => {
+        const driver = makeMockDriver();
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
+
+        const result = await executeFindByVision.call(driver as any, {
+            prompt: 'item',
+            model: 'claude-opus-4-6',
+            includeAnnotatedImage: true,
+        });
+
+        expect(result.annotatedImageBase64).toBe(Buffer.from('fake-annotated-png').toString('base64'));
     });
 
     it('falls back to non-primary monitor when primary not found', async () => {
@@ -235,7 +309,8 @@ describe('executeFindByVision', () => {
                 { primary: false, bounds: { width: 2560, height: 1440 } },
             ]),
         });
-        mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
+        setMarks([{ x1: 95, y1: 95, x2: 105, y2: 105 }]);
+        mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
 
         const result = await executeFindByVision.call(driver as any, { prompt: 'item', model: 'claude-opus-4-6' });
 
@@ -254,7 +329,7 @@ describe('executeFindByVision', () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
-                    choices: [{ message: { content: JSON.stringify({ x: 300, y: 400, label: 'button' }) } }],
+                    choices: [{ message: { content: JSON.stringify({ tag: 1, label: 'button' }) } }],
                 }),
             });
 
@@ -297,7 +372,7 @@ describe('executeFindByVision', () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
-                    candidates: [{ content: { parts: [{ text: JSON.stringify({ x: 200, y: 300, label: 'icon' }) }] } }],
+                    candidates: [{ content: { parts: [{ text: JSON.stringify({ tag: 1, label: 'icon' }) }] } }],
                 }),
             });
 

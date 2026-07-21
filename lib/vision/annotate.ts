@@ -2,13 +2,14 @@ import type { Mark } from './types';
 
 const BADGE_RADIUS = 11;
 const BADGE_FONT = 'bold 14px sans-serif';
-/** Low opacity so the underlying icon/text stays visible through the badge (see PLAN.md censor-bar tradeoff). */
-const BADGE_FILL = 'rgba(255,255,255,0.35)';
-const BADGE_BORDER = '#000000';
-const BADGE_TEXT = '#000000';
-const BBOX_OUTLINE = 'rgba(0,0,0,0.5)';
+/** Opaque so the badge stays legible against any background color — badge sits past the bbox
+ *  corner (see BADGE_CORNER_OFFSET) so it no longer covers content that needs to show through. */
+const BADGE_FILL = 'rgba(0,0,0,0.70)';
+const BADGE_BORDER = '#ffffff';
+const BADGE_TEXT = '#ffffff';
+const BBOX_OUTLINE = 'rgb(228, 11, 11)';
 /** Pushes the badge center diagonally past the bbox corner so it sits mostly outside the box instead of stamped on top of the corner content. */
-const BADGE_CORNER_OFFSET = BADGE_RADIUS * 1.1;
+const BADGE_CORNER_OFFSET = BADGE_RADIUS * 0.7;
 const DIAGONAL = Math.SQRT1_2; // cos(45°) === sin(45°)
 
 /**

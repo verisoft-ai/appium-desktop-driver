@@ -1,3 +1,9 @@
+## [2.2.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.2...v2.2.0-preview.3) (2026-07-21)
+
+### Bug Fixes
+
+* set DPI awareness and personalize vision annotation ([c761cc8](https://github.com/verisoft-ai/appium-desktop-driver/commit/c761cc873e2390e51974da6a012221d19d31118c))
+
 ## [2.2.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.1...v2.2.0-preview.2) (2026-07-20)
 
 ### Features

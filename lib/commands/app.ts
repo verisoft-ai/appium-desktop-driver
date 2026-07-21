@@ -86,10 +86,9 @@ export async function setUrl(this: AppiumDesktopDriver, url: string): Promise<vo
 }
 
 export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> {
-    const automationRootId = await this.sendCommand('saveRootElementToTable', {}) as string;
-
     if (this.caps.app && this.caps.app.toLowerCase() !== 'root') {
         try {
+            const automationRootId = await this.sendCommand('saveRootElementToTable', {}) as string;
             await this.focusElement({
                 [W3C_ELEMENT_KEY]: automationRootId?.trim(),
             } satisfies Element);

@@ -6,7 +6,6 @@ import {
     ExtraControlType,
     OrientationType,
 } from './types';
-import { FoundAutomationElement } from './elements';
 import { PSObject } from './core';
 
 export class PSString extends PSObject {
@@ -120,7 +119,7 @@ export class PSAutomationElement extends PSObject {
             throw new errors.InvalidArgumentError('PSAutomationElement accepts a valid Appium Element in the constructor.');
         }
 
-        super(new FoundAutomationElement(value[W3C_ELEMENT_KEY]).toString());
+        super(value[W3C_ELEMENT_KEY]);
     }
 }
 

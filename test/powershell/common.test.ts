@@ -17,13 +17,6 @@ import {
     PSCultureInfo,
 } from '../../lib/powershell/common';
 
-/** Decode the outermost base64 Invoke-Expression wrapper to reveal the PS command. */
-function decodeCommand(cmd: string): string {
-    const match = cmd.match(/FromBase64String\('([^']+)'\)/);
-    if (!match) {return cmd;}
-    return Buffer.from(match[1], 'base64').toString('utf8');
-}
-
 describe('PSString', () => {
     it('wraps value in double-quotes with unicode escaping', () => {
         const ps = new PSString('hello');
@@ -202,12 +195,10 @@ describe('PSRect', () => {
 });
 
 describe('PSAutomationElement', () => {
-    it('wraps a W3C element using FoundAutomationElement', () => {
+    it('wraps a W3C element id', () => {
         const element = { [W3C_ELEMENT_KEY]: '1.2.3.4.5' };
         const ps = new PSAutomationElement(element);
-        // The inner command is base64-encoded since FoundAutomationElement uses pwsh$
-        const decoded = decodeCommand(ps.toString());
-        expect(decoded).toContain('1.2.3.4.5');
+        expect(ps.toString()).toBe('1.2.3.4.5');
     });
 
     it('throws if W3C element key is missing', () => {

@@ -61,12 +61,9 @@ public class SessionState
     public string SaveElementAndReturnId(IUIAutomationElement element)
     {
         var runtimeId = element.GetRuntimeId();
-        if (runtimeId == null || runtimeId.Length == 0)
-        {
-            throw new InvalidOperationException("Element has no RuntimeId.");
-        }
-
-        var id = string.Join(".", runtimeId);
+        var id = runtimeId == null || runtimeId.Length == 0
+            ? Guid.NewGuid().ToString()
+            : string.Join(".", runtimeId);
 
         if (!ElementTable.ContainsKey(id))
         {
@@ -81,8 +78,9 @@ public class SessionState
         try
         {
             var runtimeId = element.GetRuntimeId();
-            if (runtimeId == null || runtimeId.Length == 0) return null;
-            var id = string.Join(".", runtimeId);
+            var id = runtimeId == null || runtimeId.Length == 0
+                ? Guid.NewGuid().ToString()
+                : string.Join(".", runtimeId);
             if (!ElementTable.ContainsKey(id))
                 ElementTable[id] = element;
             return id;

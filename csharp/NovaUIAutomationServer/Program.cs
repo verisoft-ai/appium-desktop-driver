@@ -6,6 +6,10 @@ class Program
 {
     static void Main(string[] args)
     {
+        // Must run before any UIA/GDI calls: without this the process is DPI-unaware,
+        // so BoundingRectangle and CopyFromScreen disagree on scale at != 100% display scaling.
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+
         string? recordingPath = null;
 
         for (int i = 0; i < args.Length; i++)

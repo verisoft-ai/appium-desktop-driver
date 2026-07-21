@@ -187,6 +187,21 @@ const UINT32_MAX = 0xFFFFFFFF;
 const user32 = load('user32.dll');
 const kernel32 = load('kernel32.dll');
 
+// Node has no manifest, so it starts DPI-unaware. Unaware processes get their
+// SetCursorPos/GetCursorPos coordinates silently scaled by Windows to a virtualized
+// 96-DPI space — that no longer matches the physical pixel coordinates the (now
+// per-monitor-aware) automation server reports for screenshots and element rects,
+// so clicks land off-target at any scale != 100%. Must run before any cursor/window
+// call. E_ACCESSDENIED (already set, e.g. by a host process) is fine to ignore.
+try {
+    const shcore = load('shcore.dll');
+    const SetProcessDpiAwareness = shcore.func('int __stdcall SetProcessDpiAwareness(int)') as (value: number) => number;
+    const PROCESS_PER_MONITOR_DPI_AWARE = 2;
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+} catch (err) {
+    log.debug(`SetProcessDpiAwareness failed (may already be set): ${err}`);
+}
+
 const POINT = struct('POINT', {
     x: 'long',
     y: 'long',
@@ -308,7 +323,6 @@ type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;
 // TODO: update all functions to have their parameters aliased properly
 const SendInput = user32.func(/* c */ `unsigned int __stdcall SendInput(unsigned int cInputs, INPUT *pInputs, int cbSize)`) as (cInputs: number, pInouts: Event[], cbSize: number) => number;
 const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int nIndex)`) as (nIndex: SystemMetric) => number;
-const SetProcessDPIAware = user32.func(/* c */ `bool __stdcall SetProcessDPIAware()`) as () => boolean;
 const GetDpiForSystem = user32.func(/* c */ `unsigned int __stdcall GetDpiForSystem()`) as () => number;
 const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (lpPoint: Point) => boolean;
 const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (x: number, y: number) => boolean;
@@ -887,12 +901,6 @@ export function mouseUp(button: number = 0): void {
 export function getDisplayOrientation(): Orientation {
     const [width, height] = getScreenResolution();
     return width > height ? 'LANDSCAPE' : 'PORTRAIT';
-}
-
-export function setDpiAwareness() {
-    if (!SetProcessDPIAware()) {
-        throw new errors.UnknownError('An error occurred while trying to set DPI awareness.');
-    };
 }
 
 export function getWindowThreadProcessId(hwnd: number, pidOut: [number | null]): number {

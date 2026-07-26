@@ -1,8 +1,157 @@
+#nullable enable
 using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using System.Windows.Automation;
+using System.Windows.Automation.Provider;
 
 namespace WinformCombo;
+
+// Fabricated raw UIA provider proving the driver's uuid fallback
+// (NovaUIAutomationServer SessionState.SaveElementAndReturnId) for elements
+// with no native RuntimeId. Plain WinForms controls always get one from
+// Windows' built-in MSAA-to-UIA bridge (verified empirically — every stock
+// control here returns a real 2-part id), so there's no way to hit that
+// fallback with an ordinary control. This item is a UIA fragment with no
+// backing HWND of its own — nothing auto-derives a RuntimeId for it, so
+// GetRuntimeId() below returns exactly what we tell it to: null.
+internal sealed class NoRuntimeIdItemProvider : IRawElementProviderSimple, IRawElementProviderFragment
+{
+    private readonly Control _host;
+    private readonly NoRuntimeIdHostProvider _root;
+
+    public NoRuntimeIdItemProvider(Control host, NoRuntimeIdHostProvider root)
+    {
+        _host = host;
+        _root = root;
+    }
+
+    public ProviderOptions ProviderOptions => ProviderOptions.ServerSideProvider;
+
+    public object? GetPatternProvider(int patternId) => null;
+
+    public object? GetPropertyValue(int propertyId)
+    {
+        if (propertyId == AutomationElementIdentifiers.NameProperty.Id) return "No RuntimeId Item";
+        if (propertyId == AutomationElementIdentifiers.AutomationIdProperty.Id) return "noRuntimeIdItem";
+        if (propertyId == AutomationElementIdentifiers.ControlTypeProperty.Id) return ControlType.Text.Id;
+        if (propertyId == AutomationElementIdentifiers.IsContentElementProperty.Id) return true;
+        if (propertyId == AutomationElementIdentifiers.IsControlElementProperty.Id) return true;
+        return null;
+    }
+
+    public IRawElementProviderSimple? HostRawElementProvider => null;
+
+    public System.Windows.Rect BoundingRectangle
+    {
+        get
+        {
+            var r = _host.RectangleToScreen(_host.ClientRectangle);
+            return new System.Windows.Rect(r.Left, r.Top, r.Width, r.Height);
+        }
+    }
+
+    public IRawElementProviderSimple[]? GetEmbeddedFragmentRoots() => null;
+
+    public int[]? GetRuntimeId() => null;
+
+    public IRawElementProviderFragment? Navigate(NavigateDirection direction) => null;
+
+    public void SetFocus() { }
+
+    public IRawElementProviderFragmentRoot FragmentRoot => _root;
+}
+
+// Root of the raw provider — this one keeps GetRuntimeId() == null too, but
+// that's the *normal*, spec-compliant case (an HWND-backed fragment root
+// lets UIA auto-derive its id from the window handle). Only the child item
+// above is the fabricated no-runtime-id case under test.
+internal sealed class NoRuntimeIdHostProvider : IRawElementProviderSimple, IRawElementProviderFragment, IRawElementProviderFragmentRoot
+{
+    private readonly Control _host;
+    private readonly NoRuntimeIdItemProvider _item;
+
+    public NoRuntimeIdHostProvider(Control host)
+    {
+        _host = host;
+        _item = new NoRuntimeIdItemProvider(host, this);
+    }
+
+    public ProviderOptions ProviderOptions => ProviderOptions.ServerSideProvider;
+
+    public object? GetPatternProvider(int patternId) => null;
+
+    public object? GetPropertyValue(int propertyId)
+    {
+        if (propertyId == AutomationElementIdentifiers.NameProperty.Id) return "NoRuntimeIdHost";
+        if (propertyId == AutomationElementIdentifiers.AutomationIdProperty.Id) return "noRuntimeIdHost";
+        if (propertyId == AutomationElementIdentifiers.ControlTypeProperty.Id) return ControlType.Pane.Id;
+        return null;
+    }
+
+    public IRawElementProviderSimple? HostRawElementProvider =>
+        AutomationInteropProvider.HostProviderFromHandle(_host.Handle);
+
+    public System.Windows.Rect BoundingRectangle
+    {
+        get
+        {
+            var r = _host.RectangleToScreen(_host.ClientRectangle);
+            return new System.Windows.Rect(r.Left, r.Top, r.Width, r.Height);
+        }
+    }
+
+    public IRawElementProviderSimple[]? GetEmbeddedFragmentRoots() => null;
+
+    public int[]? GetRuntimeId() => null;
+
+    public IRawElementProviderFragment? Navigate(NavigateDirection direction) =>
+        direction is NavigateDirection.FirstChild or NavigateDirection.LastChild ? _item : null;
+
+    public void SetFocus() { }
+
+    public IRawElementProviderFragment? ElementProviderFromPoint(double x, double y) => _item;
+
+    public IRawElementProviderFragment? GetFocus() => null;
+
+    public IRawElementProviderFragmentRoot FragmentRoot => this;
+}
+
+public class NoRuntimeIdHost : Control
+{
+    private const int WM_GETOBJECT = 0x003D;
+    private const string LabelText = "NO RUNTIMEID ITEM (fabricated, empty RuntimeId)";
+
+    private readonly NoRuntimeIdHostProvider _provider;
+
+    public NoRuntimeIdHost()
+    {
+        Name = "noRuntimeIdHost";
+        Size = new Size(360, 30);
+        BackColor = Color.LightYellow;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        _provider = new NoRuntimeIdHostProvider(this);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        using var border = new Pen(Color.DarkOrange, 2);
+        e.Graphics.DrawRectangle(border, 1, 1, Width - 3, Height - 3);
+        TextRenderer.DrawText(e.Graphics, LabelText, Font, ClientRectangle, Color.Black,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_GETOBJECT)
+        {
+            m.Result = AutomationInteropProvider.ReturnRawElementProvider(Handle, m.WParam, m.LParam, _provider);
+            return;
+        }
+        base.WndProc(ref m);
+    }
+}
 
 // Minimal repro for the SendInput KEYEVENTF_EXTENDEDKEY bug (see
 // lib/winapi/user32.ts isExtendedKeyVk / EXTENDED_KEYS).
@@ -81,7 +230,7 @@ public class MainForm : Form
     {
         Text = "Extended-Key Repro";
         Width = 420;
-        Height = 200;
+        Height = 240;
 
         TxtLog = new TextBox
         {
@@ -105,6 +254,7 @@ public class MainForm : Form
 
         Controls.Add(TxtLog);
         Controls.Add(LblRealDownCount);
+        Controls.Add(new NoRuntimeIdHost { Left = 20, Top = 140 });
 
         Application.AddMessageFilter(new KeyDownFilter(this));
     }

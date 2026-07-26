@@ -1,15 +1,13 @@
 import { AppiumDesktopDriver } from '../driver';
-import { getPngDimensions } from '../util';
 import { getResolutionScalingFactor } from '../winapi/user32';
 import {
     CoordMapping,
-    applyCoordMapping,
-    buildVisionPrompt,
-    callVisionLLM,
     computeCoordMapping,
+    formatVisionError,
     getApiKeyEnvVar,
     getProviderForModel,
-    parseVisionCoords,
+    locateElementByVision,
+    VisionStep,
 } from '../vision-utils';
 
 async function buildCoordMapping(
@@ -44,8 +42,8 @@ async function buildCoordMapping(
 
 export async function executeFindByVision(
     this: AppiumDesktopDriver,
-    args: { prompt: string; model: string },
-): Promise<{ x: number; y: number; label: string }> {
+    args: { prompt: string; model: string; includeAnnotatedImage?: boolean },
+): Promise<{ x: number; y: number; label: string; steps: VisionStep[]; annotatedImageBase64?: string }> {
     if (!args.prompt) {
         throw new Error('windows: findByVision requires a "prompt" argument.');
     }
@@ -70,14 +68,19 @@ export async function executeFindByVision(
     }
 
     const base64 = await this.getScreenshot();
-    const { width: ssW, height: ssH } = getPngDimensions(base64);
 
-    const raw = await callVisionLLM(base64, buildVisionPrompt(args.prompt, ssW, ssH), model, apiKey);
-    const parsed = parseVisionCoords(raw, args.prompt);
-
-    const mapping = await buildCoordMapping(this, ssW, ssH);
-    return {
-        ...applyCoordMapping(mapping, parsed.x, parsed.y),
-        label: parsed.label,
-    };
+    try {
+        const result = await locateElementByVision({
+            prompt: args.prompt,
+            model,
+            apiKey,
+            screenshotBase64: base64,
+            buildMapping: (ssW, ssH) => buildCoordMapping(this, ssW, ssH),
+            includeAnnotatedImage: args.includeAnnotatedImage,
+        });
+        this.log?.info(`[findByVision] steps:\n${result.steps.map((s) => `  [${s.status}] ${s.name}: ${s.detail}`).join('\n')}`);
+        return result;
+    } catch (err) {
+        throw new Error(formatVisionError(err));
+    }
 }

@@ -70,13 +70,6 @@ interface Point {
     y: number,
 }
 
-interface Rect {
-    left: number,
-    top: number,
-    right: number,
-    bottom: number,
-}
-
 interface DeviceModeAnsi {
     dmDeviceName: string | null,
     dmSpecVersion: number,
@@ -193,6 +186,21 @@ const UINT32_MAX = 0xFFFFFFFF;
 
 const user32 = load('user32.dll');
 const kernel32 = load('kernel32.dll');
+
+// Node has no manifest, so it starts DPI-unaware. Unaware processes get their
+// SetCursorPos/GetCursorPos coordinates silently scaled by Windows to a virtualized
+// 96-DPI space — that no longer matches the physical pixel coordinates the (now
+// per-monitor-aware) automation server reports for screenshots and element rects,
+// so clicks land off-target at any scale != 100%. Must run before any cursor/window
+// call. E_ACCESSDENIED (already set, e.g. by a host process) is fine to ignore.
+try {
+    const shcore = load('shcore.dll');
+    const SetProcessDpiAwareness = shcore.func('int __stdcall SetProcessDpiAwareness(int)') as (value: number) => number;
+    const PROCESS_PER_MONITOR_DPI_AWARE = 2;
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+} catch (err) {
+    log.debug(`SetProcessDpiAwareness failed (may already be set): ${err}`);
+}
 
 const POINT = struct('POINT', {
     x: 'long',
@@ -315,7 +323,6 @@ type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;
 // TODO: update all functions to have their parameters aliased properly
 const SendInput = user32.func(/* c */ `unsigned int __stdcall SendInput(unsigned int cInputs, INPUT *pInputs, int cbSize)`) as (cInputs: number, pInouts: Event[], cbSize: number) => number;
 const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int nIndex)`) as (nIndex: SystemMetric) => number;
-const SetProcessDPIAware = user32.func(/* c */ `bool __stdcall SetProcessDPIAware()`) as () => boolean;
 const GetDpiForSystem = user32.func(/* c */ `unsigned int __stdcall GetDpiForSystem()`) as () => number;
 const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (lpPoint: Point) => boolean;
 const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (x: number, y: number) => boolean;
@@ -328,8 +335,6 @@ const GetClassNameW = user32.func(/* c */ `int __stdcall GetClassNameW(HWND hWnd
 const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
-const EnumChildWindows = user32.func(/* c */ `BOOL __stdcall EnumChildWindows(HWND hWndParent, EnumWindowsProc *lpEnumFunc, LPARAM lParam)`) as (hWndParent: HWND, lpEnumFunc: EnumWindowsProc, lParam: LPARAM) => BOOL;
-const GetWindowRect = user32.func(/* c */ `BOOL __stdcall GetWindowRect(HWND hWnd, _Out_ RECT *lpRect)`) as (hWnd: HWND, lpRect: Rect) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
 const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
@@ -338,8 +343,42 @@ const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int
 const IsIconic = user32.func(/* c */ `BOOL __stdcall IsIconic(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const BringWindowToTop = user32.func(/* c */ `BOOL __stdcall BringWindowToTop(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const SetFocus = user32.func(/* c */ `HWND __stdcall SetFocus(HWND hWnd)`) as (hWnd: HWND) => HWND;
+const GetKeyState = user32.func(/* c */ `short __stdcall GetKeyState(int nVirtKey)`) as (nVirtKey: number) => number;
 
 const SW_RESTORE = 9;
+
+// Per SendInput/keybd_event docs, these VKs share a scan code with a numpad
+// key and are disambiguated only by the extended-key bit (0xE0 scan prefix).
+// A physical keypress always sets this bit; SendInput does not unless told
+// to — omitting it makes Windows resolve the VK using current NumLock state,
+// so e.g. VK_DOWN silently becomes VK_NUMPAD2 while NumLock is on and the
+// receiving app's key filter (rightly) ignores it.
+const EXTENDED_KEYS: ReadonlySet<VirtualKey> = new Set([
+    VirtualKey.VK_UP,
+    VirtualKey.VK_DOWN,
+    VirtualKey.VK_LEFT,
+    VirtualKey.VK_RIGHT,
+    VirtualKey.VK_HOME,
+    VirtualKey.VK_END,
+    VirtualKey.VK_PRIOR,
+    VirtualKey.VK_NEXT,
+    VirtualKey.VK_INSERT,
+    VirtualKey.VK_DELETE,
+    VirtualKey.VK_DIVIDE,
+    VirtualKey.VK_NUMLOCK,
+    VirtualKey.VK_SNAPSHOT,
+    VirtualKey.VK_RCONTROL,
+    VirtualKey.VK_RMENU,
+    VirtualKey.VK_LWIN,
+    VirtualKey.VK_RWIN,
+    VirtualKey.VK_APPS,
+]);
+
+// Pure so it's unit-testable without mocking the koffi FFI layer (SendInput,
+// struct/union defs, etc.) that the rest of this module touches at load time.
+export function isExtendedKeyVk(vk: VirtualKey | undefined): boolean {
+    return vk !== undefined && EXTENDED_KEYS.has(vk);
+}
 
 function makeKeyboardEvent(args: {
         /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -372,6 +411,10 @@ function makeKeyboardEvent(args: {
 
     if (!args.down) {
         flags |= KeyEventFlags.KEYEVENTF_KEYUP;
+    }
+
+    if (isExtendedKeyVk(args.vk)) {
+        flags |= KeyEventFlags.KEYEVENTF_EXTENDEDKEY;
     }
 
     return {
@@ -802,6 +845,25 @@ export function keyUp(char: string, forceUnicode: boolean = false): void {
     sendKeyInput(char, false, forceUnicode);
 }
 
+// NumLock is a toggle key — GetKeyState's low-order bit reflects its current
+// on/off state (as opposed to GetAsyncKeyState's high-order "is physically
+// held" bit, which doesn't apply to a toggle).
+export function isNumLockOn(): boolean {
+    return (GetKeyState(VirtualKey.VK_NUMLOCK) & 1) === 1;
+}
+
+// Toggling NumLock is itself a real keypress (down+up of VK_NUMLOCK), so it
+// goes through the same extended-key-flagged SendInput path as any other key.
+export function setNumLockState(on: boolean): void {
+    if (isNumLockOn() === on) {
+        return;
+    }
+    const downEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: true });
+    const upEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: false });
+    assertSuccessSendInputReturnCode(SendInput(1, [downEvent], sizeof(INPUT)));
+    assertSuccessSendInputReturnCode(SendInput(1, [upEvent], sizeof(INPUT)));
+}
+
 export async function mouseMoveRelative(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {
     await sendMouseMoveInput({x, y, relative: true, duration, easingFunction});
 }
@@ -839,12 +901,6 @@ export function mouseUp(button: number = 0): void {
 export function getDisplayOrientation(): Orientation {
     const [width, height] = getScreenResolution();
     return width > height ? 'LANDSCAPE' : 'PORTRAIT';
-}
-
-export function setDpiAwareness() {
-    if (!SetProcessDPIAware()) {
-        throw new errors.UnknownError('An error occurred while trying to set DPI awareness.');
-    };
 }
 
 export function getWindowThreadProcessId(hwnd: number, pidOut: [number | null]): number {
@@ -982,38 +1038,6 @@ export function getAllWindowsWithDetails(): Array<{ handle: string; title: strin
         log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
     }
     return windows;
-}
-
-export function getChildWindows(hwnd: number): Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> {
-    const children: Array<{ handle: string; className: string; title: string; rect: { x: number; y: number; width: number; height: number } }> = [];
-    try {
-        EnumChildWindows(hwnd, (hWnd) => {
-            try {
-                const titleBuf = Buffer.alloc(512);
-                const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
-                const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
-
-                const classBuf = Buffer.alloc(512);
-                const classLen = GetClassNameW(hWnd, classBuf, 256);
-                const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
-
-                const rectOut: Rect = { left: 0, top: 0, right: 0, bottom: 0 };
-                const gotRect = GetWindowRect(hWnd, rectOut);
-                const rect = gotRect
-                    ? { x: rectOut.left, y: rectOut.top, width: rectOut.right - rectOut.left, height: rectOut.bottom - rectOut.top }
-                    : { x: 0, y: 0, width: 0, height: 0 };
-
-                const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
-                children.push({ handle, className, title, rect });
-            } catch (err) {
-                log.error(`Exception in EnumChildWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-            }
-            return true;
-        }, 0);
-    } catch (err) {
-        log.error(`EnumChildWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-    }
-    return children;
 }
 
 function isForeground(targetHWnd: HWND): boolean {

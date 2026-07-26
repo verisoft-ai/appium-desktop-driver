@@ -20,7 +20,6 @@ import { DRIVER_VERSION } from './version';
 import {
     assertSupportedEasingFunction
 } from './util';
-import { setDpiAwareness } from './winapi/user32';
 import { xpathToElIdOrIds } from './xpath';
 
 import type { Chromedriver } from 'appium-chromedriver';
@@ -327,8 +326,6 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                     this.log.info('Executing prerun PowerShell script...');
                     await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
                 }
-
-                setDpiAwareness();
             }
 
             this.log.debug(`Started session ${sessionId}.`);

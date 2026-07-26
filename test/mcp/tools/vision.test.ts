@@ -25,18 +25,47 @@ vi.mock('../../../lib/util', () => ({
     getPngDimensions: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
 }));
 
+const ONE_MARK = [{ x1: 495, y1: 295, x2: 505, y2: 305 }];
+
+vi.mock('../../../lib/vision/mark-detect', () => ({
+    detectMarks: vi.fn().mockImplementation(async () =>
+        ONE_MARK.map((b, i) => ({
+            id: i + 1,
+            x: Math.round((b.x1 + b.x2) / 2),
+            y: Math.round((b.y1 + b.y2) / 2),
+            ...b,
+        }))
+    ),
+}));
+
+vi.mock('../../../lib/vision/annotate', () => ({
+    annotateMarksOnImage: vi.fn().mockResolvedValue(Buffer.from('fake-annotated-png')),
+}));
+
 import { registerVisionTools } from '../../../lib/mcp/tools/vision.js';
 import { createMockServer } from '../fixtures/server.js';
 import { createMockSession } from '../fixtures/session.js';
+import { detectMarks } from '../../../lib/vision/mark-detect.js';
 
 const FAKE_SCREENSHOT = 'fake-base64-screenshot';
 
-function makeLLMResponse(x: number, y: number, label: string) {
-    return { content: [{ type: 'text', text: JSON.stringify({ x, y, label }) }] };
+function makeLLMResponse(tag: number, label: string) {
+    return { content: [{ type: 'text', text: JSON.stringify({ tag, label }) }] };
 }
 
 function makeTextLLMResponse(text: string) {
     return { content: [{ type: 'text', text }] };
+}
+
+function setMarks(boxes: Array<{ x1: number; y1: number; x2: number; y2: number }>) {
+    vi.mocked(detectMarks).mockResolvedValue(
+        boxes.map((b, i) => ({
+            id: i + 1,
+            x: Math.round((b.x1 + b.x2) / 2),
+            y: Math.round((b.y1 + b.y2) / 2),
+            ...b,
+        }))
+    );
 }
 
 describe('find_by_vision tool', () => {
@@ -45,6 +74,7 @@ describe('find_by_vision tool', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         process.env.ANTHROPIC_API_KEY = 'test-key';
+        setMarks(ONE_MARK);
     });
 
     afterEach(() => {
@@ -58,7 +88,7 @@ describe('find_by_vision tool', () => {
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 100, y: 200, width: 1920, height: 1080 });
             mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0); // getDpiScale
-            mockCreate.mockResolvedValue(makeLLMResponse(500, 300, 'OK button'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'OK button'));
             registerVisionTools(server, session);
 
             const result = await server.call('find_by_vision', {
@@ -74,15 +104,53 @@ describe('find_by_vision tool', () => {
             expect(textBlock.type).toBe('text');
 
             const parsed = JSON.parse(textBlock.text);
-            // actual_x = offsetX + imgX * scaleX = 100 + 500 * 1.0 = 600
+            // Mark center (500, 300); offset=(100,200), scale=1.0
             expect(parsed.x).toBe(600);
             expect(parsed.y).toBe(500);
             expect(parsed.label).toBe('OK button');
         });
 
+        it('includes an image content block when includeAnnotatedImage is true', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'OK button'));
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'the OK button',
+                model: 'claude-opus-4-6',
+                includeAnnotatedImage: true,
+            }) as any;
+
+            expect(result.isError).toBeUndefined();
+            expect(result.content).toHaveLength(2);
+            expect(result.content[1].type).toBe('image');
+            expect(result.content[1].data).toBe(Buffer.from('fake-annotated-png').toString('base64'));
+        });
+
+        it('does not include an image content block by default', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'OK button'));
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'the OK button',
+                model: 'claude-opus-4-6',
+            }) as any;
+
+            expect(result.content).toHaveLength(1);
+        });
+
         it('applies DPI scale correction for logical pixel rects', async () => {
             // 150% DPI: logical rect 1280×720, screenshot 1920×1080
-            // isLogical = true, physW = 1280*1.5 = 1920, scaleX = 1.0, offsetX = 0
+            setMarks([{ x1: 395, y1: 295, x2: 405, y2: 305 }]);
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
@@ -91,7 +159,7 @@ describe('find_by_vision tool', () => {
                 if (cmd === 'windows: getDpiScale') { return Promise.resolve(1.5); }
                 return Promise.resolve(undefined);
             });
-            mockCreate.mockResolvedValue(makeLLMResponse(400, 300, 'button'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'button'));
             registerVisionTools(server, session);
 
             const result = await server.call('find_by_vision', {
@@ -106,6 +174,7 @@ describe('find_by_vision tool', () => {
         });
 
         it('returns coordinates for root/desktop session using monitor bounds', async () => {
+            setMarks([{ x1: 955, y1: 535, x2: 965, y2: 545 }]);
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
@@ -118,7 +187,7 @@ describe('find_by_vision tool', () => {
                 }
                 return Promise.resolve(1.0);
             });
-            mockCreate.mockResolvedValue(makeLLMResponse(960, 540, 'desktop center'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'desktop center'));
             registerVisionTools(server, session);
 
             const result = await server.call('find_by_vision', {
@@ -129,17 +198,17 @@ describe('find_by_vision tool', () => {
 
             expect(result.isError).toBeUndefined();
             const parsed = JSON.parse(result.content[0].text);
-            // Root session: offset=0, scale=1920/1920=1.0
             expect(parsed.x).toBe(960);
             expect(parsed.y).toBe(540);
         });
 
         it('returns raw image coords when coord mapping fails (graceful degradation)', async () => {
+            setMarks([{ x1: 195, y1: 145, x2: 205, y2: 155 }]);
             const server = createMockServer();
             const { session, mockBrowser } = createMockSession();
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             mockBrowser.getWindowRect = vi.fn().mockRejectedValue(new Error('no window'));
-            mockCreate.mockResolvedValue(makeLLMResponse(200, 150, 'button'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'button'));
             registerVisionTools(server, session);
 
             const result = await server.call('find_by_vision', {
@@ -161,7 +230,7 @@ describe('find_by_vision tool', () => {
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
             mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
-            mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'Save'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'Save'));
             registerVisionTools(server, session);
 
             await server.call('find_by_vision', { prompt: 'find the Save button', model: 'claude-opus-4-6' });
@@ -177,6 +246,42 @@ describe('find_by_vision tool', () => {
                     ]),
                 })
             );
+        });
+
+        it('throws when no candidate marks are detected', async () => {
+            setMarks([]);
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'claude-opus-4-6',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('no candidate UI elements detected');
+        });
+
+        it('throws when the model returns an out-of-range tag', async () => {
+            const server = createMockServer();
+            const { session, mockBrowser } = createMockSession();
+            mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
+            mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
+            mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
+            mockCreate.mockResolvedValue(makeLLMResponse(9, 'hallucinated'));
+            registerVisionTools(server, session);
+
+            const result = await server.call('find_by_vision', {
+                prompt: 'find something',
+                model: 'claude-opus-4-6',
+            }) as any;
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('but only 1 marks exist');
         });
     });
 
@@ -229,7 +334,7 @@ describe('find_by_vision tool', () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
-                    choices: [{ message: { content: JSON.stringify({ x: 300, y: 400, label: 'save button' }) } }],
+                    choices: [{ message: { content: JSON.stringify({ tag: 1, label: 'save button' }) } }],
                 }),
             });
             registerVisionTools(server, session);
@@ -267,7 +372,7 @@ describe('find_by_vision tool', () => {
             mockBedrockSend.mockResolvedValue({
                 output: {
                     message: {
-                        content: [{ text: JSON.stringify({ x: 200, y: 300, label: 'submit button' }) }],
+                        content: [{ text: JSON.stringify({ tag: 1, label: 'submit button' }) }],
                     },
                 },
             });
@@ -293,7 +398,7 @@ describe('find_by_vision tool', () => {
             mockBedrockSend.mockResolvedValue({
                 output: {
                     message: {
-                        content: [{ text: JSON.stringify({ x: 100, y: 200, label: 'cancel' }) }],
+                        content: [{ text: JSON.stringify({ tag: 1, label: 'cancel' }) }],
                     },
                 },
             });
@@ -356,7 +461,7 @@ describe('find_by_vision tool', () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
-                    candidates: [{ content: { parts: [{ text: JSON.stringify({ x: 100, y: 200, label: 'close' }) }] } }],
+                    candidates: [{ content: { parts: [{ text: JSON.stringify({ tag: 1, label: 'close' }) }] } }],
                 }),
             });
             registerVisionTools(server, session);
@@ -395,7 +500,7 @@ describe('find_by_vision tool', () => {
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
             mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
-            mockCreate.mockResolvedValue(makeLLMResponse(100, 100, 'item'));
+            mockCreate.mockResolvedValue(makeLLMResponse(1, 'item'));
             registerVisionTools(server, session);
 
             await server.call('find_by_vision', { prompt: 'find item', model: 'claude-haiku-4-5-20251001' });
@@ -468,7 +573,7 @@ describe('find_by_vision tool', () => {
             mockBrowser.takeScreenshot = vi.fn().mockResolvedValue(FAKE_SCREENSHOT);
             mockBrowser.getWindowRect = vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1920, height: 1080 });
             mockBrowser.executeScript = vi.fn().mockResolvedValue(1.0);
-            mockCreate.mockResolvedValue(makeLLMResponse(-1, -1, 'not found'));
+            mockCreate.mockResolvedValue(makeLLMResponse(-1, 'not found'));
             registerVisionTools(server, session);
 
             const result = await server.call('find_by_vision', {

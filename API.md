@@ -381,13 +381,16 @@ const video = await driver.executeScript(
 
 #### windows: findByVision
 
-Takes a screenshot and sends it to a vision LLM to locate an element by
-natural language description. Returns `{ x, y, label }`.
+Takes a screenshot, annotates candidate UI regions (detected locally via
+CV contour detection) with numbered tags, and sends it to a vision LLM to
+pick the tag matching a natural language description (Set-of-Mark
+prompting). Returns `{ x, y, label }`.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
 | `prompt` | string | yes | Natural language description |
 | `model` | string | yes | LLM model identifier |
+| `includeAnnotatedImage` | boolean | no | When `true`, also returns `annotatedImageBase64` — the numbered-badge screenshot actually sent to the model. Default `false`. |
 
 Supported providers:
 

@@ -12,6 +12,10 @@ import { registerClipboardTools } from './clipboard.js';
 import { registerVisionTools } from './vision.js';
 import { registerContextTools } from './context.js';
 import { registerNativeTools } from './native.js';
+import { registerIeTools } from './ie.js';
+import { registerFileTools } from './files.js';
+import { registerRecordingTools } from './recording.js';
+import { registerSystemTools } from './system.js';
 
 export function registerAllTools(server: McpServer, session: AppiumSession): void {
     registerSessionTools(server, session);
@@ -26,4 +30,8 @@ export function registerAllTools(server: McpServer, session: AppiumSession): voi
     registerVisionTools(server, session);
     registerContextTools(server, session);
     registerNativeTools(server, session);
+    registerIeTools(server, session);
+    registerFileTools(server, session);
+    registerRecordingTools(server, session);
+    registerSystemTools(server, session);
 }

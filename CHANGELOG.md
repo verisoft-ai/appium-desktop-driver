@@ -1,3 +1,40 @@
+## [2.2.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.3...v2.2.0-preview.4) (2026-07-26)
+
+### Features
+
+* create uuid for elements with no runtimeId and  remove dead code ([17096a6](https://github.com/verisoft-ai/appium-desktop-driver/commit/17096a6a7cbae9052fb72c6e765c7adce02c8bdb))
+
+### Bug Fixes
+
+* set focus on getScreenshot no op on failure ([d5b3c2a](https://github.com/verisoft-ai/appium-desktop-driver/commit/d5b3c2ae828a9edd83061a232fcb66f035233f98))
+
+## [2.2.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.2...v2.2.0-preview.3) (2026-07-21)
+
+### Bug Fixes
+
+* set DPI awareness and personalize vision annotation ([c761cc8](https://github.com/verisoft-ai/appium-desktop-driver/commit/c761cc873e2390e51974da6a012221d19d31118c))
+
+## [2.2.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.1...v2.2.0-preview.2) (2026-07-20)
+
+### Features
+
+* add fallback to collapse function ([ff81b41](https://github.com/verisoft-ai/appium-desktop-driver/commit/ff81b4192068c4993c76aa8e18a763f334529fb7))
+* **vision:** replace bbox+quadrant findByVision with Set-of-Mark pipeline ([983be48](https://github.com/verisoft-ai/appium-desktop-driver/commit/983be482d18cf27d0409925597b7b5fc072ed56d))
+
+## [2.2.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0...v2.2.0-preview.1) (2026-07-19)
+
+### Features
+
+* **native:** replace EnumChildWindows fallback with MSAA (IAccessible) tree walk ([d905fc7](https://github.com/verisoft-ai/appium-desktop-driver/commit/d905fc7f066121a778c5a1452f6e4ed478774d81))
+
+### Bug Fixes
+
+* arrow down virtual key not trigger NUM_PAD_2 ([82ae967](https://github.com/verisoft-ai/appium-desktop-driver/commit/82ae967283c474ff53797dffa7e43fb41ad60c1f))
+* ie classic fallback for query selector all ([4f57527](https://github.com/verisoft-ai/appium-desktop-driver/commit/4f57527b48cba6d26a481966c5e83876bd19d7fc))
+* **mcp:** added missing commands and improved instructions ([d4fb0b7](https://github.com/verisoft-ai/appium-desktop-driver/commit/d4fb0b797fb57554bf398e9acefe7e0fac5767b1))
+* **test:** update patternExpand test for no-throw fallback behavior ([1d38995](https://github.com/verisoft-ai/appium-desktop-driver/commit/1d38995b00b1c313212d62b56ffe1a03e698ad24))
+* trust fallback ALT + Down expand ([061bd8e](https://github.com/verisoft-ai/appium-desktop-driver/commit/061bd8e29081f2481ad8cd6e59f27b2ac625a87c))
+
 ## [2.1.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.0.0...v2.1.0) (2026-07-14)
 
 ### Features

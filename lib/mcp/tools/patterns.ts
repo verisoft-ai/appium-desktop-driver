@@ -151,4 +151,111 @@ export function registerPatternTools(server: McpServer, session: AppiumSession):
             }
         }
     );
+
+    server.registerTool(
+        'is_multi_select',
+        {
+            description: 'Check whether a container (e.g. ListBox) allows multiple items to be selected via the UIA Selection pattern.',
+            inputSchema: elementIdInput,
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const result = await driver.executeScript('windows: isMultiple', [{ [ELEMENT_KEY]: elementId }]);
+                return { content: [{ type: 'text' as const, text: String(result) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'scroll_element_into_view',
+        {
+            description: 'Scroll a container so the given element becomes visible, via the UIA ScrollItem pattern. Use before clicking an element that may be outside the visible scroll area.',
+            inputSchema: elementIdInput,
+            annotations: { idempotentHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                await driver.executeScript('windows: scrollIntoView', [{ [ELEMENT_KEY]: elementId }]);
+                return { content: [{ type: 'text' as const, text: 'scrolled into view' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_selected_item',
+        {
+            description: 'Get the first selected item in a container (e.g. ListBox, TreeView) via the UIA Selection pattern. Returns an element ID.',
+            inputSchema: elementIdInput,
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const result = await driver.executeScript('windows: selectedItem', [{ [ELEMENT_KEY]: elementId }]) as Record<string, string>;
+                return { content: [{ type: 'text' as const, text: result[ELEMENT_KEY] }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_all_selected_items',
+        {
+            description: 'Get all currently selected items in a multi-select container via the UIA Selection pattern. Returns a JSON array of element IDs.',
+            inputSchema: elementIdInput,
+            annotations: { readOnlyHint: true },
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                const result = await driver.executeScript('windows: allSelectedItems', [{ [ELEMENT_KEY]: elementId }]) as Array<Record<string, string>>;
+                const ids = result.map((el) => el[ELEMENT_KEY]);
+                return { content: [{ type: 'text' as const, text: JSON.stringify(ids) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'add_to_selection',
+        {
+            description: 'Add an item to the current selection in a multi-select container via the UIA SelectionItem pattern (does not deselect existing items).',
+            inputSchema: elementIdInput,
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                await driver.executeScript('windows: addToSelection', [{ [ELEMENT_KEY]: elementId }]);
+                return { content: [{ type: 'text' as const, text: 'added to selection' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'remove_from_selection',
+        {
+            description: 'Remove an item from the current selection in a multi-select container via the UIA SelectionItem pattern.',
+            inputSchema: elementIdInput,
+        },
+        async ({ elementId }) => {
+            try {
+                const driver = session.getDriver();
+                await driver.executeScript('windows: removeFromSelection', [{ [ELEMENT_KEY]: elementId }]);
+                return { content: [{ type: 'text' as const, text: 'removed from selection' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
 }

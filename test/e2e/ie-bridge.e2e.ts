@@ -137,6 +137,17 @@ describe('IE bridge — locator strategies — /login', () => {
             expect(inputs.length).toBeGreaterThanOrEqual(2);
         });
 
+        // Regression: some legacy IE document/compat modes hide querySelectorAll
+        // from the page's own script engine even though querySelector (single)
+        // and the COM-level document object still expose it. findElements with
+        // an attribute selector previously surfaced an opaque SCRIPT_E_REPORTED
+        // (0x80020101) with no diagnostic message in that scenario.
+        it('findElements by css selector — attribute selector returns matches', async () => {
+            const inputs = await driver.findElements('css selector', 'input[type="password"]');
+            expect(Array.isArray(inputs)).toBe(true);
+            expect(inputs.length).toBe(1);
+        });
+
         it('findElement with no match returns isExisting false', async () => {
             await driver.setTimeout({ implicit: 500 });
             const el = await driver.$('#does-not-exist-xyz');

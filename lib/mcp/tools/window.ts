@@ -256,6 +256,148 @@ export function registerWindowTools(server: McpServer, session: AppiumSession): 
     );
 
     server.registerTool(
+        'switch_to_parent_frame',
+        {
+            description:
+                'Switch context to the parent frame of the current frame. ' +
+                'Only supported in IE context; behaves the same as switch_to_default_content there.',
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.switchToParentFrame();
+                return { content: [{ type: 'text' as const, text: 'Switched to parent frame' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'navigate_back',
+        {
+            description: 'Navigate back (Alt+Left) in the current window\'s history.',
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.back();
+                return { content: [{ type: 'text' as const, text: 'navigated back' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'navigate_forward',
+        {
+            description: 'Navigate forward (Alt+Right) in the current window\'s history.',
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.forward();
+                return { content: [{ type: 'text' as const, text: 'navigated forward' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_window_title',
+        {
+            description: 'Get the title (Name property of the root window element) of the current window.',
+            annotations: { readOnlyHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const title = await driver.getTitle();
+                return { content: [{ type: 'text' as const, text: title }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'get_current_window_handle',
+        {
+            description: 'Get the handle of the current window (as a hex HWND string, e.g. "0x00abc123").',
+            annotations: { readOnlyHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const handle = await driver.getWindowHandle();
+                return { content: [{ type: 'text' as const, text: handle }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'maximize_current_window',
+        {
+            description: 'Maximize the current session\'s root window (whole-window operation — does not require an elementId, unlike maximize_window).',
+            annotations: { idempotentHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const rect = await driver.maximizeWindow();
+                return { content: [{ type: 'text' as const, text: JSON.stringify(rect) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'minimize_current_window',
+        {
+            description: 'Minimize the current session\'s root window (whole-window operation — does not require an elementId, unlike minimize_window).',
+            annotations: { idempotentHint: true },
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                const rect = await driver.minimizeWindow();
+                return { content: [{ type: 'text' as const, text: JSON.stringify(rect) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
+        'set_window_rect',
+        {
+            description:
+                'Move and/or resize the current session\'s root window. Restores the window to normal state first ' +
+                '(move/resize fail while maximized or minimized). Pass null for any of x/y/width/height to leave that dimension unchanged.',
+            inputSchema: {
+                x: z.number().int().nullable().describe('New screen x position, or null to leave unchanged'),
+                y: z.number().int().nullable().describe('New screen y position, or null to leave unchanged'),
+                width: z.number().int().min(0).nullable().describe('New width, or null to leave unchanged'),
+                height: z.number().int().min(0).nullable().describe('New height, or null to leave unchanged'),
+            },
+        },
+        async ({ x, y, width, height }) => {
+            try {
+                const driver = session.getDriver();
+                const rect = await driver.setWindowRect(x, y, width, height);
+                return { content: [{ type: 'text' as const, text: JSON.stringify(rect) }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
         'switch_to_default_content',
         {
             description:

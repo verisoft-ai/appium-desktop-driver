@@ -1,3 +1,13 @@
+## [2.2.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.3...v2.2.0-preview.4) (2026-07-26)
+
+### Features
+
+* create uuid for elements with no runtimeId and  remove dead code ([17096a6](https://github.com/verisoft-ai/appium-desktop-driver/commit/17096a6a7cbae9052fb72c6e765c7adce02c8bdb))
+
+### Bug Fixes
+
+* set focus on getScreenshot no op on failure ([d5b3c2a](https://github.com/verisoft-ai/appium-desktop-driver/commit/d5b3c2ae828a9edd83061a232fcb66f035233f98))
+
 ## [2.2.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0-preview.2...v2.2.0-preview.3) (2026-07-21)
 
 ### Bug Fixes

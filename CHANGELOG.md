@@ -1,3 +1,9 @@
+## [2.2.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0...v2.2.1) (2026-07-28)
+
+### Bug Fixes
+
+* use Desktop Windows Manager extended-frame-bounds for screenshot and root rect ([72e7042](https://github.com/verisoft-ai/appium-desktop-driver/commit/72e70422186080595122a1c1e85b388445b18351))
+
 ## [2.2.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.1.0...v2.2.0) (2026-07-26)
 
 ### Features

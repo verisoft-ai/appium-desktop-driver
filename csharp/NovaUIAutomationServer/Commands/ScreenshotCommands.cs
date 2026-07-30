@@ -9,21 +9,38 @@ public static class ScreenshotCommands
 {
     public static object? GetScreenshot(SessionState state, JsonElement? parameters)
     {
-        if (!NativeWindowRect.TryGet(state.RootNativeWindowHandle, out var rect))
+        var hwnd = state.RootNativeWindowHandle;
+
+        if (!NativeWindowRect.TryGet(hwnd, out var rect))
         {
             // Falls back to the old UIA path — this is the one that can stall
             // or throw UIA_E_ELEMENTNOTAVAILABLE if the target app's UI
             // thread is busy, but only hit when we have no window handle.
+            Console.Error.WriteLine($"[GetScreenshot] NativeWindowRect.TryGet failed for hwnd=0x{hwnd.ToInt64():X} — falling back to UIA GetLiveRoot()/CurrentBoundingRectangle.");
             var root = state.GetLiveRoot();
             if (root == null)
             {
+                Console.Error.WriteLine("[GetScreenshot] GetLiveRoot() returned null (no root attached). Returning 1x1 blank PNG.");
                 // Return 1x1 transparent PNG if no root
                 using var bitmap = new Bitmap(1, 1);
                 using var stream = new MemoryStream();
                 bitmap.Save(stream, ImageFormat.Png);
                 return Convert.ToBase64String(stream.ToArray());
             }
-            rect = root.CurrentBoundingRectangle;
+
+            try
+            {
+                rect = root.CurrentBoundingRectangle;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[GetScreenshot] root.CurrentBoundingRectangle threw: {ex.GetType().Name}: {ex.Message}");
+                throw;
+            }
+        }
+        else
+        {
+            Console.Error.WriteLine($"[GetScreenshot] native rect via hwnd=0x{hwnd.ToInt64():X}: ({rect.left},{rect.top})-({rect.right},{rect.bottom})");
         }
 
         var width = rect.right - rect.left;

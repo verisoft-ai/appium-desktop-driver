@@ -92,12 +92,22 @@ export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> 
             await this.focusElement({
                 [W3C_ELEMENT_KEY]: automationRootId?.trim(),
             } satisfies Element);
-        } catch {
-            // noop
+            this.log.debug('[getScreenshot] focus-before-capture succeeded.');
+        } catch (err) {
+            // Best-effort focus — a failure here (e.g. UIA_E_ELEMENTNOTAVAILABLE if
+            // the app's UI thread is busy/transitioning) must not block the
+            // screenshot itself, so we swallow it. Logged for diagnosis since this
+            // is the exact spot the original crash-under-failure bug came from.
+            this.log.debug(`[getScreenshot] focus-before-capture failed, continuing without focus: ${err instanceof Error ? err.message : err}`);
         }
     }
 
-    return await this.sendCommand('getScreenshot', {}) as string;
+    try {
+        return await this.sendCommand('getScreenshot', {}) as string;
+    } catch (err) {
+        this.log.debug(`[getScreenshot] server getScreenshot command failed: ${err instanceof Error ? err.message : err}`);
+        throw err;
+    }
 }
 
 export async function getWindowRect(this: AppiumDesktopDriver): Promise<Rect> {

@@ -27,7 +27,18 @@ public static class NativeWindowRect
             rect = default;
             return false;
         }
-        return DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf<tagRECT>()) == 0
-            || GetWindowRect(hwnd, out rect);
+
+        var hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf<tagRECT>());
+        if (hr == 0) return true;
+
+        if (GetWindowRect(hwnd, out rect)) return true;
+
+        // Both native lookups failed — almost always means hwnd is stale/destroyed
+        // (window closed between attach and this call). Callers fall back to the
+        // UIA CurrentBoundingRectangle COM path, which can itself throw
+        // UIA_E_ELEMENTNOTAVAILABLE for the same underlying reason.
+        var win32Err = Marshal.GetLastWin32Error();
+        Console.Error.WriteLine($"[NativeWindowRect] both DwmGetWindowAttribute (hr=0x{hr:X8}) and GetWindowRect (GetLastError={win32Err}) failed for hwnd=0x{hwnd.ToInt64():X}. Window handle is likely stale/destroyed.");
+        return false;
     }
 }

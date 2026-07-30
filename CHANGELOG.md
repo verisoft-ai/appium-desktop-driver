@@ -1,3 +1,9 @@
+## [2.2.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.1...v2.2.2) (2026-07-30)
+
+### Miscellaneous Chores
+
+* add debug logging to screenshot rect ([ee9e289](https://github.com/verisoft-ai/appium-desktop-driver/commit/ee9e289eb4bdcd17f78757e92d394f44739398cb))
+
 ## [2.2.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.0...v2.2.1) (2026-07-28)
 
 ### Bug Fixes

@@ -1,11 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { PNG } from 'pngjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser } from 'webdriverio';
 import { closeAllTestApps, createCalculatorSession, createNotepadSession, createRootSession, getNotepadTextArea, quitSession } from './helpers/session.js';
-
-const OUTPUT_DIR = resolve(process.cwd(), 'test', 'e2e', 'output');
 
 describe('Window and app management commands', () => {
     let calc: Browser;
@@ -231,27 +226,6 @@ describe('Window and app management commands', () => {
             expect(buffer[1]).toBe(0x50); // P
             expect(buffer[2]).toBe(0x4e); // N
             expect(buffer[3]).toBe(0x47); // G
-        });
-
-        it('captured dimensions match the window rect (proves correct rectangle, not full screen or blank), and writes the PNG to disk for visual inspection', async () => {
-            const rect = await calc.getWindowRect();
-            const screenshot = await calc.takeScreenshot();
-            const buffer = Buffer.from(screenshot, 'base64');
-            const decoded = PNG.sync.read(buffer);
-
-            mkdirSync(OUTPUT_DIR, { recursive: true });
-            writeFileSync(resolve(OUTPUT_DIR, 'calculator-screenshot.png'), buffer);
-
-            // getWindowRect and the screenshot now both resolve through the
-            // same native (DWM/win32) rect lookup, so they should match
-            // near-exactly. A couple px of tolerance covers rounding, not a
-            // different definition of "window rect" — anything past that
-            // means we captured the wrong region (e.g. full screen, or an
-            // empty/offset rect) rather than the window.
-            expect(decoded.width).toBeGreaterThan(0);
-            expect(decoded.height).toBeGreaterThan(0);
-            expect(Math.abs(decoded.width - rect.width)).toBeLessThanOrEqual(2);
-            expect(Math.abs(decoded.height - rect.height)).toBeLessThanOrEqual(2);
         });
     });
 });

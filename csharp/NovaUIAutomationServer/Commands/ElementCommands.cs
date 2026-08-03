@@ -219,16 +219,13 @@ public static class ElementCommands
 
     public static object? GetRootRect(SessionState state, JsonElement? parameters)
     {
-        if (!NativeWindowRect.TryGet(state.RootNativeWindowHandle, out var rect))
+        var root = state.GetLiveRoot();
+        if (root == null)
         {
-            var root = state.GetLiveRoot();
-            if (root == null)
-            {
-                return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
-            }
-            rect = root.CurrentBoundingRectangle;
+            return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
         }
 
+        var rect = root.CurrentBoundingRectangle;
         return new
         {
             x = (double)rect.left,

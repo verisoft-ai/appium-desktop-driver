@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { normalize } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { propertyCondition } from '../server/conditions';
@@ -265,7 +266,7 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
 
     // When ms:waitForAppLaunch is set, use it as an overall deadline for
     // all retry loops. When not set, fall back to fixed iteration counts.
-    const deadline = waitForAppLaunchMs ? Date.now() + waitForAppLaunchMs : null;
+    const deadline = waitForAppLaunchMs ? performance.now() + waitForAppLaunchMs : null;
 
     if (isUwp) {
         this.log.debug('Detected app path to be in the UWP format.');
@@ -285,7 +286,7 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
         // Outer retry loop: polls until the app window is found or the
         // deadline / attempt limit is reached. Each iteration is one
         // POLL_INTERVAL_MS tick — no blind sleep up front.
-        for (let i = 1; deadline ? Date.now() < deadline : i <= 10; i++) {
+        for (let i = 1; deadline ? performance.now() < deadline : i <= 10; i++) {
             // Strategy 1: new window detection.
             // For standalone WinUI 3 packaged apps that run in their own process
             // and don't use ApplicationFrameHost. CoreWindow handles are skipped
@@ -351,7 +352,7 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
 
         try {
             const result = await this.attachToApplicationWindow(launcherPid, { deadline });
-            if (!result.focused && deadline && Date.now() < deadline) {
+            if (!result.focused && deadline && performance.now() < deadline) {
                 this.log.info('Attached to a window that cannot receive focus (likely a splash screen). Waiting for the main window...');
                 await this.waitForMainWindow(result.knownPids, deadline);
             }
@@ -363,9 +364,9 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
             this.log.info(`PID-based window search failed (${err instanceof Error ? err.message : err}). Falling back to new-window detection.`);
         }
 
-        const remainingMs = deadline ? Math.max(0, deadline - Date.now()) : POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS;
-        const fallbackDeadline = Date.now() + remainingMs;
-        while (Date.now() < fallbackDeadline) {
+        const remainingMs = deadline ? Math.max(0, deadline - performance.now()) : POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS;
+        const fallbackDeadline = performance.now() + remainingMs;
+        while (performance.now() < fallbackDeadline) {
             const newHandles = getAllWindowHandles().filter((h) => !handlesBeforeLaunch.has(h));
             if (newHandles.length > 0) {
                 this.log.debug(`Singleton-delegator fallback: found ${newHandles.length} new window(s): ${newHandles.map((h) => `0x${h.toString(16).padStart(8, '0')}`).join(', ')}`);
@@ -477,11 +478,11 @@ export async function setWindowRect(
  * separate getProcessIds round-trip.
  */
 export async function waitForNewWindow(this: AppiumDesktopDriver, launcherPid: number, timeout: number): Promise<{ handle: number, knownPids: number[] }> {
-    const start = Date.now();
+    const start = performance.now();
     let attempts = 0;
     const knownPids = new Set<number>([launcherPid]);
 
-    while (Date.now() - start < timeout) {
+    while (performance.now() - start < timeout) {
         for (const pid of [...knownPids]) {
             const childPids = await this.sendCommand('getChildProcessIds', { parentPid: pid }) as number[];
             for (const child of childPids) { knownPids.add(child); }
@@ -593,7 +594,7 @@ export async function attachToApplicationWindow(
     const { deadline = null } = options;
     const waitForAppLaunchMs = normalizeWaitForAppLaunchMs(this.caps['ms:waitForAppLaunch']) || POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS;
     const windowTimeout = deadline
-        ? Math.min(waitForAppLaunchMs, Math.max(0, deadline - Date.now()))
+        ? Math.min(waitForAppLaunchMs, Math.max(0, deadline - performance.now()))
         : waitForAppLaunchMs;
 
     const { handle: nativeWindowHandle, knownPids } = await waitForNewWindow.call(this, launcherPid, windowTimeout);
@@ -703,7 +704,7 @@ export async function waitForMainWindow(
     this.log.debug(`Splash screen handle: ${splashHandle != null ? `0x${splashHandle.toString(16).padStart(8, '0')}` : 'unknown'}. Polling for main window...`);
 
     let attempt = 0;
-    while (Date.now() < deadline) {
+    while (performance.now() < deadline) {
         attempt++;
         await sleep(POLL_INTERVAL_MS);
 

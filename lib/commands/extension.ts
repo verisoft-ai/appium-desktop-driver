@@ -29,50 +29,6 @@ import {
 
 const PLATFORM_COMMAND_PREFIX = 'windows:';
 
-const EXTENSION_COMMANDS = Object.freeze({
-    cacheRequest: 'pushCacheRequest',
-    invoke: 'patternInvoke',
-    expand: 'patternExpand',
-    collapse: 'patternCollapse',
-    isMultiple: 'patternIsMultiple',
-    scrollIntoView: 'patternScrollIntoView',
-    selectedItem: 'patternGetSelectedItem',
-    allSelectedItems: 'patternGetAllSelectedItems',
-    addToSelection: 'patternAddToSelection',
-    removeFromSelection: 'patternRemoveFromSelection',
-    select: 'patternSelect',
-    toggle: 'patternToggle',
-    setValue: 'patternSetValue',
-    getValue: 'patternGetValue',
-    maximize: 'patternMaximize',
-    minimize: 'patternMinimize',
-    restore: 'patternRestore',
-    close: 'patternClose',
-    closeApp: 'windowsCloseApp',
-    launchApp: 'windowsLaunchApp',
-    keys: 'executeKeys',
-    click: 'executeClick',
-    hover: 'executeHover',
-    scroll: 'executeScroll',
-    setFocus: 'focusElement',
-    getClipboard: 'getClipboardBase64',
-    setClipboard: 'setClipboardFromBase64',
-    startRecordingScreen: 'startRecordingScreen',
-    stopRecordingScreen: 'stopRecordingScreen',
-    deleteFile: 'deleteFile',
-    deleteFolder: 'deleteFolder',
-    clickAndDrag: 'executeClickAndDrag',
-    getDeviceTime: 'windowsGetDeviceTime',
-    getWindowElement: 'getWindowElement',
-    getMonitors: 'windowsGetMonitors',
-    getDpiScale: 'executeGetDpiScale',
-    findByVision: 'executeFindByVision',
-    attachJavaSwing: 'executeAttachJavaSwing',
-    switchToWindowByTitle: 'windowsSwitchToWindowByTitle',
-    getWindows: 'windowsGetWindows',
-    getNativeChildren: 'executeGetNativeChildren',
-} as const);
-
 const ContentType = Object.freeze({
     PLAINTEXT: 'plaintext',
     IMAGE: 'image',
@@ -87,16 +43,60 @@ type KeyAction = {
     down?: boolean,
 }
 
+/**
+ * Callers commonly pass a raw W3C element (e.g. a WebdriverIO element handle, which
+ * the client auto-serializes to `{ [W3C_ELEMENT_KEY]: id }`) directly as an execute
+ * arg, or (for `windows: setValue`) two separate positional args `(element, value)`.
+ * The executeMethodMap dispatch path instead expects a single plain options object
+ * with named fields (e.g. `elementId`), and its param validator
+ * (`validateExecuteMethodParams` in `@appium/base-driver`) rejects anything else
+ * before our own command code ever runs. This normalizes both calling conventions
+ * into that shape. Returns `null` when the args don't match any shape this driver
+ * understands.
+ */
+function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
+    // `patternSetValue(element, value)` is the only handler taking two separate
+    // positional args instead of one options object.
+    if (script === 'windows: setValue' && args.length === 2) {
+        const [element, value] = args;
+        if (element && typeof element === 'object' && W3C_ELEMENT_KEY in element && !('elementId' in element)) {
+            return [{ elementId: element[W3C_ELEMENT_KEY], value }];
+        }
+        return null;
+    }
+
+    if (args.length > 1) {
+        return null;
+    }
+
+    if (args.length === 0) {
+        return args;
+    }
+
+    const [opts] = args;
+    if (opts && typeof opts === 'object' && W3C_ELEMENT_KEY in opts && !('elementId' in opts)) {
+        const { [W3C_ELEMENT_KEY]: elementId, ...rest } = opts;
+        return [{ elementId, ...rest }];
+    }
+
+    return args;
+}
+
 export async function execute(this: AppiumDesktopDriver, script: string, args: any[]) {
     if (script.startsWith(PLATFORM_COMMAND_PREFIX)) {
-        script = script.replace(PLATFORM_COMMAND_PREFIX, '').trim();
-        this.log.info(`Executing command '${PLATFORM_COMMAND_PREFIX} ${script}'...`);
-
-        if (!Object.hasOwn(EXTENSION_COMMANDS, script)) {
-            throw new errors.UnknownCommandError(`Unknown command '${PLATFORM_COMMAND_PREFIX} ${script}'.`);
+        const ExecuteMethodMapCtor = this.constructor as typeof AppiumDesktopDriver;
+        if (!Object.hasOwn(ExecuteMethodMapCtor.executeMethodMap ?? {}, script)) {
+            throw new errors.UnknownCommandError(`Unknown command '${script}'.`);
         }
 
-        return await this[EXTENSION_COMMANDS[script]](...args);
+        const executeMethodArgs = coerceExecuteMethodArgs(script, args);
+        if (executeMethodArgs === null) {
+            throw new errors.InvalidArgumentError(
+                `Did not get correct format of arguments for '${script}'. Expected zero or one arguments object.`
+            );
+        }
+
+        return await this.executeMethod(script, executeMethodArgs);
     }
 
     if (script.replace(/\s/g, '') === 'mobile:getContexts') {

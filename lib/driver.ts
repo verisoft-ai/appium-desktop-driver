@@ -17,6 +17,7 @@ import { propertyCondition } from './server/conditions';
 import type { ConditionDto } from './server/protocol';
 import { attachLogFileMirror, LogFileMirror } from './log-file';
 import { DRIVER_VERSION } from './version';
+import { executeMethodMap } from './execute-method-map';
 import {
     assertSupportedEasingFunction
 } from './util';
@@ -82,6 +83,8 @@ const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
 ];
 
 export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
+    static executeMethodMap = executeMethodMap;
+
     serverClient?: NovaUIAutomationClient;
     mouseButtonsDown: Set<number> = new Set();
     keyboardState: KeyboardState = {

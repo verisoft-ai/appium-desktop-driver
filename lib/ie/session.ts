@@ -3,7 +3,7 @@ import { ChildProcess, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'node:path';
 import { node } from '@appium/support';
-import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { errors, W3C_ELEMENT_KEY } from 'appium/driver';
 import { MODULE_NAME } from '../util';
 
 function bridgeExePath(): string {

@@ -2,7 +2,7 @@
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { propertyCondition, andCondition, orCondition } from '../server/conditions';
-import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { errors, W3C_ELEMENT_KEY } from 'appium/driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp, getCursorPos } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';

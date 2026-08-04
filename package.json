@@ -57,7 +57,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
-    "@appium/base-driver": "^10.1.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1035.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@napi-rs/canvas": "^1.0.2",

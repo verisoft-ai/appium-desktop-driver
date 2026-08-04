@@ -3,7 +3,7 @@ import { fs, node, system, tempDir, zip } from '@appium/support';
 import path from 'node:path';
 import { cdpRequest, downloadFile, sleep, MODULE_NAME } from '../util';
 import { AppiumDesktopDriver } from '../driver';
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 
 const NATIVE_APP = 'NATIVE_APP';
 const WEBVIEW = 'WEBVIEW';

@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as extension from '../../../lib/commands/extension';
 import * as executeMethods from '../../../lib/commands/execute-methods';
 import { createMockDriver, withExecuteMethodDispatch, MOCK_ELEMENT } from '../../fixtures/driver';
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 
 describe('execute (executeMethodMap dispatch)', () => {
     let driver: any;

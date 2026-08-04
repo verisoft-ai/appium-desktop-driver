@@ -9,7 +9,7 @@ import {
     WheelActionSequence,
 } from '@appium/types';
 
-import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { AppiumDesktopDriver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
 import { sleep } from '../util';

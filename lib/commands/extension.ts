@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { PROTOCOLS, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { PROTOCOLS, W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { Element } from '@appium/types';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

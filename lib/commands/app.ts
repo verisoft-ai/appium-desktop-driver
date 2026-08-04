@@ -6,7 +6,7 @@ import { AppiumDesktopDriver } from '../driver';
 import { propertyCondition } from '../server/conditions';
 import type { RectResult } from '../server/protocol';
 import { sleep } from '../util';
-import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { errors, W3C_ELEMENT_KEY } from 'appium/driver';
 import {
     getAllWindowHandles,
     getVisibleWindowsWithTitles,

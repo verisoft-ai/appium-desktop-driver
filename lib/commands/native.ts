@@ -1,4 +1,4 @@
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 import { Element } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 

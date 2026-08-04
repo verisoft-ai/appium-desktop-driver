@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { BaseDriver, W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';

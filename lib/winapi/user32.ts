@@ -24,7 +24,7 @@ import {
     XMouseButton,
 } from './types';
 import { SystemMetric } from './types/systemmetric';
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 import bezier, { EasingFunction } from 'bezier-easing';
 import { sleep } from '../util';
 import { Key } from '../enums';

@@ -7,7 +7,7 @@
  * implementations (in `extension.ts` / `native.ts` / `vision.ts`) already expect.
  * Behavior is not duplicated here - each wrapper just bridges args and delegates.
  */
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 import { Element } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { ClickType } from '../enums';

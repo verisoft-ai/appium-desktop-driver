@@ -1,4 +1,4 @@
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 import { fs, zip, node, tempDir, logger } from 'appium/support';
 import { pipeline } from 'node:stream/promises';
 import { AppiumDesktopDriver } from './driver';

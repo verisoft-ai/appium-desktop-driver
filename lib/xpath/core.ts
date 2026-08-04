@@ -1,5 +1,5 @@
 import { Element } from '@appium/types';
-import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { logger } from 'appium/support';
 
 import XPathAnalyzer, {

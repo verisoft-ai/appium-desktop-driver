@@ -2,7 +2,7 @@
  * Shared test fixtures for extension command tests.
  */
 import { vi } from 'vitest';
-import { BaseDriver, W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { BaseDriver, W3C_ELEMENT_KEY } from 'appium/driver';
 import { executeMethodMap } from '../../lib/execute-method-map';
 
 export interface MockDriver {

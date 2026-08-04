@@ -1,7 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { join } from 'node:path';
 import { createWriteStream, WriteStream } from 'node:fs';
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 import type { ServerRequest, ServerResponse } from './protocol';
 
 const SERVER_EXE_NAME = 'NovaUIAutomationServer.exe';

@@ -186,7 +186,8 @@ async function hasKeyboardFocus(this: AppiumDesktopDriver, elementId: string): P
     try {
         const result = await this.sendCommand('getProperty', { elementId, property: 'HasKeyboardFocus' });
         return result === true || String(result).toLowerCase() === 'true';
-    } catch {
+    } catch (err) {
+        this.log.debug(`[hasKeyboardFocus] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
         return false;
     }
 }
@@ -225,7 +226,8 @@ async function isExpanded(this: AppiumDesktopDriver, elementId: string): Promise
     try {
         const state = await this.sendCommand('getProperty', { elementId, property: 'ExpandCollapseState' }) as string;
         return state === 'Expanded' || state === 'PartiallyExpanded';
-    } catch {
+    } catch (err) {
+        this.log.debug(`[isExpanded] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
         return undefined;
     }
 }
@@ -400,7 +402,8 @@ export async function patternToggle(this: AppiumDesktopDriver, element: Element)
 export async function patternSetValue(this: AppiumDesktopDriver, element: Element, value: string): Promise<void> {
     try {
         await this.sendCommand('setElementValue', { elementId: element[W3C_ELEMENT_KEY], value });
-    } catch {
+    } catch (err) {
+        this.log.debug(`[patternSetValue] Value pattern failed (${err instanceof Error ? err.message : err}), falling back to RangeValue pattern.`);
         const numValue = Number(value);
         if (isNaN(numValue)) {
             throw new errors.InvalidArgumentError(`Value '${value}' is not a valid number for the RangeValue pattern.`);

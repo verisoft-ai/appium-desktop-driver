@@ -176,7 +176,8 @@ async function callOpenAIVision(
         let message: string;
         try {
             message = (JSON.parse(body) as { error?: { message: string } }).error?.message ?? body;
-        } catch {
+        } catch (err) {
+            log.debug(`Failed to parse OpenAI error body as JSON: ${err instanceof Error ? err.message : err}`);
             message = body || res.statusText;
         }
         throw new Error(`OpenAI API error: ${message}`);
@@ -220,7 +221,8 @@ async function callGoogleVision(
         let message: string;
         try {
             message = (JSON.parse(body) as { error?: { message: string } }).error?.message ?? body;
-        } catch {
+        } catch (err) {
+            log.debug(`Failed to parse Gemini error body as JSON: ${err instanceof Error ? err.message : err}`);
             message = body || res.statusText;
         }
         throw new Error(`Gemini API error: ${message}`);

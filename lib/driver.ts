@@ -380,8 +380,8 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                         await this.sendCommand('closeWindow', { elementId: rootId });
                     }
                 }
-            } catch {
-                // noop
+            } catch (err) {
+                this.log.debug(`[deleteSession] Postrun cleanup (process stop / window close) failed: ${err instanceof Error ? err.message : err}`);
             }
         }
         if (this.caps.postrun) {

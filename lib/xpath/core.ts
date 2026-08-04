@@ -1,5 +1,6 @@
 import { Element } from '@appium/types';
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { logger } from 'appium/support';
 
 import XPathAnalyzer, {
     ABSOLUTE_LOCATION_PATH,
@@ -64,6 +65,8 @@ import { PSControlType, PSString, PSInt32, PSInt32Array, PSBoolean, PSOrientatio
 import type { RectResult } from '../server/protocol';
 
 import { handleFunctionCall } from './functions';
+
+const log = logger.getLogger('xpath');
 
 type SendCommandFn = (method: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -500,9 +503,10 @@ function convertNodeTestToCondition(nodeTest: NodeTestNode): Condition {
             }
             try {
                 return new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(nodeTest.name));
-            } catch {
+            } catch (err) {
                 // Unknown UIA ControlType (e.g. JAB roles: LayeredPane, PushButton, RootPane).
                 // Send as ClassName — C# normalizes JAB role_en_US to PascalCase for comparison.
+                log.debug(`Unknown ControlType '${nodeTest.name}' (${err instanceof Error ? err.message : err}), falling back to ClassName condition.`);
                 return new PropertyCondition(Property.CLASS_NAME, new PSString(nodeTest.name));
             }
         case NODE_TYPE_TEST:
@@ -569,7 +573,8 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
                 try {
                     const val = (await sendCommand('getProperty', { elementId: id, property: nodeTest.name }) as string) ?? '';
                     return [val];
-                } catch {
+                } catch (err) {
+                    log.debug(`getProperty failed for unknown attribute '${nodeTest.name}' on element '${id}': ${err instanceof Error ? err.message : err}`);
                     return [''];
                 }
             }

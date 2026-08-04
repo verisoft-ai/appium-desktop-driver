@@ -12,7 +12,10 @@ function checkAppiumReachable(host: string, port: number): Promise<boolean> {
                 res.on('data', (chunk) => { body += chunk; });
                 res.on('end', () => {
                     try { resolve(JSON.parse(body)?.value?.ready === true); }
-                    catch { resolve(false); }
+                    catch (err) {
+                        process.stderr.write(`[MCP] Failed to parse Appium /status response: ${err}\n`);
+                        resolve(false);
+                    }
                 });
             }
         );

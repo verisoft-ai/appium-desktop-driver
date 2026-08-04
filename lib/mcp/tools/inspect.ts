@@ -1,8 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { logger } from 'appium/support';
 import type { AppiumSession } from '../session.js';
 import { formatError } from '../errors.js';
 import { ELEMENT_KEY } from '../constants.js';
+
+const log = logger.getLogger('mcp:inspect');
 
 interface SuggestedSelector {
     strategy: string;
@@ -108,12 +111,16 @@ export function registerInspectTools(server: McpServer, session: AppiumSession):
                 const el = await driver.$({ [ELEMENT_KEY]: elementId });
 
                 // Fetch all relevant UIA properties in parallel
+                const attrCatch = (attr: string) => (err: unknown) => {
+                    log.debug(`[get_element_info] getAttribute('${attr}') failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
+                    return null;
+                };
                 const [name, automationId, className, controlType, isEnabled] = await Promise.all([
-                    el.getAttribute('Name').catch(() => null),
-                    el.getAttribute('AutomationId').catch(() => null),
-                    el.getAttribute('ClassName').catch(() => null),
-                    el.getAttribute('ControlType').catch(() => null),
-                    el.getAttribute('IsEnabled').catch(() => null),
+                    el.getAttribute('Name').catch(attrCatch('Name')),
+                    el.getAttribute('AutomationId').catch(attrCatch('AutomationId')),
+                    el.getAttribute('ClassName').catch(attrCatch('ClassName')),
+                    el.getAttribute('ControlType').catch(attrCatch('ControlType')),
+                    el.getAttribute('IsEnabled').catch(attrCatch('IsEnabled')),
                 ]);
 
                 const props = {

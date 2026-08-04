@@ -196,8 +196,8 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
                     await trySetForegroundWindow(handle);
                     return;
                 }
-            } catch {
-                // fall through to retry
+            } catch (err) {
+                this.log.debug(`[setWindow] setRootElementFromHandle failed for handle 0x${handle.toString(16)}: ${err instanceof Error ? err.message : err}. Falling through to retry.`);
             }
         } else {
             const name = nameOrHandle;
@@ -613,7 +613,8 @@ export async function attachToWindowHandles(
         let candidateId = '';
         try {
             candidateId = await this.sendCommand('elementFromHandle', { handle: hwnd }) as string ?? '';
-        } catch {
+        } catch (err) {
+            this.log.debug(`[attachToWindowHandles] elementFromHandle failed for 0x${hwnd.toString(16).padStart(8, '0')}: ${err instanceof Error ? err.message : err}`);
             continue;
         }
         if (!candidateId) { continue; }
@@ -704,7 +705,8 @@ export async function attachToApplicationWindow(
     for (let i = 1; i <= 5; i++) {
         try {
             elementId = await this.sendCommand('elementFromHandle', { handle: nativeWindowHandle }) as string ?? '';
-        } catch {
+        } catch (err) {
+            this.log.debug(`[attachToApplicationWindow] elementFromHandle failed for 0x${nativeWindowHandle.toString(16).padStart(8, '0')}: ${err instanceof Error ? err.message : err}`);
             elementId = '';
         }
 
@@ -744,8 +746,8 @@ export async function attachToApplicationWindow(
             try {
                 await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);
                 focused = true;
-            } catch {
-                // Window cannot receive focus (e.g. splash screen)
+            } catch (err) {
+                this.log.debug(`[attachToApplicationWindow] focusElement failed (likely splash screen): ${err instanceof Error ? err.message : err}`);
             }
         }
 
@@ -766,8 +768,8 @@ export async function attachToApplicationWindow(
                     this.log.info(`Attached window has only ${focusables?.length ?? 0} focusable descendant(s); treating as a splash screen.`);
                     focused = false;
                 }
-            } catch {
-                // leave focused as-is
+            } catch (err) {
+                this.log.debug(`[attachToApplicationWindow] splash-screen focusable-descendant probe failed, leaving focused as-is: ${err instanceof Error ? err.message : err}`);
             }
         }
 
@@ -798,8 +800,8 @@ export async function waitForMainWindow(
     try {
         const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
         splashHandle = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-    } catch {
-        // If we can't get the handle, we'll just watch for staleness
+    } catch (err) {
+        this.log.debug(`[waitForMainWindow] Could not read splash screen handle, will just watch for staleness: ${err instanceof Error ? err.message : err}`);
     }
 
     this.log.debug(`Splash screen handle: ${splashHandle != null ? `0x${splashHandle.toString(16).padStart(8, '0')}` : 'unknown'}. Polling for main window...`);
@@ -820,7 +822,8 @@ export async function waitForMainWindow(
                 const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
                 await this.sendCommand('getProperty', { elementId: rootId, property: 'Name' });
             }
-        } catch {
+        } catch (err) {
+            this.log.debug(`[waitForMainWindow] Root element property read failed (treating as stale): ${err instanceof Error ? err.message : err}`);
             rootStale = true;
         }
 

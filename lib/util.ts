@@ -1,11 +1,13 @@
 import { errors } from '@appium/base-driver';
-import { fs, zip, node, tempDir } from 'appium/support';
+import { fs, zip, node, tempDir, logger } from 'appium/support';
 import { pipeline } from 'node:stream/promises';
 import { AppiumDesktopDriver } from './driver';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import path from 'node:path';
+
+const log = logger.getLogger('util');
 
 export async function findFreePort(start: number, end: number): Promise<number> {
     for (let port = start; port <= end; port++) {
@@ -118,7 +120,7 @@ export async function getBundledFfmpegPath(driver: AppiumDesktopDriver): Promise
 
         await zip.extractAllTo(zipPath, tmpRoot);
 
-        await fs.unlink(zipPath).catch(() => {});
+        await fs.unlink(zipPath).catch((err) => driver.log.debug(`ffmpeg: failed to remove temp zip '${zipPath}': ${err instanceof Error ? err.message : err}`));
 
         driver.log.info(`ffmpeg: searching for ffmpeg.exe`);
 
@@ -226,7 +228,7 @@ export async function downloadFile(
                     await pipeline(res, fileStream);
                     resolve();
                 } catch (err) {
-                    await fs.unlink(fullFilePath).catch(() => {});
+                    await fs.unlink(fullFilePath).catch((unlinkErr) => log.debug(`Failed to remove partial download '${fullFilePath}': ${unlinkErr instanceof Error ? unlinkErr.message : unlinkErr}`));
                     reject(err);
                 }
             });

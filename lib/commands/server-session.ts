@@ -164,7 +164,8 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
             await this.enableIEMode(nwh);
         }
         return true;
-    } catch {
+    } catch (err) {
+        this.log.debug(`[tryAttachToRunningApp] Attach attempt for '${appPath}' failed: ${err instanceof Error ? err.message : err}`);
         return false;
     }
 }

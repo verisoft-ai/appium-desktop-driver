@@ -40,6 +40,16 @@ async function buildCoordMapping(
     );
 }
 
+/**
+ * Locates a UI element by sending a screenshot and natural-language prompt to a vision-capable
+ * LLM, then maps the model's screenshot-space coordinates back to screen coordinates.
+ * @param args.prompt - A natural-language description of the element to locate.
+ * @param args.model - The vision model id to use (`claude-*`, `gpt-*`/`o*`, `gemini-*`, or
+ * `*.amazon.nova-*`); determines which API key env var is required.
+ * @param args.includeAnnotatedImage - Whether to include a base64 annotated screenshot in the result.
+ * @returns The located element's screen coordinates, a label, the reasoning steps taken, and
+ * optionally an annotated image.
+ */
 export async function executeFindByVision(
     this: AppiumDesktopDriver,
     args: { prompt: string; model: string; includeAnnotatedImage?: boolean },

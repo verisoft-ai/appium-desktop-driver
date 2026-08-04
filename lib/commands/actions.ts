@@ -16,6 +16,12 @@ import { sleep } from '../util';
 import type { RectResult } from '../server/protocol';
 import { Key } from '../enums';
 
+/**
+ * Executes a W3C WebDriver action chain (key, pointer, wheel, and none sequences), replaying
+ * each tick of every sequence in parallel via native input simulation.
+ * @param actionSequences - The list of action sequences to execute, one per input source.
+ * @returns Resolves once all ticks in every sequence have been executed.
+ */
 export async function performActions(this: AppiumDesktopDriver, actionSequences: ActionSequence[]): Promise<void> {
     for (const actionSequence of actionSequences) {
         if (actionSequence.type === 'pointer' &&
@@ -58,12 +64,22 @@ export async function performActions(this: AppiumDesktopDriver, actionSequences:
     }
 }
 
+/**
+ * Executes every key action in a single key action sequence, in order.
+ * @param actionSequence - The sequence of key actions to execute sequentially.
+ * @returns Resolves once every action in the sequence has been executed.
+ */
 export async function handleKeyActionSequence(this: AppiumDesktopDriver, actionSequence: KeyActionSequence): Promise<void> {
     for (const action of actionSequence.actions) {
         await this.handleKeyAction(action);
     }
 }
 
+/**
+ * Executes a single pointer action tick: move, button down, button up, or pause.
+ * @param action - The pointer action to execute.
+ * @returns Resolves once the action has been executed.
+ */
 export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, action: PointerActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
         case 'pointerMove':
@@ -87,6 +103,11 @@ export async function handleSingleMousePointerAction(this: AppiumDesktopDriver, 
     }
 }
 
+/**
+ * Executes a single wheel action tick: scrolls the mouse wheel at its current position, or pauses.
+ * @param action - The wheel action to execute.
+ * @returns Resolves once the action has been executed.
+ */
 export async function handleSingleWheelAction(this: AppiumDesktopDriver, action: WheelActionSequence['actions'][number]): Promise<void> {
     switch (action.type) {
         case 'scroll':
@@ -106,6 +127,13 @@ export async function handleSingleWheelAction(this: AppiumDesktopDriver, action:
     }
 }
 
+/**
+ * Moves the mouse cursor according to a pointer or scroll action's origin (pointer-relative,
+ * viewport-relative, or relative to an element's center), applying the session's configured
+ * pointer-move easing.
+ * @param action - The pointer move or scroll action describing the target offset and origin.
+ * @returns Resolves once the move has completed.
+ */
 export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: PointerMoveAction | ScrollAction): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
     switch (action.origin) {
@@ -136,6 +164,12 @@ export async function handleMouseMoveAction(this: AppiumDesktopDriver, action: P
     }
 }
 
+/**
+ * Executes a single key action (keyDown, keyUp, or pause), tracking modifier key state
+ * (shift/ctrl/meta/alt) and releasing all pressed keys when a NULL key action is received.
+ * @param action - The key action to execute.
+ * @returns Resolves once the action has been executed.
+ */
 export async function handleKeyAction(this: AppiumDesktopDriver, action: KeyAction): Promise<void> {
     if (action.type === 'pause') {
         if (action.duration) {
@@ -225,6 +259,11 @@ export async function handleKeyAction(this: AppiumDesktopDriver, action: KeyActi
     }
 }
 
+/**
+ * Releases all currently held modifier keys, pressed keys, and mouse buttons, resetting the
+ * driver's tracked input state.
+ * @returns Resolves once all held keys and buttons have been released.
+ */
 export async function releaseActions(this: AppiumDesktopDriver): Promise<void> {
     if (this.keyboardState.shift) {
         keyUp(Key.SHIFT);

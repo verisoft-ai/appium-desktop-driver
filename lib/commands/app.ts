@@ -64,6 +64,10 @@ function normalizeWaitForAppLaunchMs(raw: number | undefined): number {
     return raw > 120 ? raw : raw * 1000;
 }
 
+/**
+ * Gets an XML dump of the current UI Automation (or IE DOM, in IE context) tree.
+ * @returns The page source as an XML string.
+ */
 export async function getPageSource(this: AppiumDesktopDriver): Promise<string> {
     if (this.isIEContext()) {
         return this.ieSession!.getSource();
@@ -71,6 +75,10 @@ export async function getPageSource(this: AppiumDesktopDriver): Promise<string> 
     return await this.sendCommand('getPageSource', {}) as string;
 }
 
+/**
+ * Gets the current navigation URL. Only supported in IE context.
+ * @returns The current URL.
+ */
 export async function getUrl(this: AppiumDesktopDriver): Promise<string> {
     if (this.isIEContext()) {
         return this.ieSession!.getUrl();
@@ -78,6 +86,11 @@ export async function getUrl(this: AppiumDesktopDriver): Promise<string> {
     throw new errors.NotYetImplementedError();
 }
 
+/**
+ * Navigates to a URL. Only supported in IE context.
+ * @param url - The URL to navigate to.
+ * @returns Resolves once navigation has started.
+ */
 export async function setUrl(this: AppiumDesktopDriver, url: string): Promise<void> {
     if (this.isIEContext()) {
         await this.ieSession!.navigate(url);
@@ -86,6 +99,11 @@ export async function setUrl(this: AppiumDesktopDriver, url: string): Promise<vo
     throw new errors.NotYetImplementedError();
 }
 
+/**
+ * Captures a screenshot of the session's root window, best-effort focusing it first
+ * (a focus failure is logged and ignored rather than failing the capture).
+ * @returns A base64-encoded PNG image of the window.
+ */
 export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> {
     if (this.caps.app && this.caps.app.toLowerCase() !== 'root') {
         try {
@@ -111,10 +129,18 @@ export async function getScreenshot(this: AppiumDesktopDriver): Promise<string> 
     }
 }
 
+/**
+ * Gets the bounding rectangle of the session's root window.
+ * @returns The window's rect (x, y, width, height).
+ */
 export async function getWindowRect(this: AppiumDesktopDriver): Promise<Rect> {
     return await this.sendCommand('getRootRect', {}) as RectResult;
 }
 
+/**
+ * Gets the native window handle of the session's root window (or the IE window, in IE context).
+ * @returns The handle formatted as a hex string, e.g. `0x00abc123`.
+ */
 export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string> {
     if (this.isIEContext()) {
         const h = this.ieHwnd!;
@@ -125,10 +151,21 @@ export async function getWindowHandle(this: AppiumDesktopDriver): Promise<string
     return `0x${Number(nativeWindowHandle).toString(16).padStart(8, '0')}`;
 }
 
+/**
+ * Lists all top-level Win32 window handles currently on the desktop.
+ * @returns The handles, each formatted as a hex string, e.g. `0x00abc123`.
+ */
 export async function getWindowHandles(this: AppiumDesktopDriver): Promise<string[]> {
     return getAllWindowHandles().map((h) => `0x${h.toString(16).padStart(8, '0')}`);
 }
 
+/**
+ * Switches the session's root window by native handle or window name, auto-detecting and
+ * enabling/disabling IE mode as needed. Retries briefly if the window isn't found immediately.
+ * @param nameOrHandle - `"root"` for the desktop root, a numeric window handle (as a string),
+ * or a window `Name` to search for among the desktop's top-level children.
+ * @returns Resolves once the root element has been switched.
+ */
 export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string): Promise<void> {
     if (nameOrHandle.toLowerCase() === 'root') {
         await this.sendCommand('setRootElement', {});
@@ -184,6 +221,14 @@ export async function setWindow(this: AppiumDesktopDriver, nameOrHandle: string)
     throw new errors.NoSuchWindowError(`No window was found with name or handle '${nameOrHandle}'.`);
 }
 
+/**
+ * Switches the session's root window by matching its title, auto-detecting and
+ * enabling/disabling IE mode as needed. Retries briefly if no match is found immediately.
+ * @param args.title - The window title to match.
+ * @param args.exact - If true, require an exact (case-insensitive) match; otherwise match
+ * a substring.
+ * @returns Resolves once the root element has been switched.
+ */
 export async function switchToWindowByTitle(
     this: AppiumDesktopDriver,
     args: { title: string; exact?: boolean },
@@ -226,6 +271,10 @@ export async function switchToWindowByTitle(
     throw new errors.NoSuchWindowError(`No window was found with title '${title}'.`);
 }
 
+/**
+ * Closes the session's root window and clears the root element.
+ * @returns Resolves once the window is closed.
+ */
 export async function closeApp(this: AppiumDesktopDriver): Promise<void> {
     const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
     if (!rootId) {
@@ -235,6 +284,10 @@ export async function closeApp(this: AppiumDesktopDriver): Promise<void> {
     await this.sendCommand('setRootElementNull', {});
 }
 
+/**
+ * Launches (or re-attaches to) the app specified by the session's `app` capability.
+ * @returns Resolves once the app's window has become the session root.
+ */
 export async function launchApp(this: AppiumDesktopDriver): Promise<void> {
     if (!this.caps.app || ['root', 'none'].includes(this.caps.app.toLowerCase())) {
         throw new errors.InvalidArgumentError('No app capability is set for this session.');
@@ -242,6 +295,15 @@ export async function launchApp(this: AppiumDesktopDriver): Promise<void> {
     await this.changeRootElement(this.caps.app);
 }
 
+/**
+ * Sets the session's root element either directly from a native window handle, or by
+ * launching an app path (UWP AppsFolder id or classic executable path) and polling for its
+ * window to appear, using a mix of process-tree, ApplicationFrameHost, and new-window-diff
+ * strategies depending on app type.
+ * @param path - A UWP app AppsFolder id (e.g. `Package_Family!App`) or classic executable path.
+ * @param nativeWindowHandle - A native window handle to attach to directly.
+ * @returns Resolves once the root element has been set.
+ */
 export async function changeRootElement(this: AppiumDesktopDriver, path: string): Promise<void>
 export async function changeRootElement(this: AppiumDesktopDriver, nativeWindowHandle: number): Promise<void>
 export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeWindowHandle: string | number): Promise<void> {
@@ -381,6 +443,10 @@ export async function changeRootElement(this: AppiumDesktopDriver, pathOrNativeW
     throw new errors.UnknownError('Failed to locate window of the app.');
 }
 
+/**
+ * Navigates back by sending Alt+Left to the session's root window.
+ * @returns Resolves once the key combo has been sent.
+ */
 export async function back(this: AppiumDesktopDriver): Promise<void> {
     const rootId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!rootId) {
@@ -392,6 +458,10 @@ export async function back(this: AppiumDesktopDriver): Promise<void> {
     keyUp(Key.ALT);
 }
 
+/**
+ * Navigates forward by sending Alt+Right to the session's root window.
+ * @returns Resolves once the key combo has been sent.
+ */
 export async function forward(this: AppiumDesktopDriver): Promise<void> {
     const rootId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!rootId) {
@@ -403,6 +473,10 @@ export async function forward(this: AppiumDesktopDriver): Promise<void> {
     keyUp(Key.ALT);
 }
 
+/**
+ * Gets the title of the session's root window (or IE document title, in IE context).
+ * @returns The window/document title.
+ */
 export async function title(this: AppiumDesktopDriver): Promise<string> {
     if (this.isIEContext()) {
         return this.ieSession!.getTitle();
@@ -414,6 +488,10 @@ export async function title(this: AppiumDesktopDriver): Promise<string> {
     return await this.sendCommand('getProperty', { elementId: rootId, property: 'Name' }) as string;
 }
 
+/**
+ * Maximizes the session's root window.
+ * @returns The window's rect after maximizing.
+ */
 export async function maximizeWindow(this: AppiumDesktopDriver): Promise<Rect> {
     const elementId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!elementId) {
@@ -423,6 +501,10 @@ export async function maximizeWindow(this: AppiumDesktopDriver): Promise<Rect> {
     return await this.getWindowRect();
 }
 
+/**
+ * Minimizes the session's root window.
+ * @returns The window's rect after minimizing.
+ */
 export async function minimizeWindow(this: AppiumDesktopDriver): Promise<Rect> {
     const elementId = (await this.sendCommand('saveRootElementToTable', {}) as string)?.trim();
     if (!elementId) {
@@ -432,6 +514,15 @@ export async function minimizeWindow(this: AppiumDesktopDriver): Promise<Rect> {
     return await this.getWindowRect();
 }
 
+/**
+ * Moves and/or resizes the session's root window, restoring it from a maximized/minimized
+ * state first since TransformPattern.Move/Resize require the normal window state.
+ * @param x - The new x position, or `null` to leave the position unchanged.
+ * @param y - The new y position, or `null` to leave the position unchanged.
+ * @param width - The new width (must be non-negative), or `null` to leave the size unchanged.
+ * @param height - The new height (must be non-negative), or `null` to leave the size unchanged.
+ * @returns The window's rect after the move/resize.
+ */
 export async function setWindowRect(
     this: AppiumDesktopDriver,
     x: number | null,
@@ -476,6 +567,9 @@ export async function setWindowRect(
  * Returns the HWND of the found window together with all discovered PIDs so
  * the caller can use them for subsequent ProcessId-based searches without a
  * separate getProcessIds round-trip.
+ * @param launcherPid - The PID of the process that was launched.
+ * @param timeout - How long, in milliseconds, to poll before giving up.
+ * @returns The found window handle and every PID discovered in its process tree.
  */
 export async function waitForNewWindow(this: AppiumDesktopDriver, launcherPid: number, timeout: number): Promise<{ handle: number, knownPids: number[] }> {
     const start = performance.now();
@@ -506,7 +600,8 @@ export async function waitForNewWindow(this: AppiumDesktopDriver, launcherPid: n
  * real, loaded app window rather than a splash or empty frame), sets it as the
  * session root, and brings it to the foreground.
  *
- * Returns true if a window was successfully attached, false if none qualified.
+ * @param handles - Candidate native window handles to try, in order.
+ * @returns True if a window was successfully attached, false if none qualified.
  */
 export async function attachToWindowHandles(
     this: AppiumDesktopDriver,
@@ -582,9 +677,11 @@ export async function attachToWindowHandles(
  * Delegates process-tree discovery to waitForNewWindow, then resolves the
  * Win32 HWND to a UIA element via elementFromHandle (with a short ProcessId
  * fallback for the rare case where UIA registration lags the Win32 window).
- * Returns focused=false when the attached window looks like a splash screen
+ * @param launcherPid - The PID of the process that was launched.
+ * @param options.deadline - Optional `performance.now()`-based deadline bounding all retries.
+ * @returns `focused: false` when the attached window looks like a splash screen
  * (fewer than 2 keyboard-focusable descendants), signalling the caller to
- * run waitForMainWindow.
+ * run waitForMainWindow, plus every PID discovered in the process tree.
  */
 export async function attachToApplicationWindow(
     this: AppiumDesktopDriver,
@@ -686,6 +783,10 @@ export async function attachToApplicationWindow(
  * (a splash screen), this function polls until the current root element becomes
  * stale (splash screen closed) or a new, different window handle appears for the
  * same process. It then re-attaches to the new main window.
+ * @param knownPids - PIDs from the process tree of the splash-screen launch, used to
+ * re-attach via {@link attachToApplicationWindow}.
+ * @param deadline - A `performance.now()`-based deadline to stop polling at.
+ * @returns Resolves once the main window has been attached, or the deadline is reached.
  */
 export async function waitForMainWindow(
     this: AppiumDesktopDriver,

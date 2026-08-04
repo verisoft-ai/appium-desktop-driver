@@ -48,6 +48,14 @@ async function requireFfmpegPath(driver: AppiumDesktopDriver): Promise<string> {
     }
 }
 
+/**
+ * Returns a finished recording either as base64-encoded content, or by uploading it to a
+ * remote URL.
+ * @param localFile - Path to the local video file.
+ * @param remotePath - Optional URL to upload the file to instead of returning it inline.
+ * @param uploadOptions - HTTP options for the upload (auth, headers, method, form fields).
+ * @returns Base64-encoded video content, or an empty string once the upload has completed.
+ */
 export async function uploadRecordedMedia(
     localFile: string,
     remotePath?: string,
@@ -82,6 +90,11 @@ export class ScreenRecorder {
     private _videoFilter?: string;
     private _timeLimit: number;
 
+    /**
+     * @param videoPath - Local path to write the recording to.
+     * @param driver - The owning driver instance, used for logging.
+     * @param opts - Recording options (fps, time limit, encoder preset, cursor/click capture, etc).
+     */
     constructor(videoPath: string, driver: AppiumDesktopDriver, opts: ScreenRecorderOptions = {}) {
         this._driver = driver;
         this._videoPath = videoPath;
@@ -94,6 +107,9 @@ export class ScreenRecorder {
         this._timeLimit = opts.timeLimit && opts.timeLimit > 0 ? opts.timeLimit : DEFAULT_TIME_LIMIT;
     }
 
+    /**
+     * @returns The path to the recorded video file, or an empty string if it doesn't exist.
+     */
     async getVideoPath(): Promise<string> {
         if (!(await fs.exists(this._videoPath))) {
             return '';
@@ -107,6 +123,9 @@ export class ScreenRecorder {
         return this._videoPath;
     }
 
+    /**
+     * @returns True if the ffmpeg recording process is currently running.
+     */
     isRunning(): boolean {
         return !!this._process && !this._process.killed;
     }
@@ -126,6 +145,11 @@ export class ScreenRecorder {
         return '';
     }
 
+    /**
+     * Spawns the ffmpeg process to start recording the desktop and waits for the output
+     * file to appear.
+     * @returns Resolves once the recording has started and the output file is confirmed to exist.
+     */
     async start(): Promise<void> {
         const ffmpegPath = await requireFfmpegPath(this._driver);
 
@@ -208,6 +232,13 @@ export class ScreenRecorder {
         );
     }
 
+    /**
+     * Stops the recording gracefully (sending `q` to ffmpeg's stdin) and returns the
+     * resulting video path, or force-kills the process if requested.
+     * @param force - If true, immediately kill the ffmpeg process and delete the partial
+     * video instead of stopping gracefully.
+     * @returns The recorded video's path, or an empty string if force-stopped.
+     */
     async stop(force = false): Promise<string> {
         if (force) {
             return await this._enforceTermination();

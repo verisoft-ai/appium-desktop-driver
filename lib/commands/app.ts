@@ -273,6 +273,8 @@ export async function switchToWindowByTitle(
 
 /**
  * Closes the session's root window and clears the root element.
+ * @deprecated This is the legacy WebDriver-level `app/close` endpoint, dropped from the
+ * W3C spec. Use the `windows: closeApp` extension method (`windowsCloseApp`) instead.
  * @returns Resolves once the window is closed.
  */
 export async function closeApp(this: AppiumDesktopDriver): Promise<void> {
@@ -286,6 +288,8 @@ export async function closeApp(this: AppiumDesktopDriver): Promise<void> {
 
 /**
  * Launches (or re-attaches to) the app specified by the session's `app` capability.
+ * @deprecated This is the legacy WebDriver-level `app/launch` endpoint, dropped from the
+ * W3C spec. Use the `windows: launchApp` extension method (`windowsLaunchApp`) instead.
  * @returns Resolves once the app's window has become the session root.
  */
 export async function launchApp(this: AppiumDesktopDriver): Promise<void> {

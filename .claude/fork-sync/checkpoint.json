@@ -1,38 +1,80 @@
 {
-  "upstream_repo": "https://github.com/AutomateThePlanet/appium-novawindows-driver.git",
-  "merge_base_note": "cde0513 is the last commit shared with upstream (C# server rewrite merge, already in our main history). All commits below were manually triaged in a chat session on 2026-08-05.",
-  "branches": {
-    "main": {
-      "last_reviewed_sha": "32eaa0581369d72e410c38669d500e3a9b49c535"
+  "our_architecture_snapshot": {
+    "last_verified": "2026-08-05T17:25:55Z",
+    "transport": "csharp-server",
+    "evidence": "lib/server/client.ts (NovaUIAutomationClient), native/win-x64/ server binary. NOT PowerShell — CLAUDE.md's 'persistent PowerShell process' description is stale, do not trust docs, verify from code each run.",
+    "instruction": "Before triaging ANY commit from ANY upstream/fork below, re-verify this snapshot is still accurate by checking lib/server/ and native/ exist and lib/driver.ts still imports NovaUIAutomationClient. If the architecture has changed, update this block first — stale assumptions here poison every classification below."
+  },
+  "primary_upstream": {
+    "repo_url": "https://github.com/AutomateThePlanet/appium-novawindows-driver.git",
+    "merge_base_note": "cde0513 is the last commit shared with upstream (C# server rewrite merge, already in our main history). All commits below were manually triaged in a chat session on 2026-08-05.",
+    "branches": {
+      "main": { "last_reviewed_sha": "32eaa0581369d72e410c38669d500e3a9b49c535" },
+      "develop": { "last_reviewed_sha": "8ec18410a00fb8ba00e626898a998a669c995317" }
     },
-    "develop": {
-      "last_reviewed_sha": "8ec18410a00fb8ba00e626898a998a669c995317"
+    "reviewed_commits": {
+      "644034f": { "verdict": "already-ported", "note": "feat(webview): enable WebView2 support - we have full webview support (contexts.ts, server-session.ts)" },
+      "fe3f762": { "verdict": "already-ported", "note": "fix: debug cdp json issue - cdpRequest already logs + is bound with .call(this)" },
+      "37b9291": { "verdict": "already-ported", "note": "fix: fixed port cdpRequest issue - webviewDevtoolsPort resolution already present" },
+      "ee0314d": { "verdict": "already-ported", "note": "merge commit, webview support" },
+      "00edf24": { "verdict": "already-ported", "note": "fix(debug): changed logic for finding window on app launch - our waitForNewWindow uses recursive child-PID tracking, more advanced than this fix" },
+      "49aee1c": { "verdict": "already-ported", "note": "changed finding new application window logic - superseded by our waitForNewWindow implementation" },
+      "b013bc8": { "verdict": "already-ported", "note": "added minimize and maximize command - lib/commands/app.ts already has maximizeWindow/minimizeWindow" },
+      "fa4c019": { "verdict": "already-ported", "note": "merge commit, webview support" },
+      "e6542fb": { "verdict": "not-applicable", "note": "docs(readme): added enableWebView to documentation - upstream README, not shared" },
+      "be8d889": { "verdict": "not-applicable", "note": "merge commit, no unique content" },
+      "3bd5408": { "verdict": "not-applicable", "note": "chore(release) version bump" },
+      "c15567c": { "verdict": "already-ported", "note": "fix(webview): fix error when no webview endpoint is available - our getWebViewDetails already has .catch(() => undefined) fallback on cdpRequest calls" },
+      "a08f775": { "verdict": "already-ported", "note": "fix(webview): fix current webview not being set - our setContext already sets this.currentContext = name" },
+      "ca4408f": { "verdict": "already-ported", "note": "merge commit, webview support" },
+      "095b2af": { "verdict": "not-applicable", "note": "feat: ffmpeg auto-downloadable screen recorder - explicitly not wanted, we don't need ffmpeg auto-download" },
+      "ee12870": { "verdict": "already-ported", "note": "fix: root window attach not working on some machines - our setWindow/attach logic already handles root element switching and IE-mode detection, more robust" },
+      "2d88764": { "verdict": "not-applicable", "note": "merge commit, no unique content beyond above" },
+      "1fcce9f": { "verdict": "already-ported", "note": "fix: switch to root element before trying to set window - our setWindow already special-cases 'root' handle and uses setRootElementFromHandle" },
+      "9d0cdff": { "verdict": "already-ported", "note": "Fail fast in setWindow by lowering poll attempts - our app.ts already has SET_WINDOW_MAX_POLL_ATTEMPTS fail-fast constant" },
+      "33b226f": { "verdict": "already-ported", "note": "fix(xpath): return Number(str) for numeric strings, NaN otherwise - our convertProcessedExprNodesToNumbers already has the corrected ternary" },
+      "efe1b57": { "verdict": "already-ported", "note": "fix(webview): scope WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS to the C# server spawn - our server-session.ts already builds a per-session serverEnv overlay instead of mutating process.env" },
+      "1b54f50": { "verdict": "not-applicable", "note": "style(lint): apply eslint --fix and allow console in scripts/ - upstream lint config housekeeping" },
+      "cdf5dea": { "verdict": "not-applicable", "note": "test(screen-recorder): update assertion for new ScreenRecorder(driver) signature - upstream-specific test, we don't share the ffmpeg recorder feature" }
     }
   },
-  "last_run": "2026-08-05T17:25:55Z",
-  "reviewed_commits": {
-    "644034f": { "verdict": "already-ported", "note": "feat(webview): enable WebView2 support - we have full webview support (contexts.ts, server-session.ts)" },
-    "fe3f762": { "verdict": "already-ported", "note": "fix: debug cdp json issue - cdpRequest already logs + is bound with .call(this)" },
-    "37b9291": { "verdict": "already-ported", "note": "fix: fixed port cdpRequest issue - webviewDevtoolsPort resolution already present" },
-    "ee0314d": { "verdict": "already-ported", "note": "merge commit, webview support" },
-    "00edf24": { "verdict": "already-ported", "note": "fix(debug): changed logic for finding window on app launch - our waitForNewWindow uses recursive child-PID tracking, more advanced than this fix" },
-    "49aee1c": { "verdict": "already-ported", "note": "changed finding new application window logic - superseded by our waitForNewWindow implementation" },
-    "b013bc8": { "verdict": "already-ported", "note": "added minimize and maximize command - lib/commands/app.ts already has maximizeWindow/minimizeWindow" },
-    "fa4c019": { "verdict": "already-ported", "note": "merge commit, webview support" },
-    "e6542fb": { "verdict": "not-applicable", "note": "docs(readme): added enableWebView to documentation - upstream README, not shared" },
-    "be8d889": { "verdict": "not-applicable", "note": "merge commit, no unique content" },
-    "3bd5408": { "verdict": "not-applicable", "note": "chore(release) version bump" },
-    "c15567c": { "verdict": "already-ported", "note": "fix(webview): fix error when no webview endpoint is available - our getWebViewDetails already has .catch(() => undefined) fallback on cdpRequest calls" },
-    "a08f775": { "verdict": "already-ported", "note": "fix(webview): fix current webview not being set - our setContext already sets this.currentContext = name" },
-    "ca4408f": { "verdict": "already-ported", "note": "merge commit, webview support" },
-    "095b2af": { "verdict": "not-applicable", "note": "feat: ffmpeg auto-downloadable screen recorder - explicitly not wanted, we don't need ffmpeg auto-download" },
-    "ee12870": { "verdict": "already-ported", "note": "fix: root window attach not working on some machines - our setWindow/attach logic already handles root element switching and IE-mode detection, more robust" },
-    "2d88764": { "verdict": "not-applicable", "note": "merge commit, no unique content beyond above" },
-    "1fcce9f": { "verdict": "already-ported", "note": "fix: switch to root element before trying to set window - our setWindow already special-cases 'root' handle and uses setRootElementFromHandle" },
-    "9d0cdff": { "verdict": "already-ported", "note": "Fail fast in setWindow by lowering poll attempts - our app.ts already has SET_WINDOW_MAX_POLL_ATTEMPTS fail-fast constant" },
-    "33b226f": { "verdict": "already-ported", "note": "fix(xpath): return Number(str) for numeric strings, NaN otherwise - our convertProcessedExprNodesToNumbers already has the corrected ternary" },
-    "efe1b57": { "verdict": "already-ported", "note": "fix(webview): scope WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS to the C# server spawn - our server-session.ts already builds a per-session serverEnv overlay instead of mutating process.env" },
-    "1b54f50": { "verdict": "not-applicable", "note": "style(lint): apply eslint --fix and allow console in scripts/ - upstream lint config housekeeping" },
-    "cdf5dea": { "verdict": "not-applicable", "note": "test(screen-recorder): update assertion for new ScreenRecorder(driver) signature - upstream-specific test, we don't share the ffmpeg recorder feature" }
-  }
+  "sibling_forks": {
+    "discovery": {
+      "source_repo": "AutomateThePlanet/appium-novawindows-driver",
+      "discovery_command": "gh api repos/AutomateThePlanet/appium-novawindows-driver/forks --paginate -q '.[].full_name'",
+      "ahead_by_check": "for each fork: gh api repos/AutomateThePlanet/appium-novawindows-driver/compare/main...<owner>:<default_branch> -q '.ahead_by'",
+      "ahead_by_threshold": 3,
+      "note": "Only forks strictly above the threshold get triaged — below it is stale-mirror or trivial noise (verified 2026-08-05: 13 of 16 forks were 0 commits ahead).",
+      "last_discovery_run": "2026-08-05T17:25:55Z"
+    },
+    "tracked": {
+      "nguyenvanhuy0612/appium-novawindows2-driver": {
+        "default_branch": "main",
+        "architecture": "powershell",
+        "architecture_evidence": "lib/powershell/ present, no lib/server/ or native/ dir",
+        "last_reviewed_sha": "7338e01c58836ff73d2c2f463c569f78debcf107",
+        "backlog_review_date": "2026-08-05",
+        "backlog_summary": "160 commits since cde0513 (ahead_by at discovery: 160). Independent product (v0.1 through v1.1.27) that stayed on the PowerShell backend instead of following upstream's C# rewrite — different transport than us. Reviewed every commit subject; the large majority (~140) are either WIP noise ('update'/'temp'/'add'/'move' with no semantic content) or PowerShell-transport-specific hardening (session protocol, thread affinity, DPI/PS-wrapper handling, ffmpeg packaging, Win32Helper.dll build) that doesn't map onto our C# server. Backend-agnostic logic (xpath, actions, window-attach, scroll) was checked individually below.",
+        "needs_porting": [
+          { "commit_ref": "d12b4a2 / a0a1036", "note": "convertAbsoluteXPathToRelativeFromElement + includeContextElementInSearch — xpath convenience capability, no equivalent found in our lib/xpath or lib/commands" },
+          { "commit_ref": "08923f7", "note": "releaseModifierKeys capability — auto-releases stuck shift/ctrl/alt/meta after setValue; we only release modifiers on an explicit /actions/release call (lib/commands/actions.ts releaseActions), not automatically after setValue" }
+        ],
+        "already_ported_or_equivalent": [
+          { "commit_ref": "28c19db", "note": "tick-synchronise W3C performActions so modifier chords hold — our actions.ts already runs a per-tick loop with Promise.all across all sequences in parallel" },
+          { "commit_ref": "ca74c99, cea0512, 94f569b, 6a364f3, 507c71b", "note": "xpath OR-in-predicate, floor/ceiling/round W3C coercion, predicate ordering fixes — our xpath/core.ts and xpath/functions.ts already implement these correctly" },
+          { "commit_ref": "81d1674", "note": "//Tag[n] per-parent vs global index bug — our processExprNodeAsPredicate computes positions scoped to each step's node-set already; no equivalent global-index bug pattern found" },
+          { "commit_ref": "423cde1", "note": "window-attach: prioritize newer processes, map handles to PIDs — our waitForNewWindow already does recursive child-PID tracking across the process tree" }
+        ],
+        "not_applicable": {
+          "reason": "PowerShell-transport-specific (session protocol overhaul, thread affinity, DPI/PS-wrapper hardening, ffmpeg-static packaging, Win32Helper.dll prebuilt shipping) or WIP/noise commits ('update', 'temp', 'add', 'move', 'restore') with no reviewable semantic content distinct from a later named commit.",
+          "approx_commit_count": 140
+        }
+      }
+    },
+    "ignored": {
+      "BaceroSolutions/appium-novawindows-driver": { "reason": "5 ahead, trivial PowerShell arg tweaks (-NoProfile), not relevant", "ahead_by_at_check": 5, "checked": "2026-08-05" },
+      "ShanmukhaGajula/appium-novawindows-driver": { "reason": "1 ahead, single dep-security-bump commit only", "ahead_by_at_check": 1, "checked": "2026-08-05" }
+    }
+  },
+  "last_run": "2026-08-05T17:25:55Z"
 }

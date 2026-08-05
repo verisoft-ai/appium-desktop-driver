@@ -1,0 +1,38 @@
+{
+  "upstream_repo": "https://github.com/AutomateThePlanet/appium-novawindows-driver.git",
+  "merge_base_note": "cde0513 is the last commit shared with upstream (C# server rewrite merge, already in our main history). All commits below were manually triaged in a chat session on 2026-08-05.",
+  "branches": {
+    "main": {
+      "last_reviewed_sha": "32eaa0581369d72e410c38669d500e3a9b49c535"
+    },
+    "develop": {
+      "last_reviewed_sha": "8ec18410a00fb8ba00e626898a998a669c995317"
+    }
+  },
+  "last_run": "2026-08-05T17:25:55Z",
+  "reviewed_commits": {
+    "644034f": { "verdict": "already-ported", "note": "feat(webview): enable WebView2 support - we have full webview support (contexts.ts, server-session.ts)" },
+    "fe3f762": { "verdict": "already-ported", "note": "fix: debug cdp json issue - cdpRequest already logs + is bound with .call(this)" },
+    "37b9291": { "verdict": "already-ported", "note": "fix: fixed port cdpRequest issue - webviewDevtoolsPort resolution already present" },
+    "ee0314d": { "verdict": "already-ported", "note": "merge commit, webview support" },
+    "00edf24": { "verdict": "already-ported", "note": "fix(debug): changed logic for finding window on app launch - our waitForNewWindow uses recursive child-PID tracking, more advanced than this fix" },
+    "49aee1c": { "verdict": "already-ported", "note": "changed finding new application window logic - superseded by our waitForNewWindow implementation" },
+    "b013bc8": { "verdict": "already-ported", "note": "added minimize and maximize command - lib/commands/app.ts already has maximizeWindow/minimizeWindow" },
+    "fa4c019": { "verdict": "already-ported", "note": "merge commit, webview support" },
+    "e6542fb": { "verdict": "not-applicable", "note": "docs(readme): added enableWebView to documentation - upstream README, not shared" },
+    "be8d889": { "verdict": "not-applicable", "note": "merge commit, no unique content" },
+    "3bd5408": { "verdict": "not-applicable", "note": "chore(release) version bump" },
+    "c15567c": { "verdict": "already-ported", "note": "fix(webview): fix error when no webview endpoint is available - our getWebViewDetails already has .catch(() => undefined) fallback on cdpRequest calls" },
+    "a08f775": { "verdict": "already-ported", "note": "fix(webview): fix current webview not being set - our setContext already sets this.currentContext = name" },
+    "ca4408f": { "verdict": "already-ported", "note": "merge commit, webview support" },
+    "095b2af": { "verdict": "not-applicable", "note": "feat: ffmpeg auto-downloadable screen recorder - explicitly not wanted, we don't need ffmpeg auto-download" },
+    "ee12870": { "verdict": "already-ported", "note": "fix: root window attach not working on some machines - our setWindow/attach logic already handles root element switching and IE-mode detection, more robust" },
+    "2d88764": { "verdict": "not-applicable", "note": "merge commit, no unique content beyond above" },
+    "1fcce9f": { "verdict": "already-ported", "note": "fix: switch to root element before trying to set window - our setWindow already special-cases 'root' handle and uses setRootElementFromHandle" },
+    "9d0cdff": { "verdict": "already-ported", "note": "Fail fast in setWindow by lowering poll attempts - our app.ts already has SET_WINDOW_MAX_POLL_ATTEMPTS fail-fast constant" },
+    "33b226f": { "verdict": "already-ported", "note": "fix(xpath): return Number(str) for numeric strings, NaN otherwise - our convertProcessedExprNodesToNumbers already has the corrected ternary" },
+    "efe1b57": { "verdict": "already-ported", "note": "fix(webview): scope WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS to the C# server spawn - our server-session.ts already builds a per-session serverEnv overlay instead of mutating process.env" },
+    "1b54f50": { "verdict": "not-applicable", "note": "style(lint): apply eslint --fix and allow console in scripts/ - upstream lint config housekeeping" },
+    "cdf5dea": { "verdict": "not-applicable", "note": "test(screen-recorder): update assertion for new ScreenRecorder(driver) signature - upstream-specific test, we don't share the ffmpeg recorder feature" }
+  }
+}

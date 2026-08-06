@@ -1,3 +1,26 @@
+## [2.3.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.2...v2.3.0-preview.1) (2026-08-06)
+
+### Features
+
+* add CSS selector -> native UIA locator transform ([4b85a6f](https://github.com/verisoft-ai/appium-desktop-driver/commit/4b85a6f3ffbe00f8457f44c9085a627aa06caa0b))
+* **execute:** adopt standard executeMethodMap, remove legacy windows: dispatcher ([5a6cf28](https://github.com/verisoft-ai/appium-desktop-driver/commit/5a6cf2843eb833d511689b07b18c3907b86403ea))
+
+### Reverts
+
+* Revert "chore: add debug logging to screenshot rect" ([8156fbe](https://github.com/verisoft-ai/appium-desktop-driver/commit/8156fbe17c722af4610e41b1c9643a4a4ec3c34f))
+* Revert "fix: use Desktop Windows Manager extended-frame-bounds for screenshot and root rect" ([84db773](https://github.com/verisoft-ai/appium-desktop-driver/commit/84db77300cd63687b4dcb5985ab7c1140c2aa27c))
+
+### Miscellaneous Chores
+
+* add dependabot workflow for dependency scan ([0ad39fa](https://github.com/verisoft-ai/appium-desktop-driver/commit/0ad39fa49d0bdc815972f019a581a00070e4d043))
+* add JSDoc to all exported functions ([ce31b73](https://github.com/verisoft-ai/appium-desktop-driver/commit/ce31b73180ff3daedecbdd15f09d619e5d37cf8d))
+* add logging to every catch block ([9123524](https://github.com/verisoft-ai/appium-desktop-driver/commit/9123524cd2e988a421289df810977df1357fa530))
+* deprecated legacy APIs ([54197f8](https://github.com/verisoft-ai/appium-desktop-driver/commit/54197f8d9fd1d8ca08c7382566ee76fe6e7a07b0))
+* match minor updates for anthropic-ai sdk dependency ([110fe23](https://github.com/verisoft-ai/appium-desktop-driver/commit/110fe23db6a1df7a8b2f092ad8966db3b7323fda))
+* remove base driver direct dependency ([ac9aed1](https://github.com/verisoft-ai/appium-desktop-driver/commit/ac9aed117df69a55b2dc0602ddf93969de97a6ef))
+* remove duplicate eslint recommended config ([574618d](https://github.com/verisoft-ai/appium-desktop-driver/commit/574618d38b87346c30a9c776ee85844cfb7c2a63))
+* replace Date.now with monotonic API performance.now ([23f3907](https://github.com/verisoft-ai/appium-desktop-driver/commit/23f390793665775b41d08fade7b8a8317c9c7bbe))
+
 ## [2.2.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.1...v2.2.2) (2026-07-30)
 
 ### Miscellaneous Chores

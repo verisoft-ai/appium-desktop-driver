@@ -129,7 +129,7 @@ describe('Chrome WebView context support', () => {
         await switchToFirstWebview(driver);
 
         // windows:getDeviceTime is in CHROMEDRIVER_NO_PROXY — must still reach UIA handler
-        const time = await driver.execute('windows: getDeviceTime', [{}]) as string;
+        const time = await driver.execute('windows: getDeviceTime', {}) as string;
         expect(typeof time).toBe('string');
         expect(time.length).toBeGreaterThan(0);
     });

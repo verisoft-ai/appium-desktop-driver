@@ -1,5 +1,5 @@
 import { describe, it, beforeAll, afterAll, beforeEach, expect } from 'vitest';
-import type { Browser } from 'webdriverio';
+import type { Browser, Selector } from 'webdriverio';
 import {
     createCalculatorSession,
     createNotepadSession,
@@ -107,10 +107,19 @@ describe('W3C element commands', () => {
     });
 
     describe('active', () => {
-        it('returns the currently focused element after clicking a button', async () => {
+        it('returns the clicked button itself, not the top-level window', async () => {
             await calc.$('~num3Button').click();
-            const active = await calc.getActiveElement();
-            expect(active).toBeDefined();
+            const activeRef = await calc.getActiveElement();
+            const active = await calc.$(activeRef as unknown as Selector);
+            expect(await active.getAttribute('AutomationId')).toBe('num3Button');
+            expect(await active.getAttribute('ControlType')).not.toMatch(/Window|Pane/);
+        });
+
+        it('tracks focus moving to a different button', async () => {
+            await calc.$('~num7Button').click();
+            const activeRef = await calc.getActiveElement();
+            const active = await calc.$(activeRef as unknown as Selector);
+            expect(await active.getAttribute('AutomationId')).toBe('num7Button');
         });
     });
 

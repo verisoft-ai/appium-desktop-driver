@@ -59,7 +59,7 @@ function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
     // positional args instead of one options object.
     if (script === 'windows: setValue' && args.length === 2) {
         const [element, value] = args;
-        if (element && typeof element === 'object' && W3C_ELEMENT_KEY in element && !('elementId' in element)) {
+        if (element && typeof element === 'object' && W3C_ELEMENT_KEY in element) {
             return [{ elementId: element[W3C_ELEMENT_KEY], value }];
         }
         return null;
@@ -74,9 +74,9 @@ function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
     }
 
     const [opts] = args;
-    if (opts && typeof opts === 'object' && W3C_ELEMENT_KEY in opts && !('elementId' in opts)) {
+    if (opts && typeof opts === 'object' && W3C_ELEMENT_KEY in opts) {
         const { [W3C_ELEMENT_KEY]: elementId, ...rest } = opts;
-        return [{ elementId, ...rest }];
+        return [{ ...rest, elementId }];
     }
 
     return args;

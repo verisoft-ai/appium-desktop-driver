@@ -219,33 +219,13 @@ public static class ElementCommands
 
     public static object? GetRootRect(SessionState state, JsonElement? parameters)
     {
-        var hwnd = state.RootNativeWindowHandle;
-
-        if (!NativeWindowRect.TryGet(hwnd, out var rect))
+        var root = state.GetLiveRoot();
+        if (root == null)
         {
-            Console.Error.WriteLine($"[GetRootRect] NativeWindowRect.TryGet failed for hwnd=0x{hwnd.ToInt64():X} — falling back to UIA GetLiveRoot()/CurrentBoundingRectangle.");
-            var root = state.GetLiveRoot();
-            if (root == null)
-            {
-                Console.Error.WriteLine("[GetRootRect] GetLiveRoot() returned null (no root attached). Returning zero rect.");
-                return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
-            }
-
-            try
-            {
-                rect = root.CurrentBoundingRectangle;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[GetRootRect] root.CurrentBoundingRectangle threw: {ex.GetType().Name}: {ex.Message}");
-                throw;
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine($"[GetRootRect] native rect via hwnd=0x{hwnd.ToInt64():X}: ({rect.left},{rect.top})-({rect.right},{rect.bottom})");
+            return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
         }
 
+        var rect = root.CurrentBoundingRectangle;
         return new
         {
             x = (double)rect.left,

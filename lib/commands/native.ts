@@ -1,4 +1,4 @@
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 import { Element } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 
@@ -29,6 +29,9 @@ export type AccessibleChildrenResult =
  * them either. If `supported` is false or the root node has zero children, the
  * control paints its own content with no accessibility tree left to recover — use
  * the vision fallback (`windows: findByVision`) instead.
+ * @param element - The WebDriver element reference whose MSAA children should be walked.
+ * @returns The MSAA accessible tree rooted at the element, or `{ supported: false }` if the
+ * element exposes no IAccessible implementation.
  */
 export async function executeGetNativeChildren(this: AppiumDesktopDriver, element: Element): Promise<AccessibleChildrenResult> {
     const elementId = element[W3C_ELEMENT_KEY];

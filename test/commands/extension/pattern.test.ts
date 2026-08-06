@@ -22,7 +22,7 @@ import {
     patternGetValue,
     focusElement,
 } from '../../../lib/commands/extension';
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 import { createMockDriver, MOCK_ELEMENT } from '../../fixtures/driver';
 
 vi.mock('../../../lib/winapi/user32', () => ({

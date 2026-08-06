@@ -3,6 +3,7 @@ import * as serverSession from './server-session';
 import * as ieSession from './ie-session';
 import * as element from './element';
 import * as extension from './extension';
+import * as executeMethods from './execute-methods';
 import * as device from './device';
 import * as system from './system';
 import * as app from './app';
@@ -16,6 +17,7 @@ const commands = {
     ...ieSession,
     ...element,
     ...extension,
+    ...executeMethods,
     ...system,
     ...device,
     ...app,

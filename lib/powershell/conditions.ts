@@ -1,4 +1,5 @@
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
+import { logger } from 'appium/support';
 import { $ } from '../util';
 import { PSObject } from './core';
 import {
@@ -45,6 +46,8 @@ const OR_CONDITION = $ /* ps1 */ `[OrCondition]::new(${0})`;
 const NOT_CONDITION = $ /* ps1 */ `[NotCondition]::new(${0})`;
 const TRUE_CONDITION = /* ps1 */ `[Condition]::TrueCondition`;
 const FALSE_CONDITION = /* ps1 */ `[Condition]::FalseCondition`;
+
+const log = logger.getLogger('conditions');
 
 export abstract class Condition extends PSObject {
     constructor(command: string) {
@@ -93,9 +96,12 @@ export class PropertyCondition extends Condition {
                 assertPSObjectType(value, PSOrientationType);
             } catch (e) {
                 if (value instanceof PSAutomationHeadingLevel && value.originalValue.toLowerCase() === AutomationHeadingLevel.NONE) {
+                    log.debug(`OrientationType assertion failed for AutomationHeadingLevel.NONE (${e instanceof Error ? e.message : e}), coercing to OrientationType.NONE.`);
                     value = new PSOrientationType(OrientationType.NONE);
                 } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(AutomationHeadingLevel).length) {
                     throw e;
+                } else {
+                    log.debug(`OrientationType assertion failed (${e instanceof Error ? e.message : e}), accepting raw Int32 value ${value.toString()}.`);
                 }
             }
         }
@@ -105,9 +111,12 @@ export class PropertyCondition extends Condition {
                 assertPSObjectType(value, PSAutomationHeadingLevel);
             } catch (e) {
                 if (value instanceof PSOrientationType && value.originalValue.toLowerCase() === OrientationType.NONE) {
+                    log.debug(`AutomationHeadingLevel assertion failed for OrientationType.NONE (${e instanceof Error ? e.message : e}), coercing to AutomationHeadingLevel.NONE.`);
                     value = new PSAutomationHeadingLevel(AutomationHeadingLevel.NONE);
                 } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(OrientationType).length) {
                     throw e;
+                } else {
+                    log.debug(`AutomationHeadingLevel assertion failed (${e instanceof Error ? e.message : e}), accepting raw Int32 value ${value.toString()}.`);
                 }
             }
         }

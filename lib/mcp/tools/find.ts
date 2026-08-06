@@ -1,8 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { logger } from 'appium/support';
 import type { AppiumSession } from '../session.js';
 import { formatError } from '../errors.js';
 import { ELEMENT_KEY } from '../constants.js';
+
+const log = logger.getLogger('mcp:find');
 
 const STRATEGIES = ['accessibility id', 'name', 'id', 'xpath', 'class name', 'tag name', '-windows uiautomation'] as const;
 type Strategy = typeof STRATEGIES[number];
@@ -144,7 +147,8 @@ export function registerFindTools(server: McpServer, session: AppiumSession): vo
                 try {
                     const rawEl = await driver.findElement(effectiveStrategy, selector);
                     return { content: [{ type: 'text' as const, text: rawEl[ELEMENT_KEY] }] };
-                } catch {
+                } catch (err) {
+                    log.debug(`[wait_for_element] Poll attempt failed for ${strategy}="${selector}": ${err instanceof Error ? err.message : err}`);
                     if (Date.now() >= deadline) {
                         return {
                             isError: true,

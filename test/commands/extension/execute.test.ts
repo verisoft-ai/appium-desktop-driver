@@ -1,17 +1,20 @@
 /**
- * Unit tests for the execute command router.
+ * Unit tests for the execute command router (`windows:` scripts now dispatch
+ * exclusively through the standard executeMethodMap path - see
+ * execute-method-map.test.ts for elementId-normalization and arg-shape coverage).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as extension from '../../../lib/commands/extension';
-import { createMockDriver, MOCK_ELEMENT } from '../../fixtures/driver';
+import * as executeMethods from '../../../lib/commands/execute-methods';
+import { createMockDriver, withExecuteMethodDispatch, MOCK_ELEMENT } from '../../fixtures/driver';
 
 describe('execute (command router)', () => {
     let driver: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        driver = createMockDriver() as any;
-        Object.assign(driver, extension);
+        driver = withExecuteMethodDispatch(createMockDriver()) as any;
+        Object.assign(driver, extension, executeMethods);
     });
 
     it('routes windows:launchApp to windowsLaunchApp', async () => {

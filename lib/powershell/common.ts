@@ -1,4 +1,4 @@
-import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { Element, Position, Rect } from '@appium/types';
 import {
     AutomationHeadingLevel,

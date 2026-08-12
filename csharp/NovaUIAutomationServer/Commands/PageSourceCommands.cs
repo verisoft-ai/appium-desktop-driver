@@ -32,6 +32,21 @@ public static class PageSourceCommands
             }
         }
 
+        // Same for the .NET bridge — when active and the root belongs to the injected
+        // process, build the page source from the bridge's reflected control tree instead
+        // of UIA (which sees custom-drawn control libraries like DevExpress as opaque panes).
+        if (state.DotNetBridgeEnabled && state.DotNetBridge != null && state.IsDotnetBridgeWindowElement(root))
+        {
+            var hwnd = root.CurrentNativeWindowHandle;
+            var dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd);
+            if (dotnetRoot != null)
+            {
+                var dotnetDoc = new XmlDocument();
+                state.DotNetBridge.BuildXml(dotnetRoot, dotnetDoc, null);
+                return dotnetDoc.OuterXml;
+            }
+        }
+
         var xmlDoc = new XmlDocument();
         BuildPageSource(root, xmlDoc, null, state, root);
         return xmlDoc.OuterXml;

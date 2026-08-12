@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.State;
 using NovaUIAutomationServer.Uia3;
@@ -16,6 +17,12 @@ public static class PatternCommands
         if (JavaAgentElement.IsJavaId(elementId))
         {
             state.Java!.Invoke(state.Java.GetById(elementId));
+            return null;
+        }
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.Invoke(state.DotNetBridge.GetById(elementId));
             return null;
         }
 
@@ -57,6 +64,12 @@ public static class PatternCommands
             // Throws with "JAB_NO_EXPAND_ACTION" when AccessibleAction unavailable —
             // caller (TypeScript patternExpand) catches and falls back to ALT+Down.
             state.Java!.Expand(state.Java.GetById(elementId));
+            return null;
+        }
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.Expand(state.DotNetBridge.GetById(elementId));
             return null;
         }
 
@@ -111,6 +124,14 @@ public static class PatternCommands
             return null;
         }
 
+        // Bridge has no TogglePattern equivalent either — same fallback.
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.Invoke(state.DotNetBridge.GetById(elementId));
+            Thread.Sleep(50);
+            return null;
+        }
+
         var pattern = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
         pattern.Toggle();
         return null;
@@ -130,6 +151,9 @@ public static class PatternCommands
                 return "Indeterminate";
             return states.Contains("checked", StringComparison.OrdinalIgnoreCase) ? "On" : "Off";
         }
+
+        if (BridgeAgentElement.IsDotnetId(id))
+            return state.DotNetBridge!.GetToggleState(state.DotNetBridge.GetById(id));
 
         var pattern = RequirePattern<IUIAutomationTogglePattern>(state, parameters, UIA.TogglePatternId, "TogglePattern");
         return pattern.CurrentToggleState.ToString();
@@ -170,6 +194,12 @@ public static class PatternCommands
             return null;
         }
 
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.Select(state.DotNetBridge.GetById(elementId));
+            return null;
+        }
+
         var pattern = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");
         pattern.Select();
         return null;
@@ -201,6 +231,15 @@ public static class PatternCommands
             var states = GetJavaStates(state, state.Java!.GetById(id));
             return states.Contains("checked", StringComparison.OrdinalIgnoreCase)
                 || states.Contains("selected", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Bridge: re-fetch info live and read the IsSelected key the agent reports.
+        if (BridgeAgentElement.IsDotnetId(id))
+        {
+            var bridgeEl = state.DotNetBridge!.GetById(id);
+            state.DotNetBridge.GetFreshInfo(bridgeEl);
+            var value = state.DotNetBridge.GetProperty(bridgeEl, "IsSelected");
+            return value is bool b && b;
         }
 
         var pattern = RequirePattern<IUIAutomationSelectionItemPattern>(state, parameters, UIA.SelectionItemPatternId, "SelectionItemPattern");

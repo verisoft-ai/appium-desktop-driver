@@ -35,6 +35,7 @@ import {
     windowsGetDeviceTime,
     windowsSwitchToWindowByTitle,
     executeAttachJavaSwing,
+    executeAttachDotnetBridge,
     setClipboardFromBase64,
     deleteFile,
     deleteFolder,
@@ -277,6 +278,14 @@ export async function emSwitchToWindowByTitle(
  */
 export async function emAttachJavaSwing(this: AppiumDesktopDriver, jdkPath?: string): Promise<void> {
     return await executeAttachJavaSwing.call(this, { jdkPath });
+}
+
+/**
+ * `executeMethod` wrapper for {@link executeAttachDotnetBridge}.
+ * @returns Resolves once the .NET bridge session has been attached.
+ */
+export async function emAttachDotnetBridge(this: AppiumDesktopDriver): Promise<void> {
+    return await executeAttachDotnetBridge.call(this);
 }
 
 /**

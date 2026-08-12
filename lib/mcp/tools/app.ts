@@ -84,6 +84,29 @@ export function registerAppTools(server: McpServer, session: AppiumSession): voi
     );
 
     server.registerTool(
+        'attach_dotnet_bridge',
+        {
+            description:
+                'Inject the .NET bridge into the CLR process owning the current session window. ' +
+                'Use this after creating a session (with appTopLevelWindow) when dotnetBridge was NOT set at session creation time. ' +
+                'Needed for WinForms/WPF apps built with custom-drawn control libraries (e.g. DevExpress) whose controls expose ' +
+                'little or nothing via plain UIA. Only works on already-running .NET Framework processes — there is no launch-time ' +
+                'injection path, and CoreCLR (.NET 5+) targets are not yet supported.',
+            annotations: { destructiveHint: false },
+            inputSchema: {},
+        },
+        async () => {
+            try {
+                const driver = session.getDriver();
+                await driver.executeScript('windows: attachDotnetBridge', [{}]);
+                return { content: [{ type: 'text' as const, text: '.NET bridge injected. Session is now bridge-aware.' }] };
+            } catch (err) {
+                return { isError: true, content: [{ type: 'text' as const, text: formatError(err) }] };
+            }
+        }
+    );
+
+    server.registerTool(
         'get_device_time',
         {
             description: 'Get the current date/time on the Windows device.',

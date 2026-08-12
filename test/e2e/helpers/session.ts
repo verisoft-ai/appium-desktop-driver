@@ -313,6 +313,126 @@ export async function createJavaSwingFormSession(extraCaps?: Record<string, unkn
     return driver;
 }
 
+export const DEVEXPRESS_GRID_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'devexpress-grid-ownerdraw', 'bin', 'DevExpressGridOwnerDraw.exe'
+);
+export const DEVEXPRESS_GRID_WINDOW_TITLE = 'DevExpress Grid OwnerDraw Fixture';
+
+/**
+ * Launches the bespoke DevExpress WinForms grid test app as an external process (simulating a
+ * customer's app the driver has no launch control over). Returns the child process and its main
+ * window handle (decimal HWND string) for the fixture's actual window — not the "About
+ * DevExpress" trial-evaluation dialog every launch pops first (this fixture has no registered
+ * WinForms-tier license, only the WPF-tier trial key set up earlier in this project — see
+ * feedback_devexpress_licensing memory). The caller is responsible for killing the process in
+ * afterAll.
+ */
+export async function launchDevExpressGridExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(DEVEXPRESS_GRID_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn DevExpress grid app: ${DEVEXPRESS_GRID_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+
+    async function pollMainWindow(): Promise<{ hwnd: string; title: string }> {
+        const out = execSync(
+            `powershell -Command "$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; ` +
+            `if ($p -and $p.MainWindowHandle -ne 0) { Write-Output $p.MainWindowHandle; Write-Output $p.MainWindowTitle } else { Write-Output '0' }"`,
+            { stdio: ['ignore', 'pipe', 'ignore'] }
+        ).toString().trim().split(/\r?\n/);
+        return { hwnd: out[0] ?? '0', title: out[1] ?? '' };
+    }
+
+    // First window to appear is the "About DevExpress" trial nag — dismiss it with Escape so the
+    // fixture's real window can come up. SendKeys targets the foreground window, which is this
+    // freshly-launched dialog.
+    let dismissed = false;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        const { hwnd: currentHwnd, title } = await pollMainWindow();
+        if (currentHwnd !== '0' && title === DEVEXPRESS_GRID_WINDOW_TITLE) {
+            hwnd = currentHwnd;
+            break;
+        }
+        if (currentHwnd !== '0' && !dismissed) {
+            execSync(
+                'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'{ESC}\')"',
+                { stdio: 'ignore' }
+            );
+            dismissed = true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`DevExpress grid app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export const MINIMAL_OWNERDRAW_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'minimal-ownerdraw-winforms', 'bin', 'x64', 'Debug', 'net472', 'MinimalOwnerDraw.exe'
+);
+export const MINIMAL_OWNERDRAW_WINDOW_TITLE = 'Minimal OwnerDraw Fixture';
+
+/**
+ * Launches the minimal owner-draw WinForms fixture externally (simulating a customer's app the
+ * driver has no launch control over). No DevExpress dependency, no trial dialog to dismiss —
+ * a single Control subclass that paints its own text and blanks AccessibleName, so plain UIA
+ * can't see the value at all. The caller is responsible for killing the process in afterAll.
+ */
+export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(MINIMAL_OWNERDRAW_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn minimal owner-draw app: ${MINIMAL_OWNERDRAW_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`Minimal owner-draw app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export async function createDotnetBridgeAttachSession(hwnd: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:appTopLevelWindow': hwnd,
+            'appium:dotnetBridge': true,
+            'appium:shouldCloseApp': false,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
+
 /** Kill any Calculator, Notepad or To-Do processes left open by a previous test. */
 export function closeAllTestApps(): void {
     for (const name of ['Calculator.exe', 'CalculatorApp.exe', 'notepad.exe', 'Microsoft.Todos.exe']) {

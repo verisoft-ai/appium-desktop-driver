@@ -534,6 +534,14 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
         }) as string) ?? '';
         elIds = runtimeId.split('\n').map((id) => id.trim()).filter(Boolean);
     }
+    // Non-UIA bridge elements (java:, dotnet:, and any future bridge) have no RuntimeId in
+    // their info dict, so the lookup above legitimately comes back empty even for a perfectly
+    // valid, already-known context element — fall back to querying it directly rather than
+    // silently returning [] (which made every attribute predicate against a bridge element,
+    // e.g. contains(@Name, ...), evaluate against "" instead of the real value).
+    if (elIds.length === 0 && contextId) {
+        elIds = [contextId];
+    }
     const extraProperties = ['x', 'y', 'width', 'height'];
 
     switch (nodeTest.type) {

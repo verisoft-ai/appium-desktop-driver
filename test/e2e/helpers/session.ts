@@ -417,6 +417,64 @@ export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildP
     return { proc, hwnd };
 }
 
+export const MINIMAL_OWNERDRAW_X86_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'minimal-ownerdraw-x86', 'bin', 'x86', 'Debug', 'net472', 'MinimalOwnerDrawX86.exe'
+);
+
+/**
+ * Launches the 32-bit twin of the minimal owner-draw fixture (see
+ * launchMinimalOwnerDrawExternally) — same pattern, but built PlatformTarget=x86 so it's a
+ * genuine WOW64 process. Exists solely to exercise the bridge's x86 injection path
+ * (BridgeInjectorX86Stub) end to end: a 64-bit host can't CreateRemoteThread into this process
+ * directly, so attachDotnetBridge here only works if bitness detection + the x86 stub dispatch
+ * are both wired correctly. The caller is responsible for killing the process in afterAll.
+ */
+export async function launchMinimalOwnerDrawX86Externally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(MINIMAL_OWNERDRAW_X86_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn 32-bit minimal owner-draw app: ${MINIMAL_OWNERDRAW_X86_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`32-bit minimal owner-draw app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+/**
+ * Confirms a process is genuinely 32-bit (running under WOW64) — a sanity check so the 32-bit
+ * bridge e2e test can't silently pass against an accidentally-64-bit build of the fixture.
+ */
+export function isProcess32Bit(pid: number): boolean {
+    const out = execSync(
+        `powershell -Command "` +
+        `Add-Type -Namespace W -Name K -MemberDefinition '[DllImport(\\"kernel32.dll\\")] public static extern bool IsWow64Process(IntPtr h, out bool w);'; ` +
+        `$p = Get-Process -Id ${pid}; $w = $false; [W.K]::IsWow64Process($p.Handle, [ref]$w) | Out-Null; Write-Output $w` +
+        `"`,
+        { stdio: ['ignore', 'pipe', 'ignore'] }
+    ).toString().trim();
+    return out === 'True';
+}
+
 export const OWNERDRAW_GALLERY_APP_PATH = resolve(
     process.cwd(), 'test-apps', 'ownerdraw-gallery', 'bin', 'x64', 'Debug', 'net472', 'OwnerDrawGallery.exe'
 );

@@ -55,12 +55,87 @@ internal static class BridgeInjector
     [DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool IsWow64Process(IntPtr hProcess, out bool wow64Process);
+
+    /// <summary>
+    /// True if the target process is a 32-bit process running under WOW64. This host only ever
+    /// ships as a 64-bit process, so a WOW64 hit unambiguously means the target is 32-bit —
+    /// there's no "both sides 32-bit" case to disambiguate here. Distinct from DetectClrFramework
+    /// (which only checks clr.dll/coreclr.dll presence by name): a 32-bit .NET Framework process
+    /// loads its own WOW64 clr.dll too, so that check alone can't tell 32-bit from 64-bit apart.
+    /// </summary>
+    internal static bool DetectIs32Bit(int pid)
+    {
+        using var process = Process.GetProcessById(pid);
+        if (!IsWow64Process(process.Handle, out bool isWow64))
+            throw new InvalidOperationException($"IsWow64Process failed for PID {pid} (error {Marshal.GetLastWin32Error()}).");
+        return isWow64;
+    }
+
     public static void InjectFromHwnd(IntPtr hwnd, string bridgeDll)
     {
         GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == 0)
             throw new InvalidOperationException($"Could not resolve PID from window handle 0x{hwnd:X}.");
         InjectFromPid((int)pid, bridgeDll);
+    }
+
+    /// <summary>
+    /// Bitness-aware entry point for the command layer: injects directly (today's path) for a
+    /// 64-bit target, or spawns the 32-bit injector stub for a 32-bit one — CreateRemoteThread
+    /// cannot cross bitness, so this 64-bit host can never inject into a 32-bit target itself.
+    /// Everything after injection (the bridge's own TCP RPC) is unaffected by which path ran.
+    /// </summary>
+    public static void InjectFromPidAutoBitness(int pid, string x64DllPath, string x86DllPath, string x86StubPath)
+    {
+        bool is32Bit;
+        try
+        {
+            is32Bit = DetectIs32Bit(pid);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Could not determine target process bitness for PID {pid}: {ex.Message}", ex);
+        }
+
+        if (!is32Bit)
+        {
+            InjectFromPid(pid, x64DllPath);
+            return;
+        }
+
+        if (!File.Exists(x86DllPath) || !File.Exists(x86StubPath))
+            throw new InvalidOperationException(
+                $"Target process (PID {pid}) is 32-bit, but 32-bit bridge support is not installed " +
+                $"(expected '{x86DllPath}' and '{x86StubPath}'). Run `npm run build:dotnet-bridge && " +
+                "npm run build:dotnet-bridge-x86-stub` to build them.");
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = x86StubPath,
+            ArgumentList = { pid.ToString(), x86DllPath },
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using var stub = Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to start 32-bit injector stub: {x86StubPath}");
+
+        string stderrOutput = stub.StandardError.ReadToEnd();
+        bool exited = stub.WaitForExit(15_000);
+
+        if (!exited)
+        {
+            try { stub.Kill(); } catch { /* best-effort */ }
+            throw new TimeoutException($"32-bit injector stub did not complete within 15s (PID {pid}).");
+        }
+
+        if (stub.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"32-bit bridge injection failed (stub exit code {stub.ExitCode})." +
+                (string.IsNullOrWhiteSpace(stderrOutput) ? "" : $" {stderrOutput.Trim()}"));
     }
 
     public static void InjectFromPid(int pid, string bridgeDll)
@@ -196,6 +271,16 @@ internal static class BridgeInjector
         try
         {
             IntPtr export = GetProcAddress(hLocal, exportName);
+
+            // MSVC decorates __stdcall (WINAPI) C exports on x86 as "_Name@N" (N = total
+            // parameter byte size) in the export table — x64 has no name decoration at all, so
+            // this only matters for the Win32 build of appium-dotnet-bridge.dll. BridgeStart's
+            // signature is DWORD WINAPI BridgeStart(LPVOID) — one pointer-sized (4-byte) param on
+            // x86 — so "_BridgeStart@4" is the real x86 export name. Falling back here keeps this
+            // code bitness-agnostic instead of needing a platform-conditional build step.
+            if (export == IntPtr.Zero)
+                export = GetProcAddress(hLocal, $"_{exportName}@4");
+
             if (export == IntPtr.Zero)
                 throw new InvalidOperationException($"Export '{exportName}' not found in {dllPath}. Is it declared with __declspec(dllexport) extern \"C\"?");
             long rva = export.ToInt64() - hLocal.ToInt64();

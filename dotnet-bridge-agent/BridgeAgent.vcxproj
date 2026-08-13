@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  UNVERIFIED: written without access to a C++/CLI (MSVC) toolchain — no cl.exe available in the
-  environment this was authored in. Needs a Windows box with Visual Studio (Desktop development
-  with C++ workload + "C++/CLI support" component) to build and debug for the first time.
+  x64|Release verified building and running (dotnet-bridge-agent/build.bat, MSVC v143 + C++/CLI).
+  Win32|Release added for 32-bit target support (injecting into a 32-bit .NET Framework process
+  requires an injector running in a matching-bitness process — see BridgeInjectorX86Stub) — same
+  source file, no bitness-sensitive code expected, but not yet build-verified on this platform.
 -->
 <Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
     </ProjectConfiguration>
   </ItemGroup>
 
@@ -33,7 +38,8 @@
 
   <PropertyGroup>
     <TargetName>appium-dotnet-bridge</TargetName>
-    <OutDir>$(SolutionDir)..\native\win-x64\</OutDir>
+    <OutDir Condition="'$(Platform)'=='x64'">$(SolutionDir)..\native\win-x64\</OutDir>
+    <OutDir Condition="'$(Platform)'=='Win32'">$(SolutionDir)..\native\win-x86\</OutDir>
   </PropertyGroup>
 
   <ItemDefinitionGroup>

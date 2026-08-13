@@ -35,20 +35,30 @@ public static class DotNetBridgeCommands
                     "Attach to a window first using the appTopLevelWindow capability.");
         }
 
-        string bridgeDll = Path.Combine(AppContext.BaseDirectory, "appium-dotnet-bridge.dll");
-        if (!File.Exists(bridgeDll))
-            throw new FileNotFoundException($"Bridge DLL not found at: {bridgeDll}");
+        string x64Dll = Path.Combine(AppContext.BaseDirectory, "appium-dotnet-bridge.dll");
+        if (!File.Exists(x64Dll))
+            throw new FileNotFoundException($"Bridge DLL not found at: {x64Dll}");
+
+        // native/win-x86/ is a sibling of this host's own directory (native/win-x64/) — see
+        // BridgeInjector.InjectFromPidAutoBitness for why a 32-bit target needs its own DLL build
+        // and a bitness-matched injector stub rather than this 64-bit host injecting directly.
+        string x86Root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "win-x86"));
+        string x86Dll = Path.Combine(x86Root, "appium-dotnet-bridge.dll");
+        string x86Stub = Path.Combine(x86Root, "BridgeInjectorX86Stub.exe");
+
+        BridgeInjector.GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == 0)
+            throw new InvalidOperationException($"Could not resolve PID from window handle 0x{hwnd:X}.");
 
         try
         {
-            BridgeInjector.InjectFromHwnd(hwnd, bridgeDll);
+            BridgeInjector.InjectFromPidAutoBitness((int)pid, x64Dll, x86Dll, x86Stub);
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd), ex);
         }
 
-        BridgeInjector.GetWindowThreadProcessId(hwnd, out uint pid);
         state.EnableDotnetBridge((int)pid);
         return null;
     }
@@ -74,6 +84,13 @@ public static class DotNetBridgeCommands
 
                 var framework = BridgeInjector.DetectClrFramework((int)pid);
                 sb.AppendLine($"  clr:         {framework}");
+
+                try
+                {
+                    bool is32Bit = BridgeInjector.DetectIs32Bit((int)pid);
+                    sb.AppendLine($"  bitness:     {(is32Bit ? "32-bit (WOW64)" : "64-bit")}");
+                }
+                catch (Exception bitnessEx) { sb.AppendLine($"  bitness:     (could not determine: {bitnessEx.Message})"); }
 
                 string? clrModulePath = null;
                 try

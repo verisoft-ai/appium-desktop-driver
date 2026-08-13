@@ -1,7 +1,10 @@
 @echo off
-REM Builds appium-dotnet-bridge.dll (C++/CLI, /clr mixed-mode) and drops it into
-REM native/win-x64/, mirroring how java-agent/build.bat produces appium-desktop-agent.jar
-REM into the same directory.
+REM Builds appium-dotnet-bridge.dll (C++/CLI, /clr mixed-mode) for both x64 and Win32 (x86),
+REM dropping them into native/win-x64/ and native/win-x86/ respectively — mirroring how
+REM java-agent/build.bat produces appium-desktop-agent.jar into the same directory tree.
+REM The x86 build exists so the bridge can inject into 32-bit .NET Framework processes, which
+REM require an injector matching their bitness (see BridgeInjectorX86Stub) — the DLL itself is
+REM the same source compiled twice, one per platform.
 REM
 REM Requires: Visual Studio with the "Desktop development with C++" workload and the
 REM "C++/CLI support for v143 build tools" individual component. Run from a
@@ -34,6 +37,10 @@ if not defined MSBUILD (
 :build
 "%MSBUILD%" "%~dp0BridgeAgent.vcxproj" /p:Configuration=Release /p:Platform=x64
 if errorlevel 1 exit /b 1
-
 echo Built native\win-x64\appium-dotnet-bridge.dll
+
+"%MSBUILD%" "%~dp0BridgeAgent.vcxproj" /p:Configuration=Release /p:Platform=Win32
+if errorlevel 1 exit /b 1
+echo Built native\win-x86\appium-dotnet-bridge.dll
+
 endlocal

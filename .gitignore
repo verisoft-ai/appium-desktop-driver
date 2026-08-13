@@ -23,6 +23,10 @@ test-apps/devexpress-grid-ownerdraw/obj/
 test-apps/minimal-ownerdraw-winforms/bin/
 test-apps/minimal-ownerdraw-winforms/obj/
 
+# 32-bit twin of the above — proves the .NET bridge's x86 injection path
+test-apps/minimal-ownerdraw-x86/bin/
+test-apps/minimal-ownerdraw-x86/obj/
+
 # OwnerDraw gallery test-fixture app — source is checked in, build output/obj is not
 test-apps/ownerdraw-gallery/bin/
 test-apps/ownerdraw-gallery/obj/

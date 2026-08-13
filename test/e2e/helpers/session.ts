@@ -405,7 +405,9 @@ export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildP
         } catch {
             hwnd = '0';
         }
-        if (hwnd !== '0') break;
+        if (hwnd !== '0') {
+            break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
@@ -448,7 +450,9 @@ export async function launchMinimalOwnerDrawX86Externally(): Promise<{ proc: Chi
         } catch {
             hwnd = '0';
         }
-        if (hwnd !== '0') break;
+        if (hwnd !== '0') {
+            break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
@@ -503,7 +507,9 @@ export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildP
         } catch {
             hwnd = '0';
         }
-        if (hwnd !== '0') break;
+        if (hwnd !== '0') {
+            break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 500));
     }
 

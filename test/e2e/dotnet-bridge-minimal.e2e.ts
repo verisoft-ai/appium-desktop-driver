@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import type { Browser } from 'webdriverio';
 import { remote } from 'webdriverio';
 import {

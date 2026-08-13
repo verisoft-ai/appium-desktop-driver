@@ -1,3 +1,17 @@
+## [2.3.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.1...v2.3.0-preview.2) (2026-08-13)
+
+### Features
+
+* add .NET/CLR injection bridge for WinForms/WPF custom-drawn controls (v0) ([88510e8](https://github.com/verisoft-ai/appium-desktop-driver/commit/88510e8a89da3d2da8926a979cede3dc54a9c78f))
+* DevExpress-specific element fixtures (TreeList, ComboBoxEdit, TokenEdit, grouped grid) ([b53f768](https://github.com/verisoft-ai/appium-desktop-driver/commit/b53f76891f66d9ebc48d5af5febbaa0976c4f805))
+* generic list/tree bridge elements, ownerdraw-gallery fixture, UI-thread marshaling fix ([556c382](https://github.com/verisoft-ai/appium-desktop-driver/commit/556c38206f25c089583bcf652705e9eeb1b20443))
+* support attaching the .NET bridge to 32-bit target processes ([08e25ec](https://github.com/verisoft-ai/appium-desktop-driver/commit/08e25ec5cd307a2af97c486c85c2b6fa4cd8ae84))
+
+### Bug Fixes
+
+* satisfy eslint curly-brace rule and drop unused imports in e2e helpers ([87c1c19](https://github.com/verisoft-ai/appium-desktop-driver/commit/87c1c19783958dfb92a7a3d38d166a3a7c396e7b))
+* xpath attribute predicates against bridge elements ([140b32b](https://github.com/verisoft-ai/appium-desktop-driver/commit/140b32b1428c048c246a23ad399dbcdfb4882977))
+
 ## [2.3.0-preview.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.2...v2.3.0-preview.1) (2026-08-06)
 
 ### Features

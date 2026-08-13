@@ -27,6 +27,11 @@ test-apps/minimal-ownerdraw-winforms/obj/
 test-apps/ownerdraw-gallery/bin/
 test-apps/ownerdraw-gallery/obj/
 
+# DevExpress-specific elements gallery test-fixture app — source is checked in, build output/obj
+# is not (built at test time via build:devexpress-elements-gallery-test-app)
+test-apps/devexpress-elements-gallery/bin/
+test-apps/devexpress-elements-gallery/obj/
+
 # C++/CLI native bridge build artifacts — MSBuild's default IntDir nests under a
 # project-name subfolder (dotnet-bridge-agent/BridgeAgent/x64/Release/...), not directly under
 # dotnet-bridge-agent/x64/ as a naive guess would suggest. Final output lands in native/win-x64/

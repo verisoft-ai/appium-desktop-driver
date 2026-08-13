@@ -36,6 +36,7 @@
     "build:winform-test-app": "dotnet publish test-apps/winform-combo/WinformCombo.csproj -c Release -o test-apps/winform-combo/bin",
     "build:java-swing-test-app": "javac -d test-apps/java-swing-form test-apps/java-swing-form/TestForm.java",
     "build:devexpress-test-app": "node scripts/build-devexpress-test-app.js",
+    "build:devexpress-elements-gallery-test-app": "node scripts/build-devexpress-elements-gallery-test-app.js",
     "build:test-apps": "npm run build:winform-test-app && npm run build:java-swing-test-app && npm run build:devexpress-test-app",
     "build:all": "npm run build:java-agent && npm run build:dotnet-bridge && npm run build:native && npm run build:iebridge && npm run build",
     "watch": "tsc -b --watch",

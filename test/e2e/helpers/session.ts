@@ -417,45 +417,6 @@ export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildP
     return { proc, hwnd };
 }
 
-export const LISTBOX_PROBE_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'listbox-probe-throwaway', 'bin', 'x64', 'Debug', 'net472', 'ListBoxProbe.exe'
-);
-
-/**
- * Throwaway Phase-1 checkpoint fixture for the .NET bridge's ListItemHandle machinery — see
- * test-apps/listbox-probe-throwaway/. Deleted once the real ownerdraw-gallery app supersedes it.
- */
-export async function launchListBoxProbeExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
-    const proc = spawn(LISTBOX_PROBE_APP_PATH, [], { detached: true, stdio: 'ignore' });
-
-    if (!proc.pid) {
-        throw new Error(`Failed to spawn listbox probe app: ${LISTBOX_PROBE_APP_PATH}`);
-    }
-
-    const pid = proc.pid;
-    const deadline = Date.now() + 15_000;
-    let hwnd = '0';
-    while (Date.now() < deadline) {
-        try {
-            hwnd = execSync(
-                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
-                { stdio: ['ignore', 'pipe', 'ignore'] }
-            ).toString().trim();
-        } catch {
-            hwnd = '0';
-        }
-        if (hwnd !== '0') break;
-        await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-
-    if (hwnd === '0') {
-        proc.kill();
-        throw new Error(`Listbox probe app window did not appear within 15s (pid=${pid})`);
-    }
-
-    return { proc, hwnd };
-}
-
 export const OWNERDRAW_GALLERY_APP_PATH = resolve(
     process.cwd(), 'test-apps', 'ownerdraw-gallery', 'bin', 'x64', 'Debug', 'net472', 'OwnerDrawGallery.exe'
 );
@@ -491,6 +452,65 @@ export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildP
     if (hwnd === '0') {
         proc.kill();
         throw new Error(`ownerdraw-gallery app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export const DEVEXPRESS_ELEMENTS_GALLERY_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'devexpress-elements-gallery', 'bin', 'DevExpressElementsGallery.exe'
+);
+export const DEVEXPRESS_ELEMENTS_GALLERY_WINDOW_TITLE = 'DevExpress Elements Gallery';
+
+/**
+ * Launches the DevExpress-specific elements fixture externally (simulating a customer's app the
+ * driver has no launch control over). Same trial-nag tolerance as launchDevExpressGridExternally
+ * — an "About DevExpress" dialog pops inconsistently depending on build-cache state, so this polls
+ * for the real window's title rather than assuming a dialog will or won't appear. See
+ * test-apps/devexpress-elements-gallery/Program.cs for the 4 element kinds it hosts (TreeList,
+ * ComboBoxEdit, TokenEdit, grouped GridControl) — each confirmed genuinely UIA-blind via a
+ * throwaway probe before this fixture was written.
+ */
+export async function launchDevExpressElementsGalleryExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(DEVEXPRESS_ELEMENTS_GALLERY_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn devexpress-elements-gallery app: ${DEVEXPRESS_ELEMENTS_GALLERY_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+
+    async function pollMainWindow(): Promise<{ hwnd: string; title: string }> {
+        const out = execSync(
+            `powershell -Command "$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; ` +
+            `if ($p -and $p.MainWindowHandle -ne 0) { Write-Output $p.MainWindowHandle; Write-Output $p.MainWindowTitle } else { Write-Output '0' }"`,
+            { stdio: ['ignore', 'pipe', 'ignore'] }
+        ).toString().trim().split(/\r?\n/);
+        return { hwnd: out[0] ?? '0', title: out[1] ?? '' };
+    }
+
+    let dismissed = false;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        const { hwnd: currentHwnd, title } = await pollMainWindow();
+        if (currentHwnd !== '0' && title === DEVEXPRESS_ELEMENTS_GALLERY_WINDOW_TITLE) {
+            hwnd = currentHwnd;
+            break;
+        }
+        if (currentHwnd !== '0' && !dismissed) {
+            execSync(
+                'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'{ESC}\')"',
+                { stdio: 'ignore' }
+            );
+            dismissed = true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`devexpress-elements-gallery app window did not appear within 15s (pid=${pid})`);
     }
 
     return { proc, hwnd };

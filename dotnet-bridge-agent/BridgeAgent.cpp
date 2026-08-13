@@ -327,6 +327,40 @@ public:
     TreeNodeHandle(Object^ owner, int nodeId) : Owner(owner), NodeId(nodeId) {}
 };
 
+// Synthetic wrapper for a real DevExpress.XtraTreeList.TreeList node — unlike TreeNodeHandle
+// (which targets our own fixtures' int-id convention), TreeList already has real TreeListNode
+// objects with Id/Nodes/Expanded/ParentNode. This just carries the owning TreeList alongside the
+// node so BuildInfo/GetChildren can call TreeList.GetRowCellValue(node, column), which is an
+// instance method on the control, not the node.
+public ref class DevExpressTreeListNodeHandle
+{
+public:
+    Object^ TreeList;
+    Object^ Node;
+
+    DevExpressTreeListNodeHandle(Object^ treeList, Object^ node) : TreeList(treeList), Node(node) {}
+};
+
+// Synthetic wrapper for one item of a real DevExpress editor's item collection (ComboBoxEdit's
+// Properties.Items, TokenEdit's Properties.Tokens). "Kind" picks which convention BuildInfo uses
+// to find the real (as opposed to bound-placeholder) text: TokenEdit's TokenEditToken already has
+// a genuine Value property distinct from Description (a real DevExpress API, not our convention);
+// ComboBoxEdit's items are plain objects with no such split, so combo fixtures must use item
+// objects exposing a "RealValue" property — same duck-typed-convention discipline as
+// ListItemHandle's GetItemText, just applied to per-item data objects instead of the owner
+// control.
+public ref class DevExpressItemHandle
+{
+public:
+    Object^ Owner;
+    Object^ Item;
+    int Index;
+    String^ Kind;   // "combo" or "token"
+
+    DevExpressItemHandle(Object^ owner, Object^ item, int index, String^ kind)
+        : Owner(owner), Item(item), Index(index), Kind(kind) {}
+};
+
 // C++/CLI lambdas cannot capture managed-typed locals for delegate construction, so a tiny
 // closure object stands in for GetDevExpressRowCellValue's Control.Invoke marshaling.
 ref class CellValueInvoker
@@ -343,6 +377,25 @@ public:
     Object^ Run()
     {
         return _method->Invoke(_view, gcnew array<Object^> { _rowHandle, _column });
+    }
+};
+
+// Same purpose as CellValueInvoker but for an arbitrary method/target/args triple — used by
+// TreeList's GetRowCellValue marshaling, which (unlike GridView's (int, column) shape) takes
+// (TreeListNode, TreeListColumn), so the fixed-shape CellValueInvoker above doesn't fit.
+ref class GenericMethodInvoker
+{
+    MethodInfo^ _method;
+    Object^ _target;
+    array<Object^>^ _args;
+
+public:
+    GenericMethodInvoker(MethodInfo^ method, Object^ target, array<Object^>^ args)
+        : _method(method), _target(target), _args(args) {}
+
+    Object^ Run()
+    {
+        return _method->Invoke(_target, _args);
     }
 };
 
@@ -414,6 +467,14 @@ public:
             return rootNodes;
         if (auto node = dynamic_cast<TreeNodeHandle^>(target))
             return GetTreeNodeChildren(node);
+        if (auto treeListRoots = TryGetDevExpressTreeListRoots(target))
+            return treeListRoots;
+        if (auto treeListNode = dynamic_cast<DevExpressTreeListNodeHandle^>(target))
+            return GetDevExpressTreeListNodeChildren(treeListNode);
+        if (auto comboItems = TryGetDevExpressComboItems(target))
+            return comboItems;
+        if (auto tokens = TryGetDevExpressTokens(target))
+            return tokens;
 
         if (auto ctrl = dynamic_cast<Control^>(target))
         {
@@ -440,6 +501,53 @@ public:
         // so they need their own branch before the generic ones below.
         if (auto row = dynamic_cast<GridRowHandle^>(target))
         {
+            // Group rows (GroupCount > 0) get real row handles that are no longer sequential
+            // positive ints — TryGetDevExpressGridRows below now walks GetVisibleRowHandle(i)
+            // instead of assuming rowHandle==i, so a row here may be a group row. Group rows need
+            // their own real-value source (GetGroupRowValue/GetChildRowCount, not
+            // GetRowCellValue) — this is the same "invisible to plain UIA" scenario as the data
+            // rows: UIA only ever shows a generic "Group Row" placeholder, confirmed empirically.
+            bool isGroupRow = false;
+            try
+            {
+                auto isGroupRowMethod = row->View->GetType()->GetMethod("IsGroupRow", gcnew array<Type^> { int::typeid });
+                if (isGroupRowMethod != nullptr)
+                    isGroupRow = safe_cast<bool>(isGroupRowMethod->Invoke(row->View, gcnew array<Object^> { row->RowHandle }));
+            }
+            catch (Exception^) { /* best-effort — treat as a data row */ }
+
+            if (isGroupRow)
+            {
+                info["ClassName"] = "GridGroupRow";
+                info["LocalizedControlType"] = "GridGroupRow";
+                info["AutomationId"] = "";
+                info["Description"] = "";
+                info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
+                info["IsEnabled"] = true;
+                info["IsOffscreen"] = false;
+                info["IsGroupRow"] = true;
+
+                String^ groupValue = "";
+                int childCount = 0;
+                try
+                {
+                    auto getGroupRowValueMethod = row->View->GetType()->GetMethod("GetGroupRowValue", gcnew array<Type^> { int::typeid });
+                    Object^ val = getGroupRowValueMethod != nullptr
+                        ? getGroupRowValueMethod->Invoke(row->View, gcnew array<Object^> { row->RowHandle })
+                        : nullptr;
+                    groupValue = val != nullptr ? val->ToString() : "";
+
+                    auto getChildRowCountMethod = row->View->GetType()->GetMethod("GetChildRowCount", gcnew array<Type^> { int::typeid });
+                    if (getChildRowCountMethod != nullptr)
+                        childCount = safe_cast<int>(getChildRowCountMethod->Invoke(row->View, gcnew array<Object^> { row->RowHandle }));
+                }
+                catch (Exception^) { /* best-effort */ }
+
+                info["Value"] = groupValue;
+                info["Name"] = String::Format("{0} ({1} items)", groupValue, childCount);
+                return info;
+            }
+
             info["ClassName"] = "GridRow";
             info["LocalizedControlType"] = "GridRow";
             info["Name"] = String::Format("Row {0}", row->RowHandle + 1);
@@ -562,6 +670,128 @@ public:
 
             auto isExpandedMethod = ownerType->GetMethod("IsNodeExpanded", gcnew array<Type^> { int::typeid });
             info["IsExpanded"] = safe_cast<bool>(isExpandedMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId }));
+            return info;
+        }
+        if (auto tlNode = dynamic_cast<DevExpressTreeListNodeHandle^>(target))
+        {
+            // "TreeListNode" isn't a real UIA ControlType, but prefixed anyway for the same
+            // future-proofing reason BridgeTreeNode/BridgeListItem are.
+            info["ClassName"] = "DevExpressTreeListNode";
+            info["LocalizedControlType"] = "DevExpressTreeListNode";
+            info["AutomationId"] = "";
+            info["Description"] = "";
+            info["IsEnabled"] = true;
+            info["IsOffscreen"] = false;
+            info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
+
+            bool hasChildren = false, expanded = false;
+            try
+            {
+                auto childNodesProp = tlNode->Node->GetType()->GetProperty("Nodes");
+                auto childNodes = childNodesProp != nullptr
+                    ? dynamic_cast<System::Collections::ICollection^>(childNodesProp->GetValue(tlNode->Node, nullptr))
+                    : nullptr;
+                hasChildren = childNodes != nullptr && childNodes->Count > 0;
+
+                auto expandedProp = tlNode->Node->GetType()->GetProperty("Expanded");
+                if (expandedProp != nullptr)
+                    expanded = safe_cast<bool>(expandedProp->GetValue(tlNode->Node, nullptr));
+            }
+            catch (Exception^) { /* best-effort */ }
+            info["HasChildren"] = hasChildren;
+            info["IsExpanded"] = expanded;
+
+            // Real per-column values via TreeList.GetRowCellValue(node, column) — the same
+            // CustomUnboundColumnData-reachable API that proved this node's "Status" column
+            // invisible to plain UIA. Concatenated generically across all visible columns rather
+            // than hardcoding a field name, so this isn't tied to any one fixture's column shape.
+            auto nameParts = gcnew List<String^>();
+            try
+            {
+                auto columnsProp = tlNode->TreeList->GetType()->GetProperty("Columns");
+                auto columns = columnsProp != nullptr
+                    ? dynamic_cast<System::Collections::IEnumerable^>(columnsProp->GetValue(tlNode->TreeList, nullptr))
+                    : nullptr;
+                // Unbound columns resolve through TreeList's own CustomUnboundColumnData event,
+                // same as the grid — only fires reliably when invoked on the UI thread.
+                Control^ treeListCtrl = dynamic_cast<Control^>(tlNode->TreeList);
+                if (columns != nullptr)
+                {
+                    for each (Object ^ column in columns)
+                    {
+                        auto visibleProp = column->GetType()->GetProperty("Visible");
+                        if (visibleProp != nullptr && !safe_cast<bool>(visibleProp->GetValue(column, nullptr))) continue;
+
+                        auto captionProp = column->GetType()->GetProperty("Caption");
+                        String^ caption = captionProp != nullptr ? (String^)captionProp->GetValue(column, nullptr) : "";
+
+                        Object^ value = nullptr;
+                        auto getCellValueForColumn = tlNode->TreeList->GetType()->GetMethod(
+                            "GetRowCellValue", gcnew array<Type^> { tlNode->Node->GetType(), column->GetType() });
+                        if (getCellValueForColumn != nullptr)
+                        {
+                            auto args = gcnew array<Object^> { tlNode->Node, column };
+                            try
+                            {
+                                if (treeListCtrl != nullptr && treeListCtrl->IsHandleCreated && treeListCtrl->InvokeRequired)
+                                {
+                                    auto invoker = gcnew GenericMethodInvoker(getCellValueForColumn, tlNode->TreeList, args);
+                                    value = treeListCtrl->Invoke(gcnew Func<Object^>(invoker, &GenericMethodInvoker::Run));
+                                }
+                                else
+                                {
+                                    value = getCellValueForColumn->Invoke(tlNode->TreeList, args);
+                                }
+                            }
+                            catch (Exception^) { /* best-effort */ }
+                        }
+
+                        nameParts->Add(String::Format("{0}: {1}", caption, value != nullptr ? value->ToString() : ""));
+                    }
+                }
+            }
+            catch (Exception^) { /* best-effort */ }
+
+            String^ combined = String::Join(" | ", nameParts);
+            info["Name"] = combined;
+            info["Value"] = combined;
+            return info;
+        }
+        if (auto item = dynamic_cast<DevExpressItemHandle^>(target))
+        {
+            info["ClassName"] = item->Kind == "token" ? "DevExpressToken" : "DevExpressComboItem";
+            info["LocalizedControlType"] = info["ClassName"];
+            info["AutomationId"] = "";
+            info["Description"] = "";
+            info["IsEnabled"] = true;
+            info["IsOffscreen"] = false;
+            info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
+
+            String^ realValue = "";
+            try
+            {
+                if (item->Kind == "token")
+                {
+                    // TokenEditToken.Value is a genuine DevExpress API distinct from Description
+                    // (the bound placeholder text UIA shows) — no fixture convention needed here.
+                    auto valueProp = item->Item->GetType()->GetProperty("Value");
+                    Object^ val = valueProp != nullptr ? valueProp->GetValue(item->Item, nullptr) : nullptr;
+                    realValue = val != nullptr ? val->ToString() : "";
+                }
+                else
+                {
+                    // ComboBoxEdit items are plain objects with no built-in bound/real split —
+                    // fixtures must expose a "RealValue" property by convention, same duck-typed
+                    // discipline as ListItemHandle's GetItemText.
+                    auto realValueProp = item->Item->GetType()->GetProperty("RealValue");
+                    Object^ val = realValueProp != nullptr ? realValueProp->GetValue(item->Item, nullptr) : nullptr;
+                    realValue = val != nullptr ? val->ToString() : (item->Item != nullptr ? item->Item->ToString() : "");
+                }
+            }
+            catch (Exception^) { /* best-effort */ }
+
+            info["Name"] = realValue;
+            info["Value"] = realValue;
             return info;
         }
 
@@ -724,6 +954,27 @@ public:
                 return;
             }
         }
+        if (auto tlNode = dynamic_cast<DevExpressTreeListNodeHandle^>(target))
+        {
+            auto focusedNodeProp = tlNode->TreeList->GetType()->GetProperty("FocusedNode");
+            if (focusedNodeProp != nullptr && focusedNodeProp->CanWrite)
+            {
+                focusedNodeProp->SetValue(tlNode->TreeList, tlNode->Node, nullptr);
+                return;
+            }
+        }
+        if (auto devExItem = dynamic_cast<DevExpressItemHandle^>(target))
+        {
+            if (devExItem->Kind == "combo")
+            {
+                auto editValueProp = devExItem->Owner->GetType()->GetProperty("EditValue");
+                if (editValueProp != nullptr && editValueProp->CanWrite)
+                {
+                    editValueProp->SetValue(devExItem->Owner, devExItem->Item, nullptr);
+                    return;
+                }
+            }
+        }
         auto performClick = target->GetType()->GetMethod("PerformClick", gcnew array<Type^>(0));
         if (performClick != nullptr)
         {
@@ -745,6 +996,15 @@ public:
             if (toggleExpandMethod != nullptr)
             {
                 toggleExpandMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId });
+                return;
+            }
+        }
+        if (auto tlNode = dynamic_cast<DevExpressTreeListNodeHandle^>(target))
+        {
+            auto expandedProp = tlNode->Node->GetType()->GetProperty("Expanded");
+            if (expandedProp != nullptr && expandedProp->CanWrite)
+            {
+                expandedProp->SetValue(tlNode->Node, true, nullptr);
                 return;
             }
         }
@@ -894,15 +1154,43 @@ public:
         if (rowCountProp == nullptr) return nullptr;
         int rowCount = safe_cast<int>(rowCountProp->GetValue(view, nullptr));
 
+        // GetVisibleRowHandle(i) equals i for an ungrouped view (zero behavior change for the
+        // pinned devexpress-grid-ownerdraw regression fixture), but is required once GroupCount >
+        // 0 — grouped views hand out real row handles that are no longer sequential positive
+        // ints (group-row handles are negative). Falls back to the raw index if the method isn't
+        // found for some reason, matching the old unconditional behavior.
+        auto visibleHandleMethod = view->GetType()->GetMethod("GetVisibleRowHandle", gcnew array<Type^> { int::typeid });
+
         auto result = gcnew List<Object^>();
         for (int i = 0; i < rowCount; i++)
-            result->Add(gcnew GridRowHandle(view, i));
+        {
+            int rowHandle = i;
+            if (visibleHandleMethod != nullptr)
+            {
+                try { rowHandle = safe_cast<int>(visibleHandleMethod->Invoke(view, gcnew array<Object^> { i })); }
+                catch (Exception^) { rowHandle = i; }
+            }
+            result->Add(gcnew GridRowHandle(view, rowHandle));
+        }
         return result;
     }
 
     static List<Object^>^ GetDevExpressGridCells(GridRowHandle^ row)
     {
         auto result = gcnew List<Object^>();
+
+        // Group rows aren't backed by per-column GetRowCellValue the way data rows are (that API
+        // is for data rows only) — this bridge doesn't drill into per-column cells for a group
+        // row; BuildInfo's GridGroupRow branch already exposes the group's real value directly.
+        try
+        {
+            auto isGroupRowMethod = row->View->GetType()->GetMethod("IsGroupRow", gcnew array<Type^> { int::typeid });
+            if (isGroupRowMethod != nullptr &&
+                safe_cast<bool>(isGroupRowMethod->Invoke(row->View, gcnew array<Object^> { row->RowHandle })))
+                return result;
+        }
+        catch (Exception^) { /* best-effort — fall through to normal cell reads */ }
+
         auto columnsProp = row->View->GetType()->GetProperty("Columns");
         if (columnsProp == nullptr) return result;
         auto columns = dynamic_cast<System::Collections::IEnumerable^>(columnsProp->GetValue(row->View, nullptr));
@@ -931,6 +1219,23 @@ public:
             : nullptr;
     }
 
+    // Type::GetProperty(string) throws AmbiguousMatchException when a property is re-declared
+    // with a covariant return type at more than one level of the hierarchy — DevExpress editors
+    // do exactly this for "Properties" (BaseEdit.Properties : RepositoryItem, overridden as
+    // ComboBoxEdit.Properties : RepositoryItemComboBox, etc). Walking from the most-derived type
+    // down with BindingFlags::DeclaredOnly finds the first (most-derived, most useful) match
+    // instead of throwing.
+    static PropertyInfo^ FindPropertyInHierarchy(Type^ type, String^ name)
+    {
+        for (Type^ t = type; t != nullptr; t = t->BaseType)
+        {
+            auto prop = t->GetProperty(name,
+                BindingFlags::Public | BindingFlags::Instance | BindingFlags::DeclaredOnly);
+            if (prop != nullptr) return prop;
+        }
+        return nullptr;
+    }
+
     static Object^ GetDevExpressRowCellValue(Object^ view, int rowHandle, Object^ column)
     {
         auto method = view->GetType()->GetMethod("GetRowCellValue",
@@ -950,6 +1255,109 @@ public:
         }
 
         return method->Invoke(view, gcnew array<Object^> { rowHandle, column });
+    }
+
+    static List<Object^>^ TryGetDevExpressTreeListRoots(Object^ target)
+    {
+        String^ typeName = target->GetType()->FullName;
+        if (typeName == nullptr || typeName != "DevExpress.XtraTreeList.TreeList") return nullptr;
+
+        auto nodesProp = target->GetType()->GetProperty("Nodes");
+        if (nodesProp == nullptr) return nullptr;
+        auto nodes = dynamic_cast<System::Collections::IEnumerable^>(nodesProp->GetValue(target, nullptr));
+        if (nodes == nullptr) return nullptr;
+
+        auto result = gcnew List<Object^>();
+        for each (Object ^ node in nodes)
+            result->Add(gcnew DevExpressTreeListNodeHandle(target, node));
+        return result;
+    }
+
+    static List<Object^>^ GetDevExpressTreeListNodeChildren(DevExpressTreeListNodeHandle^ handle)
+    {
+        auto result = gcnew List<Object^>();
+
+        // Same "children genuinely absent until expanded" discipline as TreeNodeHandle — makes
+        // Reflector::Expand's toggle observable instead of always returning the full subtree.
+        auto expandedProp = handle->Node->GetType()->GetProperty("Expanded");
+        bool expanded = expandedProp != nullptr && safe_cast<bool>(expandedProp->GetValue(handle->Node, nullptr));
+        if (!expanded) return result;
+
+        auto childNodesProp = handle->Node->GetType()->GetProperty("Nodes");
+        auto childNodes = childNodesProp != nullptr
+            ? dynamic_cast<System::Collections::IEnumerable^>(childNodesProp->GetValue(handle->Node, nullptr))
+            : nullptr;
+        if (childNodes == nullptr) return result;
+
+        for each (Object ^ child in childNodes)
+            result->Add(gcnew DevExpressTreeListNodeHandle(handle->TreeList, child));
+        return result;
+    }
+
+    static List<Object^>^ TryGetDevExpressComboItems(Object^ target)
+    {
+        String^ typeName = target->GetType()->FullName;
+        if (typeName == nullptr || typeName != "DevExpress.XtraEditors.ComboBoxEdit") return nullptr;
+
+        try
+        {
+            auto propertiesProp = FindPropertyInHierarchy(target->GetType(), "Properties");
+            Object^ properties = propertiesProp != nullptr ? propertiesProp->GetValue(target, nullptr) : nullptr;
+            if (properties == nullptr) return gcnew List<Object^>();
+
+            auto itemsProp = properties->GetType()->GetProperty("Items");
+            auto items = itemsProp != nullptr
+                ? dynamic_cast<System::Collections::IEnumerable^>(itemsProp->GetValue(properties, nullptr))
+                : nullptr;
+            if (items == nullptr) return gcnew List<Object^>();
+
+            auto result = gcnew List<Object^>();
+            int index = 0;
+            for each (Object ^ item in items)
+                result->Add(gcnew DevExpressItemHandle(target, item, index++, "combo"));
+            return result;
+        }
+        catch (Exception^ ex)
+        {
+            // Surface the failure as a single diagnostic child instead of throwing — an
+            // exception here would silently vanish (BridgeAgentService.BuildXmlRecursive swallows
+            // getChildren errors to Console.Error, invisible to a WinForms app), leaving a plain
+            // empty-children element that's indistinguishable from "combo really has no items."
+            auto result = gcnew List<Object^>();
+            result->Add(gcnew DevExpressItemHandle(target, "ERROR: " + ex->Message, 0, "combo"));
+            return result;
+        }
+    }
+
+    static List<Object^>^ TryGetDevExpressTokens(Object^ target)
+    {
+        String^ typeName = target->GetType()->FullName;
+        if (typeName == nullptr || typeName != "DevExpress.XtraEditors.TokenEdit") return nullptr;
+
+        try
+        {
+            auto propertiesProp = FindPropertyInHierarchy(target->GetType(), "Properties");
+            Object^ properties = propertiesProp != nullptr ? propertiesProp->GetValue(target, nullptr) : nullptr;
+            if (properties == nullptr) return gcnew List<Object^>();
+
+            auto tokensProp = properties->GetType()->GetProperty("Tokens");
+            auto tokens = tokensProp != nullptr
+                ? dynamic_cast<System::Collections::IEnumerable^>(tokensProp->GetValue(properties, nullptr))
+                : nullptr;
+            if (tokens == nullptr) return gcnew List<Object^>();
+
+            auto result = gcnew List<Object^>();
+            int index = 0;
+            for each (Object ^ token in tokens)
+                result->Add(gcnew DevExpressItemHandle(target, token, index++, "token"));
+            return result;
+        }
+        catch (Exception^ ex)
+        {
+            auto result = gcnew List<Object^>();
+            result->Add(gcnew DevExpressItemHandle(target, "ERROR: " + ex->Message, 0, "token"));
+            return result;
+        }
     }
 
 private:

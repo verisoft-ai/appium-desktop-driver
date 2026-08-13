@@ -1,3 +1,4 @@
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Uia3;
 
@@ -19,6 +20,11 @@ public class SessionState
     internal JavaAgentService? Java { get; private set; }
     public bool JavaSwingEnabled { get; private set; }
     public int LastStartedProcessId { get; set; }
+
+    // .NET bridge
+    internal BridgeAgentService? DotNetBridge { get; private set; }
+    public bool DotNetBridgeEnabled { get; private set; }
+    public int DotNetBridgeTargetPid { get; private set; }
 
     // HWND of the attached top-level window (0 if the root is the desktop or
     // an element with no native handle). We re-resolve the root via
@@ -123,6 +129,23 @@ public class SessionState
     }
 
     /// <summary>
+    /// Connects to the .NET bridge running in the target CLR process.
+    /// The bridge DLL must have been injected first via BridgeInjector.
+    /// </summary>
+    public void EnableDotnetBridge(int? pid = null)
+    {
+        int targetPid = pid ?? LastStartedProcessId;
+        if (targetPid == 0)
+            throw new InvalidOperationException(
+                "No process PID available. Use appTopLevelWindow with dotnetBridge:true.");
+
+        DotNetBridge ??= new BridgeAgentService();
+        DotNetBridge.Connect(targetPid);
+        DotNetBridgeEnabled = true;
+        DotNetBridgeTargetPid = targetPid;
+    }
+
+    /// <summary>
     /// Returns true if the given UIA element's HWND is a Java window.
     /// Uses WinAPI GetClassName — no JAB DLL required.
     /// </summary>
@@ -133,6 +156,25 @@ public class SessionState
         {
             var hwnd = element.CurrentNativeWindowHandle;
             return hwnd != IntPtr.Zero && JavaWindowDetector.IsJavaWindow(hwnd);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Returns true if the given UIA element's HWND belongs to the process the .NET bridge
+    /// was injected into. Unlike Java (which can auto-detect any Java window by class name),
+    /// the bridge is injected into one specific target process per session, so routing is
+    /// keyed on PID match rather than a generic "is this a .NET window" heuristic.
+    /// </summary>
+    public bool IsDotnetBridgeWindowElement(IUIAutomationElement element)
+    {
+        if (!DotNetBridgeEnabled) return false;
+        try
+        {
+            var hwnd = element.CurrentNativeWindowHandle;
+            if (hwnd == IntPtr.Zero) return false;
+            BridgeInjector.GetWindowThreadProcessId(hwnd, out uint pid);
+            return (int)pid == DotNetBridgeTargetPid;
         }
         catch { return false; }
     }

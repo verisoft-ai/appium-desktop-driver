@@ -93,6 +93,10 @@ public class CommandDispatcher
             ["enableJavaSwing"] = JabCommands.EnableJavaSwing,
             ["injectJavaAgent"] = JabCommands.InjectJavaAgent,
 
+            // .NET bridge
+            ["enableDotnetBridge"] = DotNetBridgeCommands.EnableDotnetBridge,
+            ["injectDotnetBridge"] = DotNetBridgeCommands.InjectDotnetBridge,
+
             // Diagnostics
             ["getMonitors"] = DiagnosticCommands.GetMonitors,
             ["debug:ping"] = DiagnosticCommands.Ping,

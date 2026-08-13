@@ -83,6 +83,7 @@ export const executeMethodMap: ExecuteMethodMap<AppiumDesktopDriver> = {
         params: { required: ['prompt', 'model'], optional: ['includeAnnotatedImage'] },
     },
     'windows: attachJavaSwing': { command: 'emAttachJavaSwing', params: { optional: ['jdkPath'] } },
+    'windows: attachDotnetBridge': { command: 'emAttachDotnetBridge', params: {} },
     'windows: switchToWindowByTitle': {
         command: 'emSwitchToWindowByTitle',
         params: { optional: ['title', 'exact'] },

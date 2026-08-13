@@ -21,10 +21,12 @@ for installation, capabilities, and usage examples.
   - [PowerShell Execution](#powershell-execution)
   - [Cache Requests](#cache-requests)
   - [Java Swing Agent](#java-swing-agent)
+  - [.NET Bridge](#net-bridge)
 - [W3C Actions](#w3c-actions)
 - [WebView and CDP](#webview-and-cdp)
 - [Internet Explorer](#internet-explorer)
 - [Java Swing Automation](#java-swing-automation)
+- [.NET Bridge Automation](#net-bridge-automation)
 
 ## Locator Strategies
 
@@ -616,6 +618,28 @@ await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program 
 
 ---
 
+### .NET Bridge
+
+#### windows: attachDotnetBridge
+
+Injects the .NET bridge DLL into the CLR of the process owning the
+current session window, then connects to it. Equivalent to creating the
+session with `appium:dotnetBridge: true` + `appium:appTopLevelWindow`
+but allows you to run plain UIA commands first and switch to bridge
+mode later.
+
+Takes no arguments. Requires no capability — the target process is
+resolved from the session's current root window.
+
+```js
+await driver.executeScript('windows: attachDotnetBridge', []);
+```
+
+See [.NET Bridge Automation](#net-bridge-automation) for full setup
+and current scope (WinForms only — WPF not yet supported).
+
+---
+
 ## Internet Explorer
 
 `iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
@@ -915,3 +939,96 @@ routes each find call to the correct engine automatically.
 - **Java 8 and Java 9+** — tested on JDK 8 and JDK 25. All three
   injection paths work on both. Java 9+ requires `JAVA_HOME/bin/java.exe`
   (no `tools.jar` needed).
+
+## .NET Bridge Automation
+
+The driver automates WinForms (and DevExpress WinForms) applications
+whose custom-drawn controls don't expose values through UI Automation
+— for example, ownerdraw controls that paint their own content via GDI,
+or DevExpress grids/trees that only surface a generic placeholder value
+("Column row N") to UIA regardless of the real cell content.
+
+### How it works
+
+Unlike the Java Swing agent, .NET has no cooperative attach API — this
+is real Win32 injection (`LoadLibraryW` + `CreateRemoteThread`), not a
+JVM-sanctioned mechanism. The bridge is a native DLL (built from a
+C++/CLI mixed-mode assembly, so it has a real native entry point
+`CreateRemoteThread` can target, but runs managed reflection code once
+loaded) that starts a loopback TCP server inside the target process,
+writes its port to `%TEMP%\appium-dotnet-bridge-{pid}.port`, and serves
+element queries from the C# driver server. Mutating commands
+(`invoke`/`select`/`expand`/`setValue`) are marshaled onto the target's
+real UI thread before touching WinForms state.
+
+Bitness is detected automatically: 64-bit targets are injected directly,
+32-bit (WOW64) targets are injected via a separate 32-bit stub process,
+since a 64-bit host cannot `CreateRemoteThread` across bitness.
+
+There is no launch-time injection path — the target process must
+already be running before the bridge can attach.
+
+### Path A — attach at session time
+
+Set `appium:appTopLevelWindow` to the decimal HWND of the target window
+and `appium:dotnetBridge: true`.
+
+```js
+capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,   // decimal HWND string
+  'appium:dotnetBridge': true,
+  'appium:shouldCloseApp': false,
+}
+```
+
+### Path B — inject mid-session (`windows: attachDotnetBridge`)
+
+Create a plain UIA session first, switch to the target window if needed,
+then inject the bridge at any point during the session.
+
+```js
+// 1. Create a plain UIA session pointed at the target window
+const driver = await remote({ ..., capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,
+  'appium:shouldCloseApp': false,
+}});
+
+// 2. Inject at any point
+await driver.executeScript('windows: attachDotnetBridge', []);
+
+// 3. Real control values (not the generic UIA placeholder) are now readable
+const source = await driver.getPageSource();
+```
+
+If you started from `app: Root`, switch to the target window first:
+
+```js
+const hexHwnd = `0x${parseInt(decimalHwnd, 10).toString(16).padStart(8, '0')}`;
+await driver.switchToWindow(hexHwnd);
+await driver.executeScript('windows: attachDotnetBridge', []);
+```
+
+### Supported controls
+
+- Generic ownerdraw controls (ListBox, TreeView, ComboBox, ContextMenu,
+  custom-painted controls with blanked `AccessibleName`)
+- DevExpress WinForms: `XtraGrid` (including grouped grids), `XtraTreeList`,
+  `ComboBoxEdit`, `TokenEdit`
+
+### Limitations
+
+- **.NET Framework only** — targets hosting CoreCLR (.NET 5+ / .NET
+  Core, detected via `coreclr.dll`) are rejected. Only classic
+  `clr.dll`-hosted processes are supported.
+- **WinForms only — WPF is not yet supported.** Plain WPF windows are
+  partially readable (generic visual-tree walk covers read-only
+  queries), but mutating commands on WPF elements are not correctly
+  marshaled onto the WPF dispatcher yet, and there is no DevExpress-WPF
+  (`Xpf.*`) reflection at all — DevExpress WPF grids/trees fall back to
+  a generic, non-semantic walk. WPF support is planned.
+- **x64 and x86 (WOW64) targets only** — both are supported via
+  automatic bitness detection.

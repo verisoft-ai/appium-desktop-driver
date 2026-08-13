@@ -326,6 +326,18 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                     }
                 }
 
+                if (this.caps.dotnetBridge) {
+                    if (!this.caps.appTopLevelWindow) {
+                        throw new errors.InvalidArgumentError(
+                            'dotnetBridge:true requires the appTopLevelWindow capability to identify the target window ' +
+                            '(no launch-time injection is supported for .NET — attach only).'
+                        );
+                    }
+                    this.log.info('.NET Bridge mode: injecting bridge into running CLR via Win32 injection...');
+                    await this.sendCommand('injectDotnetBridge', { hwnd: Number(this.caps.appTopLevelWindow) });
+                    this.log.info('.NET bridge injected and connected successfully.');
+                }
+
                 if (this.caps.prerun) {
                     this.log.info('Executing prerun PowerShell script...');
                     await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);

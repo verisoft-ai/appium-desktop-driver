@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Protocol;
 using NovaUIAutomationServer.Server;
@@ -26,6 +27,13 @@ public static class FindCommands
         if (TryRouteToJava(state, contextElementId, out var javaRoot))
         {
             return state.Java!.FindFirst(javaRoot!, conditionDto, scope);
+        }
+
+        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
+        // the process the bridge was injected into.
+        if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
+        {
+            return state.DotNetBridge!.FindFirst(dotnetRoot!, conditionDto, scope);
         }
 
         // When searching from the session root we re-resolve the attached HWND
@@ -98,6 +106,13 @@ public static class FindCommands
             return state.Java!.FindAll(javaRoot!, conditionDto, scope);
         }
 
+        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
+        // the process the bridge was injected into.
+        if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
+        {
+            return state.DotNetBridge!.FindAll(dotnetRoot!, conditionDto, scope);
+        }
+
         // When searching from the session root we re-resolve the attached HWND
         // via IUIAutomation.ElementFromHandle(hwnd) on every call. WPF apps
         // routinely rebuild their automation-peer tree after navigation (splash
@@ -167,6 +182,16 @@ public static class FindCommands
             try
             {
                 return state.Java!.IsAlive(elementId);
+            }
+            catch { return false; }
+        }
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            if (state.DotNetBridge == null) return false;
+            try
+            {
+                return state.DotNetBridge!.IsAlive(elementId);
             }
             catch { return false; }
         }
@@ -475,6 +500,44 @@ public static class FindCommands
         var title = uiaRoot.get_CurrentName() ?? "";
         javaRoot = state.Java.GetWindowRoot(hwnd, title);
         return javaRoot != null;
+    }
+
+    // ── .NET bridge routing ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns true when the find request should be routed to the .NET bridge.
+    /// Sets <paramref name="dotnetRoot"/> to the bridge element to search from.
+    /// </summary>
+    private static bool TryRouteToDotnet(SessionState state, string? contextElementId, out BridgeAgentElement? dotnetRoot)
+    {
+        dotnetRoot = null;
+        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return false;
+
+        // Context is already a bridge element — search within its subtree directly.
+        if (contextElementId != null && BridgeAgentElement.IsDotnetId(contextElementId))
+        {
+            dotnetRoot = state.DotNetBridge.GetById(contextElementId);
+            return true;
+        }
+
+        IUIAutomationElement? uiaRoot = null;
+        if (contextElementId != null)
+        {
+            try { uiaRoot = state.GetElement(contextElementId); }
+            catch { return false; }
+        }
+        else
+        {
+            uiaRoot = state.GetLiveRoot();
+        }
+
+        if (uiaRoot == null) return false;
+        if (!state.IsDotnetBridgeWindowElement(uiaRoot)) return false;
+
+        var hwnd = uiaRoot.CurrentNativeWindowHandle;
+        var title = uiaRoot.get_CurrentName() ?? "";
+        dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd, title);
+        return dotnetRoot != null;
     }
 
     // Native UIA3 descendant search first — sub-millisecond on typical apps.

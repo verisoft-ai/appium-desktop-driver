@@ -1184,3 +1184,15 @@ export async function executeAttachJavaSwing(this: AppiumDesktopDriver, opts: { 
     const jdkPath = opts.jdkPath ?? this.caps.jdkPath;
     await this.sendCommand('injectJavaAgent', { jdkPath });
 }
+
+/**
+ * `windows: attachDotnetBridge` execute-method handler: injects the .NET bridge into the CLR
+ * owning the session's current root window (resolved by the C# server from the root element's
+ * HWND) and connects to it.
+ * @returns Resolves once the .NET bridge has been injected and connected.
+ */
+export async function executeAttachDotnetBridge(this: AppiumDesktopDriver): Promise<void> {
+    // Injects the bridge DLL into the process owning the current root window,
+    // then connects. The C# side resolves the PID from the root element's HWND.
+    await this.sendCommand('injectDotnetBridge', {});
+}

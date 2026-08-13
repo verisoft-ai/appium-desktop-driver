@@ -417,6 +417,85 @@ export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildP
     return { proc, hwnd };
 }
 
+export const LISTBOX_PROBE_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'listbox-probe-throwaway', 'bin', 'x64', 'Debug', 'net472', 'ListBoxProbe.exe'
+);
+
+/**
+ * Throwaway Phase-1 checkpoint fixture for the .NET bridge's ListItemHandle machinery — see
+ * test-apps/listbox-probe-throwaway/. Deleted once the real ownerdraw-gallery app supersedes it.
+ */
+export async function launchListBoxProbeExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(LISTBOX_PROBE_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn listbox probe app: ${LISTBOX_PROBE_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`Listbox probe app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export const OWNERDRAW_GALLERY_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'ownerdraw-gallery', 'bin', 'x64', 'Debug', 'net472', 'OwnerDrawGallery.exe'
+);
+
+/**
+ * Launches the ownerdraw-gallery fixture externally (simulating a customer's app the driver has
+ * no launch control over). No third-party dependency, no trial dialog to dismiss. See
+ * test-apps/ownerdraw-gallery/Program.cs for the 5 element kinds it hosts.
+ */
+export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(OWNERDRAW_GALLERY_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn ownerdraw-gallery app: ${OWNERDRAW_GALLERY_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`ownerdraw-gallery app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
 export async function createDotnetBridgeAttachSession(hwnd: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({
         ...APPIUM_SERVER,

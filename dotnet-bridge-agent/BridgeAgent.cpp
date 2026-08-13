@@ -296,6 +296,37 @@ public:
         : View(view), RowHandle(rowHandle), Column(column), Caption(caption), FieldName(fieldName) {}
 };
 
+// Synthetic wrapper for a "virtual" list item — for any Control that paints its own rows and
+// isn't a real ListBox/ComboBox (so has no ListBox.Items to be real child objects). Unlike
+// GridRowHandle/GridCellHandle, this is not tied to any specific fixture or 3rd-party control:
+// TryGetOwnerDrawListItems below picks up ANY Control that exposes the ItemCount/GetItemText/
+// SelectItem convention via reflection, so both our own test fixtures and, in principle, a real
+// customer control following the same shape would work without the bridge needing to know about
+// the concrete type at compile time — same reflection-only discipline as the DevExpress adapter.
+public ref class ListItemHandle
+{
+public:
+    Object^ Owner;   // the owning Control (held as Object^ — no compile-time fixture reference)
+    int Index;
+
+    ListItemHandle(Object^ owner, int index) : Owner(owner), Index(index) {}
+};
+
+// Synthetic wrapper for a "virtual" tree node — same convention-based, no-compile-time-reference
+// discipline as ListItemHandle. Node ids are owner-defined ints (not necessarily contiguous),
+// -1 is the reserved "root" parent id. TryGetTreeRootNodes/GetChildren below only descend into a
+// node's children when the owner itself reports it expanded — that's what makes
+// Reflector::Expand's ToggleExpand call observable (children genuinely absent until expanded),
+// not a no-op that always returns the same full tree regardless of expand state.
+public ref class TreeNodeHandle
+{
+public:
+    Object^ Owner;
+    int NodeId;
+
+    TreeNodeHandle(Object^ owner, int nodeId) : Owner(owner), NodeId(nodeId) {}
+};
+
 // C++/CLI lambdas cannot capture managed-typed locals for delegate construction, so a tiny
 // closure object stands in for GetDevExpressRowCellValue's Control.Invoke marshaling.
 ref class CellValueInvoker
@@ -322,6 +353,25 @@ public:
 public ref class Reflector abstract sealed
 {
 public:
+    // Finds a real Control near `target` whose handle lives on the actual WinForms UI thread —
+    // used by BridgeServer::Dispatch to marshal every mutating command (invoke/select/expand/
+    // setValue/requestFocus) via Control.Invoke before touching WinForms state. Without this,
+    // those commands run directly on the bridge's TCP connection-handling thread, which is a
+    // plain background Thread (never marked STA, never pumps a Windows message loop) — calling
+    // WinForms UI-creating code from it (e.g. a fixture's PerformClick spawning a popup Form)
+    // is a real threading violation that fails silently: the RPC call returns successfully but
+    // the resulting window is never actually functional. GetDevExpressRowCellValue already had
+    // to work around this exact problem locally (ctrl->Invoke(...)) before this existed.
+    static Control^ FindUiThreadControl(Object^ target)
+    {
+        if (auto ctrl = dynamic_cast<Control^>(target)) return ctrl;
+        if (auto item = dynamic_cast<ListItemHandle^>(target)) return dynamic_cast<Control^>(item->Owner);
+        if (auto node = dynamic_cast<TreeNodeHandle^>(target)) return dynamic_cast<Control^>(node->Owner);
+        if (auto row = dynamic_cast<GridRowHandle^>(target)) return GridControlOf(row->View);
+        if (auto cell = dynamic_cast<GridCellHandle^>(target)) return GridControlOf(cell->View);
+        return nullptr;
+    }
+
     static Object^ GetWindowRoot(long long hwndValue)
     {
         IntPtr hwnd = IntPtr((void*)hwndValue);
@@ -358,6 +408,12 @@ public:
             return rowsFromGrid;
         if (auto row = dynamic_cast<GridRowHandle^>(target))
             return GetDevExpressGridCells(row);
+        if (auto listItems = TryGetOwnerDrawListItems(target))
+            return listItems;
+        if (auto rootNodes = TryGetTreeRootNodes(target))
+            return rootNodes;
+        if (auto node = dynamic_cast<TreeNodeHandle^>(target))
+            return GetTreeNodeChildren(node);
 
         if (auto ctrl = dynamic_cast<Control^>(target))
         {
@@ -392,6 +448,22 @@ public:
             info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
             info["IsEnabled"] = true;
             info["IsOffscreen"] = false;
+
+            // Reflects the view's real FocusedRowHandle live on every getInfo/getChildren call —
+            // this is what makes Reflector::Select's FocusedRowHandle write observable from the
+            // outside, rather than a test only being able to assert "the call didn't throw."
+            bool isSelected = false;
+            try
+            {
+                auto focusedRowHandleProp = row->View->GetType()->GetProperty("FocusedRowHandle");
+                if (focusedRowHandleProp != nullptr)
+                {
+                    int focused = safe_cast<int>(focusedRowHandleProp->GetValue(row->View, nullptr));
+                    isSelected = focused == row->RowHandle;
+                }
+            }
+            catch (Exception^) { /* best-effort — leave isSelected false */ }
+            info["IsSelected"] = isSelected;
             return info;
         }
         if (auto cell = dynamic_cast<GridCellHandle^>(target))
@@ -407,6 +479,89 @@ public:
 
             Object^ value = GetDevExpressRowCellValue(cell->View, cell->RowHandle, cell->Column);
             info["Value"] = value != nullptr ? value->ToString() : "";
+            return info;
+        }
+        if (auto item = dynamic_cast<ListItemHandle^>(target))
+        {
+            auto ownerType = item->Owner->GetType();
+            // "ListItem" (unlike "GridRow"/"GridCell") is a real UIA ControlType name — an xpath
+            // node test like //ListItem would build a real ControlType==ListItem condition
+            // instead of falling back to the ClassName match this bridge understands, silently
+            // matching nothing. Prefixed to guarantee no collision with any current or future
+            // real UIA ControlType.
+            info["ClassName"] = "BridgeListItem";
+            info["LocalizedControlType"] = "BridgeListItem";
+            info["AutomationId"] = "";
+            info["Description"] = "";
+            info["IsEnabled"] = true;
+            info["IsOffscreen"] = false;
+
+            auto getItemTextMethod = ownerType->GetMethod("GetItemText", gcnew array<Type^> { int::typeid });
+            String^ text = getItemTextMethod != nullptr
+                ? (String^)getItemTextMethod->Invoke(item->Owner, gcnew array<Object^> { item->Index })
+                : "";
+            info["Name"] = text;
+            info["Value"] = text;
+
+            // Optional SelectedIndex convention — reflects live selection state so tests can
+            // assert selectElement actually changed something, not just "the call didn't throw"
+            // (same reasoning as GridRowHandle's IsSelected added in the invoke/select split).
+            bool isSelected = false;
+            auto selectedIndexProp = ownerType->GetProperty("SelectedIndex");
+            if (selectedIndexProp != nullptr)
+            {
+                try
+                {
+                    int selected = safe_cast<int>(selectedIndexProp->GetValue(item->Owner, nullptr));
+                    isSelected = selected == item->Index;
+                }
+                catch (Exception^) { /* best-effort — leave isSelected false */ }
+            }
+            info["IsSelected"] = isSelected;
+
+            // Optional GetItemBounds(int) convention — cheap for fixtures we control, gives
+            // native mouse .click() real coordinates instead of the 0,0,0,0 GridRowHandle/
+            // GridCellHandle currently fall back to.
+            info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
+            auto getItemBoundsMethod = ownerType->GetMethod("GetItemBounds", gcnew array<Type^> { int::typeid });
+            auto ownerCtrl = dynamic_cast<Control^>(item->Owner);
+            if (getItemBoundsMethod != nullptr && ownerCtrl != nullptr)
+            {
+                try
+                {
+                    Object^ boundsObj = getItemBoundsMethod->Invoke(item->Owner, gcnew array<Object^> { item->Index });
+                    auto bounds = safe_cast<System::Drawing::Rectangle>(boundsObj);
+                    System::Drawing::Point screenTopLeft = ownerCtrl->PointToScreen(System::Drawing::Point(bounds.X, bounds.Y));
+                    info["x"] = (double)screenTopLeft.X;
+                    info["y"] = (double)screenTopLeft.Y;
+                    info["width"] = (double)bounds.Width;
+                    info["height"] = (double)bounds.Height;
+                }
+                catch (Exception^) { /* best-effort — leave 0,0,0,0 */ }
+            }
+            return info;
+        }
+        if (auto node = dynamic_cast<TreeNodeHandle^>(target))
+        {
+            auto ownerType = node->Owner->GetType();
+            info["ClassName"] = "BridgeTreeNode"; // avoid colliding with the real UIA "TreeItem"
+            info["LocalizedControlType"] = "BridgeTreeNode";
+            info["AutomationId"] = "";
+            info["Description"] = "";
+            info["IsEnabled"] = true;
+            info["IsOffscreen"] = false;
+            info["x"] = 0.0; info["y"] = 0.0; info["width"] = 0.0; info["height"] = 0.0;
+
+            auto getNodeTextMethod = ownerType->GetMethod("GetNodeText", gcnew array<Type^> { int::typeid });
+            String^ text = (String^)getNodeTextMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId });
+            info["Name"] = text;
+            info["Value"] = text;
+
+            auto hasChildrenMethod = ownerType->GetMethod("NodeHasChildren", gcnew array<Type^> { int::typeid });
+            info["HasChildren"] = safe_cast<bool>(hasChildrenMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId }));
+
+            auto isExpandedMethod = ownerType->GetMethod("IsNodeExpanded", gcnew array<Type^> { int::typeid });
+            info["IsExpanded"] = safe_cast<bool>(isExpandedMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId }));
             return info;
         }
 
@@ -545,6 +700,58 @@ public:
         throw gcnew InvalidOperationException("Element does not support a reflectable invoke action.");
     }
 
+    // Distinct from Invoke: "select" means "make this the current selection," not "click it."
+    // Previously selectElement silently aliased to Invoke (PerformClick-only), so selecting a
+    // grid row that isn't also a button-like control with PerformClick would throw a misleading
+    // "does not support invoke" error instead of a real select.
+    static void Select(Object^ target)
+    {
+        if (auto row = dynamic_cast<GridRowHandle^>(target))
+        {
+            auto focusedRowHandleProp = row->View->GetType()->GetProperty("FocusedRowHandle");
+            if (focusedRowHandleProp != nullptr && focusedRowHandleProp->CanWrite)
+            {
+                focusedRowHandleProp->SetValue(row->View, row->RowHandle, nullptr);
+                return;
+            }
+        }
+        if (auto item = dynamic_cast<ListItemHandle^>(target))
+        {
+            auto selectItemMethod = item->Owner->GetType()->GetMethod("SelectItem", gcnew array<Type^> { int::typeid });
+            if (selectItemMethod != nullptr)
+            {
+                selectItemMethod->Invoke(item->Owner, gcnew array<Object^> { item->Index });
+                return;
+            }
+        }
+        auto performClick = target->GetType()->GetMethod("PerformClick", gcnew array<Type^>(0));
+        if (performClick != nullptr)
+        {
+            performClick->Invoke(target, nullptr);
+            return;
+        }
+        throw gcnew InvalidOperationException(
+            String::Format("selectElement not supported for {0}.", target->GetType()->Name));
+    }
+
+    // Deliberately no PerformClick/Invoke fallback here (unlike Select) — a click silently
+    // "succeeding" on a non-expandable element while claiming to have expanded it would be
+    // exactly the bug the invoke/select/expand split was meant to fix.
+    static void Expand(Object^ target)
+    {
+        if (auto node = dynamic_cast<TreeNodeHandle^>(target))
+        {
+            auto toggleExpandMethod = node->Owner->GetType()->GetMethod("ToggleExpand", gcnew array<Type^> { int::typeid });
+            if (toggleExpandMethod != nullptr)
+            {
+                toggleExpandMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId });
+                return;
+            }
+        }
+        throw gcnew InvalidOperationException(
+            String::Format("expandElement not supported for {0}.", target->GetType()->Name));
+    }
+
     // ── Condition matching — mirrors java-agent/CommandHandler.java's matchesCondition() shape:
     //    {"type":"and"|"or"|"not"|"true"|"false"|"property", "property":..., "value":..., "conditions":[...], "condition":{...}}
 
@@ -587,6 +794,83 @@ public:
             return MatchesProperty(target, prop, value);
         }
         return false;
+    }
+
+    // ── Owner-draw "virtual list" extraction — convention-based, no compile-time reference to
+    //    any specific fixture or control type. Any Control exposing all three of:
+    //      int ItemCount { get; }
+    //      string GetItemText(int index)
+    //      void SelectItem(int index)
+    //    is treated as a virtual list host — its items become ListItemHandle children. This is
+    //    intentionally not a type-name check (unlike TryGetDevExpressGridRows below): the point
+    //    is that any control following this shape works, including a real customer control we've
+    //    never seen, not just our own test fixtures. GetItemBounds(int) is optional — if present,
+    //    its (fixture-local) Rectangle is translated to screen coordinates via the owner's
+    //    PointToScreen so native mouse .click() has real bounds to work with; otherwise bounds
+    //    default to 0,0,0,0 and interaction must go through selectElement.
+    static List<Object^>^ TryGetOwnerDrawListItems(Object^ target)
+    {
+        auto type = target->GetType();
+        auto itemCountProp = type->GetProperty("ItemCount");
+        auto getItemTextMethod = type->GetMethod("GetItemText", gcnew array<Type^> { int::typeid });
+        auto selectItemMethod = type->GetMethod("SelectItem", gcnew array<Type^> { int::typeid });
+        if (itemCountProp == nullptr || getItemTextMethod == nullptr || selectItemMethod == nullptr)
+            return nullptr;
+
+        int count = safe_cast<int>(itemCountProp->GetValue(target, nullptr));
+        auto result = gcnew List<Object^>();
+        for (int i = 0; i < count; i++)
+            result->Add(gcnew ListItemHandle(target, i));
+        return result;
+    }
+
+    // ── Owner-draw "virtual tree" extraction — same convention-based discipline as
+    //    TryGetOwnerDrawListItems. Any Control exposing all of:
+    //      int[] GetChildNodeIds(int parentNodeId)   // -1 for the tree's roots
+    //      string GetNodeText(int nodeId)
+    //      bool NodeHasChildren(int nodeId)
+    //      bool IsNodeExpanded(int nodeId)
+    //      void ToggleExpand(int nodeId)
+    //    is treated as a virtual tree host. GetChildren on a TreeNodeHandle only calls
+    //    GetChildNodeIds when the owner reports the node expanded — a collapsed node's children
+    //    are genuinely absent from the tree, not just hidden, which is what makes Expand's
+    //    ToggleExpand call a real, observable state change instead of a no-op.
+    static bool IsTreeHost(Type^ type)
+    {
+        return type->GetMethod("GetChildNodeIds", gcnew array<Type^> { int::typeid }) != nullptr
+            && type->GetMethod("GetNodeText", gcnew array<Type^> { int::typeid }) != nullptr
+            && type->GetMethod("NodeHasChildren", gcnew array<Type^> { int::typeid }) != nullptr
+            && type->GetMethod("IsNodeExpanded", gcnew array<Type^> { int::typeid }) != nullptr
+            && type->GetMethod("ToggleExpand", gcnew array<Type^> { int::typeid }) != nullptr;
+    }
+
+    static array<int>^ GetChildNodeIds(Object^ owner, int parentNodeId)
+    {
+        auto method = owner->GetType()->GetMethod("GetChildNodeIds", gcnew array<Type^> { int::typeid });
+        return safe_cast<array<int>^>(method->Invoke(owner, gcnew array<Object^> { parentNodeId }));
+    }
+
+    static List<Object^>^ TryGetTreeRootNodes(Object^ target)
+    {
+        if (!IsTreeHost(target->GetType())) return nullptr;
+
+        auto result = gcnew List<Object^>();
+        for each (int id in GetChildNodeIds(target, -1))
+            result->Add(gcnew TreeNodeHandle(target, id));
+        return result;
+    }
+
+    static List<Object^>^ GetTreeNodeChildren(TreeNodeHandle^ node)
+    {
+        auto result = gcnew List<Object^>();
+        auto ownerType = node->Owner->GetType();
+        auto isExpandedMethod = ownerType->GetMethod("IsNodeExpanded", gcnew array<Type^> { int::typeid });
+        bool expanded = safe_cast<bool>(isExpandedMethod->Invoke(node->Owner, gcnew array<Object^> { node->NodeId }));
+        if (!expanded) return result;
+
+        for each (int id in GetChildNodeIds(node->Owner, node->NodeId))
+            result->Add(gcnew TreeNodeHandle(node->Owner, id));
+        return result;
     }
 
     // ── DevExpress GridView row/cell extraction — pure reflection, no compile-time DevExpress
@@ -639,6 +923,14 @@ public:
         return result;
     }
 
+    static Control^ GridControlOf(Object^ view)
+    {
+        auto gridControlProp = view->GetType()->GetProperty("GridControl");
+        return gridControlProp != nullptr
+            ? dynamic_cast<Control^>(gridControlProp->GetValue(view, nullptr))
+            : nullptr;
+    }
+
     static Object^ GetDevExpressRowCellValue(Object^ view, int rowHandle, Object^ column)
     {
         auto method = view->GetType()->GetMethod("GetRowCellValue",
@@ -649,17 +941,7 @@ public:
         // which is only raised reliably when called on the UI thread — called directly from
         // this injected thread it silently returns null instead of firing. Marshal via
         // Control.Invoke (found through the view's GridControl property) so the event fires.
-        auto gridControlProp = view->GetType()->GetProperty("GridControl");
-        Control^ ctrl = gridControlProp != nullptr
-            ? dynamic_cast<Control^>(gridControlProp->GetValue(view, nullptr))
-            : nullptr;
-
-        String^ dbg = String::Format("ctrl={0} handleCreated={1} invokeRequired={2}",
-            ctrl != nullptr, ctrl != nullptr ? ctrl->IsHandleCreated : false,
-            ctrl != nullptr && ctrl->IsHandleCreated ? ctrl->InvokeRequired : false);
-        System::IO::File::AppendAllText(
-            System::IO::Path::Combine(System::IO::Path::GetTempPath(), "bridge-invoke-debug.log"),
-            dbg + "\n");
+        Control^ ctrl = GridControlOf(view);
 
         if (ctrl != nullptr && ctrl->IsHandleCreated && ctrl->InvokeRequired)
         {
@@ -671,23 +953,56 @@ public:
     }
 
 private:
+    // Case-insensitive lookup directly against whatever BuildInfo populated for this target —
+    // covers name/automationid/classname (previously the only 3 hardcoded branches) plus "value"
+    // and any future element kind's custom info fields, with no per-property branch needed here.
     static bool MatchesProperty(Object^ target, String^ property, String^ value)
     {
         if (property == nullptr) return false;
         auto info = BuildInfo(target);
         String^ prop = property->ToLowerInvariant();
 
-        if (prop == "name" || prop == "automationid")
+        String^ key = nullptr;
+        for each (String ^ k in info->Keys)
         {
-            String^ actual = info->ContainsKey("Name") ? (String^)info["Name"] : "";
-            return actual == value;
+            if (k->ToLowerInvariant() == prop) { key = k; break; }
         }
-        if (prop == "classname")
+        if (key == nullptr) return false;
+
+        Object^ actual = info[key];
+        String^ actualStr = actual != nullptr ? actual->ToString() : "";
+        return actualStr == value;
+    }
+};
+
+// C++/CLI lambdas cannot capture managed-typed locals for delegate construction (see
+// CellValueInvoker above) — this closure stands in for Control.Invoke's MethodInvoker target
+// when marshaling a mutating Reflector call onto the real UI thread from Dispatch.
+ref class UiThreadCommand
+{
+public:
+    enum class Kind { Invoke, Select, Expand, SetValue, RequestFocus };
+
+private:
+    Kind _kind;
+    Object^ _target;
+    String^ _value;
+
+public:
+    UiThreadCommand(Kind kind, Object^ target, String^ value) : _kind(kind), _target(target), _value(value) {}
+
+    void Run()
+    {
+        switch (_kind)
         {
-            String^ actual = info->ContainsKey("ClassName") ? (String^)info["ClassName"] : "";
-            return actual == value;
+        case Kind::Invoke: Reflector::Invoke(_target); break;
+        case Kind::Select: Reflector::Select(_target); break;
+        case Kind::Expand: Reflector::Expand(_target); break;
+        case Kind::SetValue: Reflector::SetValue(_target, _value); break;
+        case Kind::RequestFocus:
+            if (auto ctrl = dynamic_cast<Control^>(_target)) ctrl->Focus();
+            break;
         }
-        return false;
     }
 };
 
@@ -821,19 +1136,31 @@ private:
         {
             Object^ target = RequireElement(params);
             String^ value = params->ContainsKey("value") ? (String^)params["value"] : "";
-            Reflector::SetValue(target, value);
+            RunOnUiThread(target, UiThreadCommand::Kind::SetValue, value);
             return nullptr;
         }
-        if (command == "invoke" || command == "selectElement" || command == "expandElement")
+        if (command == "invoke")
         {
             Object^ target = RequireElement(params);
-            Reflector::Invoke(target);
+            RunOnUiThread(target, UiThreadCommand::Kind::Invoke, nullptr);
+            return nullptr;
+        }
+        if (command == "selectElement")
+        {
+            Object^ target = RequireElement(params);
+            RunOnUiThread(target, UiThreadCommand::Kind::Select, nullptr);
+            return nullptr;
+        }
+        if (command == "expandElement")
+        {
+            Object^ target = RequireElement(params);
+            RunOnUiThread(target, UiThreadCommand::Kind::Expand, nullptr);
             return nullptr;
         }
         if (command == "requestFocus")
         {
             Object^ target = RequireElement(params);
-            if (auto ctrl = dynamic_cast<Control^>(target)) ctrl->Focus();
+            RunOnUiThread(target, UiThreadCommand::Kind::RequestFocus, nullptr);
             return nullptr;
         }
         if (command == "getToggleState")
@@ -855,6 +1182,26 @@ private:
         }
 
         throw gcnew InvalidOperationException(String::Format("Unknown command: {0}", command));
+    }
+
+    // Marshals a mutating Reflector call onto the real UI thread when one can be found near the
+    // target (see Reflector::FindUiThreadControl) — the bridge's own TCP connection-handling
+    // thread never pumps a Windows message loop, so touching WinForms UI state directly from it
+    // (e.g. a fixture's PerformClick creating a popup Form) fails silently: the RPC call returns
+    // successfully but the resulting window is never actually functional. Falls back to running
+    // inline when no Control can be found (nothing to marshal onto, e.g. a detached object).
+    static void RunOnUiThread(Object^ target, UiThreadCommand::Kind kind, String^ value)
+    {
+        auto cmd = gcnew UiThreadCommand(kind, target, value);
+        Control^ ctrl = Reflector::FindUiThreadControl(target);
+        if (ctrl != nullptr && ctrl->IsHandleCreated && ctrl->InvokeRequired)
+        {
+            ctrl->Invoke(gcnew MethodInvoker(cmd, &UiThreadCommand::Run));
+        }
+        else
+        {
+            cmd->Run();
+        }
     }
 
     static Object^ RequireElement(Dictionary<String^, Object^>^ params)

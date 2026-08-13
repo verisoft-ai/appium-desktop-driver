@@ -74,6 +74,18 @@ describe('.NET Bridge — appTopLevelWindow + dotnetBridge attach', () => {
         expect(await cell.isEnabled()).toBe(true);
         expect(await cell.isDisplayed()).toBe(true);
     });
+
+    it('selectElement moves the real DevExpress FocusedRowHandle, not just a fake success', async () => {
+        const row1 = await driver.$('//GridRow[contains(@Name,"Row 1")]');
+        expect(await row1.getAttribute('IsSelected')).toBe(true);
+
+        const row2 = await driver.$('//GridRow[contains(@Name,"Row 2")]');
+        const elementId: string = await row2.elementId;
+        await driver.executeScript('windows: select', [{ elementId }]);
+
+        expect(await row2.getAttribute('IsSelected')).toBe(true);
+        expect(await row1.getAttribute('IsSelected')).toBe(false);
+    });
 });
 
 // ─── Path B: windows: attachDotnetBridge post-session ─────────────────────────

@@ -521,6 +521,89 @@ export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildP
     return { proc, hwnd };
 }
 
+export const WPF_MINIMAL_APP_PATH = resolve(process.cwd(), 'test-apps', 'wpf-minimal', 'bin', 'WpfMinimal.exe');
+
+/**
+ * Launches the wpf-minimal fixture externally (no DevExpress dependency, no trial dialog).
+ * See test-apps/wpf-minimal/Program.cs — a TextBox, Button, and an owner-drawn list following the
+ * bridge's generic list convention, used to validate the WPF Dispatcher-marshaling fix.
+ */
+export async function launchWpfMinimalExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(WPF_MINIMAL_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn wpf-minimal app: ${WPF_MINIMAL_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`wpf-minimal app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export const WPF_DATAGRID_TEMPLATE_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'wpf-datagrid-template', 'bin', 'WpfDataGridTemplate.exe'
+);
+
+/**
+ * Launches the wpf-datagrid-template fixture externally (no DevExpress dependency). See
+ * test-apps/wpf-datagrid-template/Program.cs — a plain WPF DataGrid with two bound text columns
+ * and one DataGridTemplateColumn whose cell content is owner-drawn (OnRender + null
+ * AutomationPeer), genuinely invisible to plain UIA.
+ */
+export async function launchWpfDataGridTemplateExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(WPF_DATAGRID_TEMPLATE_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn wpf-datagrid-template app: ${WPF_DATAGRID_TEMPLATE_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`wpf-datagrid-template app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
 export const DEVEXPRESS_ELEMENTS_GALLERY_APP_PATH = resolve(
     process.cwd(), 'test-apps', 'devexpress-elements-gallery', 'bin', 'DevExpressElementsGallery.exe'
 );

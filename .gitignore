@@ -36,6 +36,16 @@ test-apps/ownerdraw-gallery/obj/
 test-apps/devexpress-elements-gallery/bin/
 test-apps/devexpress-elements-gallery/obj/
 
+# WPF minimal test-fixture app — source is checked in, build output/obj is not (built at test time
+# via build:wpf-minimal-test-app)
+test-apps/wpf-minimal/bin/
+test-apps/wpf-minimal/obj/
+
+# WPF DataGrid templated-column test-fixture app — source is checked in, build output/obj is not
+# (built at test time via build:wpf-datagrid-template-test-app)
+test-apps/wpf-datagrid-template/bin/
+test-apps/wpf-datagrid-template/obj/
+
 # C++/CLI native bridge build artifacts — MSBuild's default IntDir nests under a
 # project-name subfolder (dotnet-bridge-agent/BridgeAgent/x64/Release/...), not directly under
 # dotnet-bridge-agent/x64/ as a naive guess would suggest. Final output lands in native/win-x64/

@@ -81,15 +81,14 @@ See [API.md — Java Swing Automation](./API.md#java-swing-automation) for full 
 The driver automates WinForms (and DevExpress WinForms) apps whose
 custom-drawn controls don't expose values through UIA, by injecting a
 native bridge DLL into the target's CLR — no launch-time hook, attach only.
+The same bridge also supports plain WPF apps: reading and mutating (invoke,
+select, expand, setValue, requestFocus) arbitrary WPF elements, correctly
+marshaled onto the WPF Dispatcher thread.
 
 Two injection paths are available:
 
 - **Path A** — attach at session time (`appium:appTopLevelWindow` + `appium:dotnetBridge: true`). No `appium:app` launch path exists for .NET; the target process must already be running.
 - **Path B** — inject mid-session via `windows: attachDotnetBridge`. Start any session, switch to the target window, then call the command.
-
-**WPF apps are not yet supported** — the bridge currently only reflects
-over WinForms (and WinForms-hosted DevExpress) object trees. WPF support
-is planned.
 
 See [API.md — .NET Bridge Automation](./API.md#net-bridge-automation) for full examples and supported scope.
 

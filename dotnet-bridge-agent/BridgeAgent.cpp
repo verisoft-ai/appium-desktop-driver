@@ -46,6 +46,8 @@ using namespace System::Reflection;
 using namespace System::Windows::Forms;
 using namespace System::Windows;
 using namespace System::Windows::Media;
+using namespace System::Windows::Threading;
+using namespace System::Windows::Interop;
 
 namespace AppiumDotNetBridge {
 
@@ -425,6 +427,24 @@ public:
         return nullptr;
     }
 
+    // WPF counterpart to FindUiThreadControl — every DependencyObject inherits DispatcherObject's
+    // Dispatcher property, so this is a cast plus a null-checked read, not a tree walk. Wrapped in
+    // try/catch like GetWindowRoot's WPF fallback below: an element not yet attached to a
+    // PresentationSource can throw or return a default dispatcher.
+    static Dispatcher^ FindWpfDispatcher(Object^ target)
+    {
+        DependencyObject^ dep = dynamic_cast<DependencyObject^>(target);
+        if (dep == nullptr)
+        {
+            if (auto item = dynamic_cast<ListItemHandle^>(target)) dep = dynamic_cast<DependencyObject^>(item->Owner);
+            else if (auto node = dynamic_cast<TreeNodeHandle^>(target)) dep = dynamic_cast<DependencyObject^>(node->Owner);
+        }
+        if (dep == nullptr) return nullptr;
+
+        try { return dep->Dispatcher; }
+        catch (Exception^) { return nullptr; }
+    }
+
     static Object^ GetWindowRoot(long long hwndValue)
     {
         IntPtr hwnd = IntPtr((void*)hwndValue);
@@ -434,19 +454,16 @@ public:
         if (ctrl != nullptr) return ctrl;
 
         // Fall back to WPF: the HWND hosts a PresentationSource whose RootVisual is the tree root.
+        // Called directly (not via reflection) since System.Windows.Interop.HwndSource is a
+        // compile-time reference here (PresentationFramework.dll is already #using'd) — the
+        // original reflection-based Type::GetType("..., PresentationFramework") lookup silently
+        // failed to bind at runtime (caught by the try/catch below, returning nullptr every time),
+        // which is why plain WPF windows never actually got a bridge tree despite this looking
+        // correct on paper. Confirmed by running against test-apps/wpf-minimal/.
         try
         {
-            auto hwndSourceType = Type::GetType("System.Windows.Interop.HwndSource, PresentationFramework");
-            if (hwndSourceType != nullptr)
-            {
-                auto fromHwnd = hwndSourceType->GetMethod("FromHwnd", BindingFlags::Public | BindingFlags::Static);
-                Object^ source = fromHwnd->Invoke(nullptr, gcnew array<Object^> { hwnd });
-                if (source != nullptr)
-                {
-                    auto rootVisualProp = source->GetType()->GetProperty("RootVisual");
-                    return rootVisualProp->GetValue(source, nullptr);
-                }
-            }
+            auto source = HwndSource::FromHwnd(hwnd);
+            if (source != nullptr) return source->RootVisual;
         }
         catch (Exception^) { /* not a WPF window either */ }
 
@@ -853,6 +870,23 @@ public:
                 info["IsEnabled"] = fe->IsEnabled;
                 info["IsOffscreen"] = !fe->IsVisible;
             }
+
+            // Same Text-property fallback the WinForms Control branch above already has (e.g.
+            // TextBox.Text, TextBlock.Text) — without this, getText()/getAttribute('Value') on a
+            // plain WPF element never surfaces real content, only the blank/AutomationId-derived
+            // Name computed above.
+            try
+            {
+                auto textProp = target->GetType()->GetProperty("Text");
+                if (textProp != nullptr)
+                {
+                    String^ text = safe_cast<String^>(textProp->GetValue(target, nullptr));
+                    if (!String::IsNullOrEmpty(text) && String::IsNullOrEmpty((String^)info["Name"]))
+                        info["Name"] = text;
+                    info["Value"] = text;
+                }
+            }
+            catch (Exception^) { /* no Text property, or reflection failed — not fatal */ }
         }
 
         TryAddDevExpressProps(target, info);
@@ -927,6 +961,19 @@ public:
             performClick->Invoke(target, nullptr);
             return;
         }
+
+        // WPF ButtonBase-derived controls (Button, RepeatButton, ToggleButton, ...) have no public
+        // PerformClick — OnClick is the protected virtual that actually raises the Click routed
+        // event / fires a bound Command, the WPF equivalent of what PerformClick does on WinForms.
+        // Reflected via NonPublic since this runs inside the injected process itself, not across a
+        // trust boundary.
+        auto onClick = target->GetType()->GetMethod("OnClick", BindingFlags::NonPublic | BindingFlags::Instance);
+        if (onClick != nullptr && onClick->GetParameters()->Length == 0)
+        {
+            onClick->Invoke(target, nullptr);
+            return;
+        }
+
         throw gcnew InvalidOperationException("Element does not support a reflectable invoke action.");
     }
 
@@ -1409,6 +1456,7 @@ public:
         case Kind::SetValue: Reflector::SetValue(_target, _value); break;
         case Kind::RequestFocus:
             if (auto ctrl = dynamic_cast<Control^>(_target)) ctrl->Focus();
+            else if (auto elem = dynamic_cast<UIElement^>(_target)) elem->Focus();
             break;
         }
     }
@@ -1440,6 +1488,19 @@ public:
     }
 
 private:
+    // C++/CLI lambdas can't capture managed-typed locals for delegate construction (see
+    // CellValueInvoker above) — stands in for Dispatcher.Invoke's Func<Object^> target below.
+    ref class DispatchInvoker
+    {
+        String^ _command;
+        Dictionary<String^, Object^>^ _params;
+
+    public:
+        DispatchInvoker(String^ command, Dictionary<String^, Object^>^ params) : _command(command), _params(params) {}
+
+        Object^ Run() { return Dispatch(_command, _params); }
+    };
+
     static void HandleClient(Object^ clientObj)
     {
         auto client = (TcpClient^)clientObj;
@@ -1476,7 +1537,29 @@ private:
         {
             String^ command = request != nullptr && request->ContainsKey("command") ? (String^)request["command"] : nullptr;
             auto params = request != nullptr && request->ContainsKey("params") ? dynamic_cast<Dictionary<String^, Object^>^>(request["params"]) : nullptr;
-            Object^ result = Dispatch(command, params);
+
+            // Every read command (getWindowRoot/getChildren/getInfo/find*) touches DependencyObject
+            // state too — WPF enforces thread affinity on property reads, not just mutation, so this
+            // needs the same marshaling RunOnUiThread already does for invoke/select/expand/setValue/
+            // requestFocus. Unlike RunOnUiThread (which resolves a dispatcher from a specific already-
+            // known target), there's no element to inspect yet for e.g. getWindowRoot's raw hwnd — so
+            // this marshals via the process' single WPF Application.Current.Dispatcher instead, which
+            // covers every command uniformly. Application.Current is null in a WinForms/DevExpress
+            // host process (no WPF Application ever created there), so this is a no-op for the
+            // existing WinForms path — confirmed by running against test-apps/wpf-minimal/, where
+            // getWindowRoot/getChildren/getInfo all threw "The calling thread cannot access this
+            // object because a different thread owns it" before this fix.
+            Object^ result;
+            Dispatcher^ wpfDispatcher = System::Windows::Application::Current != nullptr ? System::Windows::Application::Current->Dispatcher : nullptr;
+            if (wpfDispatcher != nullptr && !wpfDispatcher->CheckAccess())
+            {
+                auto invoker = gcnew DispatchInvoker(command, params);
+                result = wpfDispatcher->Invoke(gcnew Func<Object^>(invoker, &DispatchInvoker::Run));
+            }
+            else
+            {
+                result = Dispatch(command, params);
+            }
 
             auto response = gcnew Dictionary<String^, Object^>();
             response["id"] = idObj;
@@ -1596,8 +1679,11 @@ private:
     // target (see Reflector::FindUiThreadControl) — the bridge's own TCP connection-handling
     // thread never pumps a Windows message loop, so touching WinForms UI state directly from it
     // (e.g. a fixture's PerformClick creating a popup Form) fails silently: the RPC call returns
-    // successfully but the resulting window is never actually functional. Falls back to running
-    // inline when no Control can be found (nothing to marshal onto, e.g. a detached object).
+    // successfully but the resulting window is never actually functional. WPF is stricter still —
+    // touching a DependencyObject off its owning Dispatcher thread throws outright — so a WPF
+    // target with no WinForms Control ancestor is marshaled onto its Dispatcher instead (see
+    // Reflector::FindWpfDispatcher). Falls back to running inline only when neither can be found
+    // (nothing to marshal onto, e.g. a detached object).
     static void RunOnUiThread(Object^ target, UiThreadCommand::Kind kind, String^ value)
     {
         auto cmd = gcnew UiThreadCommand(kind, target, value);
@@ -1605,11 +1691,17 @@ private:
         if (ctrl != nullptr && ctrl->IsHandleCreated && ctrl->InvokeRequired)
         {
             ctrl->Invoke(gcnew MethodInvoker(cmd, &UiThreadCommand::Run));
+            return;
         }
-        else
+
+        Dispatcher^ dispatcher = Reflector::FindWpfDispatcher(target);
+        if (dispatcher != nullptr && !dispatcher->CheckAccess())
         {
-            cmd->Run();
+            dispatcher->Invoke(gcnew Action(cmd, &UiThreadCommand::Run));
+            return;
         }
+
+        cmd->Run();
     }
 
     static Object^ RequireElement(Dictionary<String^, Object^>^ params)

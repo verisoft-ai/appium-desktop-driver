@@ -1,3 +1,13 @@
+## [2.3.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.2...v2.3.0-preview.3) (2026-08-14)
+
+### Features
+
+* support WPF apps in the .NET bridge ([e9b87d6](https://github.com/verisoft-ai/appium-desktop-driver/commit/e9b87d6c75bb612eaddcd2f3841ad86ff9db47db))
+
+### Miscellaneous Chores
+
+* drop WPF bridge support planning doc ([95bc2c8](https://github.com/verisoft-ai/appium-desktop-driver/commit/95bc2c8cac132c1215f4274b29024b484afd93ae))
+
 ## [2.3.0-preview.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.1...v2.3.0-preview.2) (2026-08-13)
 
 ### Features

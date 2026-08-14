@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { BaseDriver, W3C_ELEMENT_KEY, errors } from 'appium/driver';
 import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
@@ -17,10 +17,12 @@ import { propertyCondition } from './server/conditions';
 import type { ConditionDto } from './server/protocol';
 import { attachLogFileMirror, LogFileMirror } from './log-file';
 import { DRIVER_VERSION } from './version';
+import { executeMethodMap } from './execute-method-map';
 import {
     assertSupportedEasingFunction
 } from './util';
 import { xpathToElIdOrIds } from './xpath';
+import { cssToNativeLocator } from './css';
 
 import type { Chromedriver } from 'appium-chromedriver';
 import type { IESession } from './ie/session';
@@ -82,6 +84,8 @@ const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
 ];
 
 export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
+    static executeMethodMap = executeMethodMap;
+
     serverClient?: NovaUIAutomationClient;
     mouseButtonsDown: Set<number> = new Set();
     keyboardState: KeyboardState = {
@@ -142,22 +146,22 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     }
 
     override async findElement(strategy: string, selector: string): Promise<Element> {
-        [strategy, selector] = this.processSelector(strategy, selector);
+        [strategy, selector] = await this.processSelector(strategy, selector);
         return super.findElement(strategy, selector);
     }
 
     override async findElements(strategy: string, selector: string): Promise<Element[]> {
-        [strategy, selector] = this.processSelector(strategy, selector);
+        [strategy, selector] = await this.processSelector(strategy, selector);
         return super.findElements(strategy, selector);
     }
 
     override async findElementFromElement(strategy: string, selector: string, elementId: string): Promise<Element> {
-        [strategy, selector] = this.processSelector(strategy, selector);
+        [strategy, selector] = await this.processSelector(strategy, selector);
         return super.findElementFromElement(strategy, selector, elementId);
     }
 
     override async findElementsFromElement(strategy: string, selector: string, elementId: string): Promise<Element[]> {
-        [strategy, selector] = this.processSelector(strategy, selector);
+        [strategy, selector] = await this.processSelector(strategy, selector);
         return super.findElementsFromElement(strategy, selector, elementId);
     }
 
@@ -322,6 +326,18 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                     }
                 }
 
+                if (this.caps.dotnetBridge) {
+                    if (!this.caps.appTopLevelWindow) {
+                        throw new errors.InvalidArgumentError(
+                            'dotnetBridge:true requires the appTopLevelWindow capability to identify the target window ' +
+                            '(no launch-time injection is supported for .NET — attach only).'
+                        );
+                    }
+                    this.log.info('.NET Bridge mode: injecting bridge into running CLR via Win32 injection...');
+                    await this.sendCommand('injectDotnetBridge', { hwnd: Number(this.caps.appTopLevelWindow) });
+                    this.log.info('.NET bridge injected and connected successfully.');
+                }
+
                 if (this.caps.prerun) {
                     this.log.info('Executing prerun PowerShell script...');
                     await this.executePowerShellScript(this.caps.prerun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
@@ -377,8 +393,8 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
                         await this.sendCommand('closeWindow', { elementId: rootId });
                     }
                 }
-            } catch {
-                // noop
+            } catch (err) {
+                this.log.debug(`[deleteSession] Postrun cleanup (process stop / window close) failed: ${err instanceof Error ? err.message : err}`);
             }
         }
         if (this.caps.postrun) {
@@ -397,32 +413,14 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
         }
     }
 
-    private processSelector(strategy: string, selector: string): [string, string] {
+    private async processSelector(strategy: string, selector: string): Promise<[string, string]> {
         if (strategy !== 'css selector') {
             return [strategy, selector];
         }
 
         this.log.warn('Warning: Use Appium mobile selectors instead of Selenium By, since most of them are based on CSS.');
-        const digitRegex = /\\3(\d) /;
 
-        if (selector.startsWith('.')) {
-            selector = selector.substring(1).replace(digitRegex, '$1');
-            strategy = 'class name';
-            return [strategy, selector];
-        }
-
-        if (selector.startsWith('#')) {
-            selector = selector.substring(1).replace(digitRegex, '$1');
-            strategy = 'id';
-            return [strategy, selector];
-        }
-
-        if (selector.startsWith('*[name')) {
-            selector = selector.substring(selector.indexOf('"') + 1, selector.lastIndexOf('"')).replace(digitRegex, '$1');
-            strategy = 'name';
-            return [strategy, selector];
-        }
-
-        return [strategy, selector];
+        const nativeLocator = await cssToNativeLocator(selector);
+        return [nativeLocator.strategy, nativeLocator.selector];
     }
 }

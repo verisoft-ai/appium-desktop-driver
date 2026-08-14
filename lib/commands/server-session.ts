@@ -9,6 +9,13 @@ const INIT_RETRY_DELAY_MS = 500;
 const WEBVIEW_DEVTOOLS_PORT_LOWER = 10900;
 const WEBVIEW_DEVTOOLS_PORT_UPPER = 11000;
 
+/**
+ * Starts the C# UI Automation server process for this session, retrying on transient COM
+ * type-initializer failures, then resolves the session's root element from the `app`,
+ * `appTopLevelWindow`, or `noReset` capabilities (attaching to an already-running instance
+ * when possible). Also enables WebView2 CDP remote debugging if `webviewEnabled` is set.
+ * @returns Resolves once the server has started and the root element has been established.
+ */
 export async function startServerSession(this: AppiumDesktopDriver): Promise<void> {
     // Build a per-session env overlay rather than mutating process.env, which
     // is global across all sessions in the Appium server process.
@@ -120,7 +127,8 @@ export async function startServerSession(this: AppiumDesktopDriver): Promise<voi
 
 /**
  * Attempts to attach to an already-running instance of the given app.
- * Returns true if successfully attached, false if no running process found.
+ * @param appPath - The app path or UWP app user model id from the `app` capability.
+ * @returns True if successfully attached, false if no running process was found.
  */
 export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: string): Promise<boolean> {
     const isUwp = appPath.includes('!') && appPath.includes('_') && !(appPath.includes('/') || appPath.includes('\\'));
@@ -156,11 +164,16 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
             await this.enableIEMode(nwh);
         }
         return true;
-    } catch {
+    } catch (err) {
+        this.log.debug(`[tryAttachToRunningApp] Attach attempt for '${appPath}' failed: ${err instanceof Error ? err.message : err}`);
         return false;
     }
 }
 
+/**
+ * Disposes the C# UI Automation server process for this session, if one is running.
+ * @returns Resolves once the server process has been terminated.
+ */
 export async function terminateServerSession(this: AppiumDesktopDriver): Promise<void> {
     if (!this.serverClient) {
         return;

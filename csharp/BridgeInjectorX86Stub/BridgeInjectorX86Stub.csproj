@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone x86 helper: CreateRemoteThread cannot cross bitness (a 64-bit process can never
+    inject into a 32-bit one), so injecting appium-dotnet-bridge.dll (x86 build) into a 32-bit
+    .NET Framework target requires an injector process that is itself 32-bit. This stub is that
+    process — spawned by the 64-bit NovaUIAutomationServer host when it detects a 32-bit target
+    (see BridgeInjector.DetectBitness), given a pid and DLL path, and exits after injection
+    succeeds or fails. Everything after injection (the bridge's own TCP RPC) is bitness-agnostic
+    and unaffected by this — see dotnet-bridge-agent/BridgeAgent.vcxproj's header comment.
+
+    BridgeInjector.cs is linked (not duplicated) from NovaUIAutomationServer so both the 64-bit
+    host and this 32-bit stub compile the exact same injection logic.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <AssemblyName>BridgeInjectorX86Stub</AssemblyName>
+    <RootNamespace>BridgeInjectorX86Stub</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\NovaUIAutomationServer\DotNet\BridgeInjector.cs" Link="BridgeInjector.cs" />
+  </ItemGroup>
+
+</Project>

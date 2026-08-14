@@ -3,16 +3,28 @@ import { fs, node, system, tempDir, zip } from '@appium/support';
 import path from 'node:path';
 import { cdpRequest, downloadFile, sleep, MODULE_NAME } from '../util';
 import { AppiumDesktopDriver } from '../driver';
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 
 const NATIVE_APP = 'NATIVE_APP';
 const WEBVIEW = 'WEBVIEW';
 const WEBVIEW_BASE = `${WEBVIEW}_`;
 
+/**
+ * Gets the name of the currently active context (`NATIVE_APP` or a `WEBVIEW_<id>` handle).
+ * @returns The current context name.
+ */
 export async function getCurrentContext(this: AppiumDesktopDriver): Promise<string> {
     return this.currentContext ??= NATIVE_APP;
 }
 
+/**
+ * Switches the active context. Switching to `NATIVE_APP` (or omitting the name) stops any
+ * running Chromedriver/proxy; switching to a `WEBVIEW_<id>` handle resolves the matching
+ * Chromium/Edge webview via CDP, downloads (or reuses) a matching chromedriver/edgedriver
+ * executable, and starts proxying WebDriver commands to it.
+ * @param name - The context name to switch to, or `null`/omitted for `NATIVE_APP`.
+ * @returns Resolves once the context switch (and, for webviews, chromedriver startup) completes.
+ */
 export async function setContext(this: AppiumDesktopDriver, name?: string | null): Promise<void> {
     if (!name || name === NATIVE_APP) {
         this.chromedriver?.stop();
@@ -83,6 +95,11 @@ export async function setContext(this: AppiumDesktopDriver, name?: string | null
     this.jwpProxyActive = true;
 }
 
+/**
+ * Lists all available contexts: the native app plus one `WEBVIEW_<id>` entry per open
+ * webview page discovered via CDP.
+ * @returns The list of available context names.
+ */
 export async function getContexts(this: AppiumDesktopDriver): Promise<string[]> {
     const webViewDetails = await this.getWebViewDetails();
     return [
@@ -153,6 +170,13 @@ interface CDPListResponseEntry {
 
 type CDPListResponse = CDPListResponseEntry[];
 
+/**
+ * Queries the app's CDP endpoint (`/json/version` and `/json/list`) for available webview
+ * pages. Requires the `webviewEnabled` capability.
+ * @param waitForWebviewMs - Optional delay, in milliseconds, to wait before querying (useful
+ * while a webview is still initializing).
+ * @returns The CDP version info and list of open pages.
+ */
 export async function getWebViewDetails(this: AppiumDesktopDriver, waitForWebviewMs?: number): Promise<WebViewDetails> {
     if (!this.caps.webviewEnabled) {
         throw new errors.InvalidArgumentError('WebView support is not enabled. Please set the "enableWebView" capability to true and try again.');

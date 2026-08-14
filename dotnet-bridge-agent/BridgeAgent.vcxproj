@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  x64|Release verified building and running (dotnet-bridge-agent/build.bat, MSVC v143 + C++/CLI).
+  Win32|Release added for 32-bit target support (injecting into a 32-bit .NET Framework process
+  requires an injector running in a matching-bitness process — see BridgeInjectorX86Stub) — same
+  source file, no bitness-sensitive code expected, but not yet build-verified on this platform.
+-->
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6E2A6E2B-6B7B-4C7A-9B0A-0A0A0A0A0A0A}</ProjectGuid>
+    <RootNamespace>BridgeAgent</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <CLRSupport>true</CLRSupport>
+    <!-- .NET Framework processes only in v1 — see plan doc. CLRSupport implies /clr,
+         which requires the target managed runtime to be .NET Framework compatible. -->
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <TargetName>appium-dotnet-bridge</TargetName>
+    <OutDir Condition="'$(Platform)'=='x64'">$(SolutionDir)..\native\win-x64\</OutDir>
+    <OutDir Condition="'$(Platform)'=='Win32'">$(SolutionDir)..\native\win-x86\</OutDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- BridgeStart is exported via extern "C" __declspec(dllexport) in source;
+           no separate .def file needed. -->
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="BridgeAgent.cpp" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -10,6 +10,7 @@ Key advantages over WinAppDriver:
 - RawView element support (elements hidden from ContentView/ControlView)
 - Reliable text input independent of the active keyboard layout
 - Java Swing / AWT automation via injected JVM agent (no JAB required)
+- .NET/WinForms automation via injected CLR bridge — reads custom-drawn (ownerdraw) and DevExpress control values invisible to plain UIA
 - WebView2, Chrome, and Edge embedded content via CDP
 - Internet Explorer 11 automation via built-in IE DOM Bridge (no IEDriverServer required)
 - Built-in screen recording, clipboard API, and vision-based finding
@@ -47,6 +48,7 @@ All capabilities use the `appium:` prefix in W3C format
 | `appium:delayAfterClick` | number | Milliseconds after each click |
 | `appium:javaSwing` | boolean | Enable JVM agent for Java Swing/AWT apps |
 | `appium:jdkPath` | string | Path to JDK root (e.g. `C:\Program Files\Java\jdk1.8.0_xxx`). Overrides `JAVA_HOME` for agent injection. Required only for Path B/C. |
+| `appium:dotnetBridge` | boolean | Inject the .NET bridge into the CLR owning `appium:appTopLevelWindow` at session time. Attach-only — requires `appium:appTopLevelWindow`. |
 | `appium:webviewEnabled` | boolean | Enable WebView2 / Chrome / Edge CDP |
 | `appium:webviewDevtoolsPort` | number | CDP port (auto-selected when omitted) |
 | `appium:chromedriverExecutablePath` | string | Local Chromedriver binary |
@@ -73,6 +75,22 @@ Three injection paths are available:
 - **Path C** — inject agent mid-session via `windows: attachJavaSwing`. Start any session, switch to the Java window, then call the command. Requires `JAVA_HOME` or `appium:jdkPath` (or pass `jdkPath` as a script argument).
 
 See [API.md — Java Swing Automation](./API.md#java-swing-automation) for full examples, JAVA_HOME setup, and supported XPath attributes.
+
+### .NET Bridge via CLR injection
+
+The driver automates WinForms (and DevExpress WinForms) apps whose
+custom-drawn controls don't expose values through UIA, by injecting a
+native bridge DLL into the target's CLR — no launch-time hook, attach only.
+The same bridge also supports plain WPF apps: reading and mutating (invoke,
+select, expand, setValue, requestFocus) arbitrary WPF elements, correctly
+marshaled onto the WPF Dispatcher thread.
+
+Two injection paths are available:
+
+- **Path A** — attach at session time (`appium:appTopLevelWindow` + `appium:dotnetBridge: true`). No `appium:app` launch path exists for .NET; the target process must already be running.
+- **Path B** — inject mid-session via `windows: attachDotnetBridge`. Start any session, switch to the target window, then call the command.
+
+See [API.md — .NET Bridge Automation](./API.md#net-bridge-automation) for full examples and supported scope.
 
 ### Desktop root: click an icon and switch windows
 

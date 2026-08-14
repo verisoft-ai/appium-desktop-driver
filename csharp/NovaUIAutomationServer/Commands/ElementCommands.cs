@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
@@ -40,6 +41,13 @@ public static class ElementCommands
             }
 
             return state.Java.GetProperty(javaEl, propertyName);
+        }
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            var bridgeEl = state.DotNetBridge!.GetById(elementId);
+            state.DotNetBridge.GetFreshInfo(bridgeEl);
+            return state.DotNetBridge.GetProperty(bridgeEl, propertyName);
         }
 
         var element = state.GetElement(elementId);
@@ -153,6 +161,9 @@ public static class ElementCommands
         if (JavaAgentElement.IsJavaId(elementId))
             return state.Java!.GetTagName(state.Java.GetById(elementId));
 
+        if (BridgeAgentElement.IsDotnetId(elementId))
+            return state.DotNetBridge!.GetTagName(state.DotNetBridge.GetById(elementId));
+
         var element = state.GetElement(elementId);
         var ctId = element.CurrentControlType;
         return ConditionBuilder.ControlTypeNameById.TryGetValue(ctId, out var name) ? name : ctId.ToString();
@@ -166,6 +177,9 @@ public static class ElementCommands
 
         if (JavaAgentElement.IsJavaId(elementId))
             return state.Java!.GetText(state.Java.GetById(elementId));
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+            return state.DotNetBridge!.GetText(state.DotNetBridge.GetById(elementId));
 
         var element = state.GetElement(elementId);
 
@@ -205,6 +219,9 @@ public static class ElementCommands
         if (JavaAgentElement.IsJavaId(elementId))
             return state.Java!.GetRect(state.Java.GetById(elementId));
 
+        if (BridgeAgentElement.IsDotnetId(elementId))
+            return state.DotNetBridge!.GetRect(state.DotNetBridge.GetById(elementId));
+
         var element = state.GetElement(elementId);
         var rect = element.CurrentBoundingRectangle;
 
@@ -219,33 +236,13 @@ public static class ElementCommands
 
     public static object? GetRootRect(SessionState state, JsonElement? parameters)
     {
-        var hwnd = state.RootNativeWindowHandle;
-
-        if (!NativeWindowRect.TryGet(hwnd, out var rect))
+        var root = state.GetLiveRoot();
+        if (root == null)
         {
-            Console.Error.WriteLine($"[GetRootRect] NativeWindowRect.TryGet failed for hwnd=0x{hwnd.ToInt64():X} — falling back to UIA GetLiveRoot()/CurrentBoundingRectangle.");
-            var root = state.GetLiveRoot();
-            if (root == null)
-            {
-                Console.Error.WriteLine("[GetRootRect] GetLiveRoot() returned null (no root attached). Returning zero rect.");
-                return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
-            }
-
-            try
-            {
-                rect = root.CurrentBoundingRectangle;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[GetRootRect] root.CurrentBoundingRectangle threw: {ex.GetType().Name}: {ex.Message}");
-                throw;
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine($"[GetRootRect] native rect via hwnd=0x{hwnd.ToInt64():X}: ({rect.left},{rect.top})-({rect.right},{rect.bottom})");
+            return new { x = 0.0, y = 0.0, width = 0.0, height = 0.0 };
         }
 
+        var rect = root.CurrentBoundingRectangle;
         return new
         {
             x = (double)rect.left,
@@ -267,6 +264,12 @@ public static class ElementCommands
             return null;
         }
 
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.RequestFocus(state.DotNetBridge.GetById(elementId));
+            return null;
+        }
+
         var element = state.GetElement(elementId);
         element.SetFocus();
         return null;
@@ -282,6 +285,12 @@ public static class ElementCommands
         if (JavaAgentElement.IsJavaId(elementId))
         {
             state.Java!.SetValue(state.Java.GetById(elementId), value);
+            return null;
+        }
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+        {
+            state.DotNetBridge!.SetValue(state.DotNetBridge.GetById(elementId), value);
             return null;
         }
 
@@ -302,6 +311,9 @@ public static class ElementCommands
 
         if (JavaAgentElement.IsJavaId(elementId))
             return state.Java!.GetText(state.Java.GetById(elementId));
+
+        if (BridgeAgentElement.IsDotnetId(elementId))
+            return state.DotNetBridge!.GetText(state.DotNetBridge.GetById(elementId));
 
         var element = state.GetElement(elementId);
         if (element.GetCurrentPattern(UIA.ValuePatternId) is IUIAutomationValuePattern vp)

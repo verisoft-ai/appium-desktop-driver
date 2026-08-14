@@ -16,7 +16,7 @@ import {
     getElementScreenshot,
 } from '../../lib/commands/element';
 import { createMockDriver } from '../fixtures/driver';
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY } from 'appium/driver';
 
 vi.mock('../../lib/winapi/user32', () => ({
     mouseDown: vi.fn(),

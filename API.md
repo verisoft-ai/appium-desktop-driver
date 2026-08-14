@@ -21,10 +21,12 @@ for installation, capabilities, and usage examples.
   - [PowerShell Execution](#powershell-execution)
   - [Cache Requests](#cache-requests)
   - [Java Swing Agent](#java-swing-agent)
+  - [.NET Bridge](#net-bridge)
 - [W3C Actions](#w3c-actions)
 - [WebView and CDP](#webview-and-cdp)
 - [Internet Explorer](#internet-explorer)
 - [Java Swing Automation](#java-swing-automation)
+- [.NET Bridge Automation](#net-bridge-automation)
 
 ## Locator Strategies
 
@@ -616,6 +618,28 @@ await driver.executeScript('windows: attachJavaSwing', [{ jdkPath: 'C:\\Program 
 
 ---
 
+### .NET Bridge
+
+#### windows: attachDotnetBridge
+
+Injects the .NET bridge DLL into the CLR of the process owning the
+current session window, then connects to it. Equivalent to creating the
+session with `appium:dotnetBridge: true` + `appium:appTopLevelWindow`
+but allows you to run plain UIA commands first and switch to bridge
+mode later.
+
+Takes no arguments. Requires no capability — the target process is
+resolved from the session's current root window.
+
+```js
+await driver.executeScript('windows: attachDotnetBridge', []);
+```
+
+See [.NET Bridge Automation](#net-bridge-automation) for full setup
+and current scope (WinForms, DevExpress WinForms, and WPF).
+
+---
+
 ## Internet Explorer
 
 `iexplore.exe` exposes content via MSAA/COM, not UIA. The driver
@@ -915,3 +939,119 @@ routes each find call to the correct engine automatically.
 - **Java 8 and Java 9+** — tested on JDK 8 and JDK 25. All three
   injection paths work on both. Java 9+ requires `JAVA_HOME/bin/java.exe`
   (no `tools.jar` needed).
+
+## .NET Bridge Automation
+
+The driver automates WinForms (and DevExpress WinForms) applications
+whose custom-drawn controls don't expose values through UI Automation
+— for example, ownerdraw controls that paint their own content via GDI,
+or DevExpress grids/trees that only surface a generic placeholder value
+("Column row N") to UIA regardless of the real cell content. The same
+bridge also automates plain WPF applications, including reading and
+mutating arbitrary elements that a `DataTemplate` renders independently
+of their bound value.
+
+### How it works
+
+Unlike the Java Swing agent, .NET has no cooperative attach API — this
+is real Win32 injection (`LoadLibraryW` + `CreateRemoteThread`), not a
+JVM-sanctioned mechanism. The bridge is a native DLL (built from a
+C++/CLI mixed-mode assembly, so it has a real native entry point
+`CreateRemoteThread` can target, but runs managed reflection code once
+loaded) that starts a loopback TCP server inside the target process,
+writes its port to `%TEMP%\appium-dotnet-bridge-{pid}.port`, and serves
+element queries from the C# driver server. Every command — reads
+(`getInfo`/`getChildren`/`getWindowRoot`) and mutating commands
+(`invoke`/`select`/`expand`/`setValue`/`requestFocus`) alike — is
+marshaled onto the target's real UI thread before touching WinForms
+state, or onto the WPF Dispatcher thread before touching a
+`DependencyObject`; WPF enforces this more strictly than WinForms does,
+throwing rather than silently misbehaving if violated.
+
+Bitness is detected automatically: 64-bit targets are injected directly,
+32-bit (WOW64) targets are injected via a separate 32-bit stub process,
+since a 64-bit host cannot `CreateRemoteThread` across bitness.
+
+There is no launch-time injection path — the target process must
+already be running before the bridge can attach.
+
+### Path A — attach at session time
+
+Set `appium:appTopLevelWindow` to the decimal HWND of the target window
+and `appium:dotnetBridge: true`.
+
+```js
+capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,   // decimal HWND string
+  'appium:dotnetBridge': true,
+  'appium:shouldCloseApp': false,
+}
+```
+
+### Path B — inject mid-session (`windows: attachDotnetBridge`)
+
+Create a plain UIA session first, switch to the target window if needed,
+then inject the bridge at any point during the session.
+
+```js
+// 1. Create a plain UIA session pointed at the target window
+const driver = await remote({ ..., capabilities: {
+  platformName: 'Windows',
+  'appium:automationName': 'DesktopDriver',
+  'appium:appTopLevelWindow': hwnd,
+  'appium:shouldCloseApp': false,
+}});
+
+// 2. Inject at any point
+await driver.executeScript('windows: attachDotnetBridge', []);
+
+// 3. Real control values (not the generic UIA placeholder) are now readable
+const source = await driver.getPageSource();
+```
+
+If you started from `app: Root`, switch to the target window first:
+
+```js
+const hexHwnd = `0x${parseInt(decimalHwnd, 10).toString(16).padStart(8, '0')}`;
+await driver.switchToWindow(hexHwnd);
+await driver.executeScript('windows: attachDotnetBridge', []);
+```
+
+### Supported controls
+
+- Generic ownerdraw controls (ListBox, TreeView, ComboBox, ContextMenu,
+  custom-painted controls with blanked `AccessibleName`)
+- DevExpress WinForms: `XtraGrid` (including grouped grids), `XtraTreeList`,
+  `ComboBoxEdit`, `TokenEdit`
+- Plain WPF elements — reads (getPageSource/getInfo/getChildren/getValue)
+  and mutating commands (invoke, select, expand, setValue, requestFocus)
+  both work against arbitrary `DependencyObject`/`FrameworkElement`
+  targets, correctly marshaled onto the WPF Dispatcher thread. This
+  includes owner-drawn WPF cells/elements (e.g. a `DataGridTemplateColumn`
+  whose cell content paints itself via `OnRender` and returns a
+  suppressed `AutomationPeer`) — genuinely UIA-blind, the WPF analog of
+  WinForms custom-draw, but read by the bridge's generic visual-tree walk
+  with **no dedicated reflection code**, since a WPF `DataTemplate`
+  always renders through a real `FrameworkElement` with gettable
+  properties (unlike WinForms owner-draw, which paints raw GDI pixels
+  with no backing element at all).
+- DevExpress WPF (`Xpf.*`) controls — probed against
+  `DevExpress.Xpf.Grid.GridControl` specifically: bound and unbound
+  columns are already fully readable via plain UIA (no bridge needed for
+  those), and `CellTemplate`-rendered cells are covered by the same
+  generic mechanism above — no dedicated `Xpf.Grid` reflection exists or
+  is needed.
+- Invoke on WPF `ButtonBase`-derived controls (`Button`, `RepeatButton`,
+  `ToggleButton`, ...) uses the protected `OnClick` method (the WPF
+  equivalent of WinForms' `PerformClick`), so no XAML/AutomationPeer
+  wiring is required on the target app's side.
+
+### Limitations
+
+- **.NET Framework only** — targets hosting CoreCLR (.NET 5+ / .NET
+  Core, detected via `coreclr.dll`) are rejected. Only classic
+  `clr.dll`-hosted processes are supported.
+- **x64 and x86 (WOW64) targets only** — both are supported via
+  automatic bitness detection.

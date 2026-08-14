@@ -1,4 +1,4 @@
-import { errors } from '@appium/base-driver';
+import { errors } from 'appium/driver';
 
 const MAGIC_UNICODE_REPLACEMENT_CHAR = '\uF000';
 const BEGIN_OF_STATEMENT_REGEX = '(?<![.:-])';

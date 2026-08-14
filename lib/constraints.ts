@@ -79,6 +79,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     jdkPath: {
         isString: true,
     },
+    dotnetBridge: {
+        isBoolean: true,
+    },
     ieDriverServerPath: {
         isString: true,
     },

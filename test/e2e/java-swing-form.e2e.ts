@@ -406,20 +406,20 @@ describe('Java Swing Form', () => {
         });
 
         it('"push button" finds JButton (among possible internal combo arrow buttons)', async () => {
-            const buttons = await driver.$$('.push button');
+            const buttons = await driver.$$('[class-name="push button"]');
             expect(buttons.length).toBeGreaterThanOrEqual(1);
             const names = await buttons.map((b) => b.getAttribute('Name'));
             expect(names).toContain('submitButton');
         });
 
         it('"check box" finds JCheckBox', async () => {
-            const checkboxes = await driver.$$('.check box');
+            const checkboxes = await driver.$$('[class-name="check box"]');
             expect(checkboxes.length).toBe(1);
             expect(await checkboxes[0].getAttribute('Name')).toBe('agreeCheckbox');
         });
 
         it('"combo box" finds JComboBox', async () => {
-            const combos = await driver.$$('.combo box');
+            const combos = await driver.$$('[class-name="combo box"]');
             expect(combos.length).toBe(2);
             const names = await combos.map((c) => c.getAttribute('Name'));
             expect(names).toContain('country');

@@ -2,16 +2,29 @@
 import { Element, Rect } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { propertyCondition, andCondition, orCondition } from '../server/conditions';
-import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { errors, W3C_ELEMENT_KEY } from 'appium/driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp, getCursorPos } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
 import type { RectResult } from '../server/protocol';
 
+/**
+ * Reads a UI Automation property value from an element.
+ * @param propertyName - The UIA property name (e.g. `Name`, `IsEnabled`, `ControlType`).
+ * @param elementId - The id of the element to read from.
+ * @returns The property value as a string.
+ */
 export async function getProperty(this: AppiumDesktopDriver, propertyName: string, elementId: string): Promise<string> {
     return await this.sendCommand('getProperty', { elementId, property: propertyName }) as string;
 }
 
+/**
+ * Legacy WebDriver attribute getter, retained for compatibility; delegates to {@link getProperty}
+ * outside of IE context.
+ * @param propertyName - The attribute/property name to read.
+ * @param elementId - The id of the element to read from.
+ * @returns The attribute value.
+ */
 export async function getAttribute(this: AppiumDesktopDriver, propertyName: string, elementId: string) {
     if (this.isIEContext()) {
         return this.ieSession!.getAttribute(elementId, propertyName);
@@ -20,11 +33,20 @@ export async function getAttribute(this: AppiumDesktopDriver, propertyName: stri
     return await this.getProperty(propertyName, elementId);
 }
 
+/**
+ * Finds the currently focused UI element.
+ * @returns A WebDriver element reference for the focused element.
+ */
 export async function active(this: AppiumDesktopDriver): Promise<Element> {
     const elementId = await this.sendCommand('findElementFocused', {}) as string;
     return { [W3C_ELEMENT_KEY]: elementId };
 }
 
+/**
+ * Gets an element's tag name (its UIA control type).
+ * @param elementId - The id of the element to inspect.
+ * @returns The element's tag/control-type name.
+ */
 export async function getName(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     if (this.isIEContext()) {
         return (await this.ieSession!.getAttribute(elementId, 'tagName')) ?? '';
@@ -32,6 +54,11 @@ export async function getName(this: AppiumDesktopDriver, elementId: string): Pro
     return await this.sendCommand('getTagName', { elementId }) as string;
 }
 
+/**
+ * Reads an element's visible text via its UIA TextPattern.
+ * @param elementId - The id of the element to read text from.
+ * @returns The element's text, with embedded-object placeholder characters stripped.
+ */
 export async function getText(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     if (this.isIEContext()) {
         return this.ieSession!.getText(elementId);
@@ -41,6 +68,11 @@ export async function getText(this: AppiumDesktopDriver, elementId: string): Pro
     return text.replace(/\uFFFC/g, '');
 }
 
+/**
+ * Clears an element's value by setting it to an empty string.
+ * @param elementId - The id of the element to clear.
+ * @returns Resolves once the element has been cleared.
+ */
 export async function clear(this: AppiumDesktopDriver, elementId: string): Promise<void> {
     if (this.isIEContext()) {
         await this.ieSession!.clear(elementId);
@@ -49,6 +81,15 @@ export async function clear(this: AppiumDesktopDriver, elementId: string): Promi
     await this.sendCommand('setElementValue', { elementId, value: '' });
 }
 
+/**
+ * Sends text/keys to an element, focusing it first and translating WebDriver modifier-key
+ * sequences (shift/ctrl/meta/alt) and special keys into key-down/key-up events interleaved
+ * with plain text sent via `sendKeys`. Java agent elements bypass focus/sendKeys and are set
+ * directly via `setElementValue`.
+ * @param value - The text to send, either as a string or an array of characters/key values.
+ * @param elementId - The id of the element to send the value to.
+ * @returns Resolves once all characters and key actions have been sent.
+ */
 export async function setValue(this: AppiumDesktopDriver, value: string | string[], elementId: string): Promise<void> {
     if (this.isIEContext()) {
         const text = Array.isArray(value) ? value.join('') : value;
@@ -182,6 +223,12 @@ export async function setValue(this: AppiumDesktopDriver, value: string | string
     await sendKeysAndResetArray();
 }
 
+/**
+ * Gets an element's bounding rectangle, translated from screen coordinates into
+ * coordinates relative to the session's root window.
+ * @param elementId - The id of the element to measure.
+ * @returns The element's rect (x, y, width, height) relative to the root window.
+ */
 export async function getElementRect(this: AppiumDesktopDriver, elementId: string): Promise<Rect> {
     if (this.isIEContext()) {
         throw new errors.NotYetImplementedError();
@@ -195,6 +242,11 @@ export async function getElementRect(this: AppiumDesktopDriver, elementId: strin
     return rect;
 }
 
+/**
+ * Checks whether an element is currently displayed on screen.
+ * @param elementId - The id of the element to check.
+ * @returns True if the element is on screen (not marked `IsOffscreen`).
+ */
 export async function elementDisplayed(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     if (this.isIEContext()) {
         return this.ieSession!.isDisplayed(elementId);
@@ -207,6 +259,12 @@ export async function elementDisplayed(this: AppiumDesktopDriver, elementId: str
 }
 
 // TODO: find better way to handle whether to use select or toggle
+/**
+ * Checks whether an element is selected, preferring the UIA SelectionItem pattern and
+ * falling back to the Toggle pattern's on/off state.
+ * @param elementId - The id of the element to check.
+ * @returns True if the element is selected or toggled on.
+ */
 export async function elementSelected(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     if (this.isIEContext()) {
         return this.ieSession!.isSelected(elementId);
@@ -220,6 +278,11 @@ export async function elementSelected(this: AppiumDesktopDriver, elementId: stri
     }
 }
 
+/**
+ * Checks whether an element is enabled.
+ * @param elementId - The id of the element to check.
+ * @returns True if the element's `IsEnabled` property is true.
+ */
 export async function elementEnabled(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
     if (this.isIEContext()) {
         return this.ieSession!.isEnabled(elementId);
@@ -228,6 +291,14 @@ export async function elementEnabled(this: AppiumDesktopDriver, elementId: strin
     return typeof result === 'boolean' ? result : String(result).toLowerCase() === 'true';
 }
 
+/**
+ * Clicks an element by moving the native cursor to its clickable point and issuing a real
+ * mouse down/up. Focuses a focusable Pane/Window ancestor first unless the target is a menu
+ * item (focusing an ancestor would close the open popup), and re-checks the clickable point
+ * for WPF popups that are still animating into place.
+ * @param elementId - The id of the element to click.
+ * @returns Resolves once the click has been dispatched and the post-click settle delay elapses.
+ */
 export async function click(this: AppiumDesktopDriver, elementId: string): Promise<void> {
     if (this.isIEContext()) {
         await this.ieSession!.click(elementId);
@@ -346,6 +417,11 @@ export async function click(this: AppiumDesktopDriver, elementId: string): Promi
     await sleep(this.caps.delayAfterClick ?? postClickSettleMs);
 }
 
+/**
+ * Captures a screenshot of a single element.
+ * @param elementId - The id of the element to capture.
+ * @returns A base64-encoded PNG image of the element.
+ */
 export async function getElementScreenshot(this: AppiumDesktopDriver, elementId: string): Promise<string> {
     if (this.isIEContext()) {
         throw new errors.NotYetImplementedError();
@@ -357,6 +433,12 @@ export async function getElementScreenshot(this: AppiumDesktopDriver, elementId:
     return await this.sendCommand('getElementScreenshot', { elementId }) as string;
 }
 
+/**
+ * Switches the active IE frame context. Only supported in IE context.
+ * @param id - `null` to switch to the default (top-level) content, a numeric frame index,
+ * or a WebDriver element reference identifying a frame element.
+ * @returns Resolves once the frame switch has completed.
+ */
 export async function setFrame(
     this: AppiumDesktopDriver,
     id: null | number | Record<string, string>,
@@ -379,6 +461,11 @@ export async function setFrame(
     await this.ieSession!.switchToFrameByElement(elementId);
 }
 
+/**
+ * Switches back to the default (top-level) content from within an IE frame. Only supported
+ * in IE context.
+ * @returns Resolves once the switch has completed.
+ */
 export async function switchToParentFrame(this: AppiumDesktopDriver): Promise<void> {
     if (!this.isIEContext()) {
         throw new errors.NotImplementedError('switchToParentFrame is only supported in IE context');

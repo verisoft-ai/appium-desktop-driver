@@ -54,6 +54,29 @@ public static class DotNetBridgeCommands
         {
             BridgeInjector.InjectFromPidAutoBitness((int)pid, x64Dll, x86Dll, x86Stub);
         }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd,
+                "Injection failed at the Win32 API level (LoadLibrary/CreateRemoteThread). " +
+                "Common causes: antivirus/EDR blocking cross-process code injection, or insufficient privileges — try running as Administrator."), ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd,
+                "Access denied opening the target process. Try running as Administrator, " +
+                "or check that antivirus/EDR is not blocking process access."), ex);
+        }
+        catch (IOException ex)
+        {
+            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd,
+                "I/O error reading or writing the bridge DLL or the x86 stub. " +
+                "Verify the files are not locked by antivirus and were not corrupted during install."), ex);
+        }
+        catch (BadImageFormatException ex)
+        {
+            throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd,
+                "Bridge DLL bitness does not match the target process (32-bit vs 64-bit)."), ex);
+        }
         catch (Exception ex)
         {
             throw new InvalidOperationException(BuildDiagnosticMessage(ex, hwnd), ex);
@@ -63,10 +86,15 @@ public static class DotNetBridgeCommands
         return null;
     }
 
-    private static string BuildDiagnosticMessage(Exception ex, IntPtr hwnd)
+    private static string BuildDiagnosticMessage(Exception ex, IntPtr hwnd, string? hint = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(ex.Message);
+        if (hint != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine(hint);
+        }
         sb.AppendLine();
         sb.AppendLine("=== attachDotnetBridge diagnostics ===");
 

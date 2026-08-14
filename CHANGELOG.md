@@ -1,3 +1,9 @@
+## [2.3.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.3...v2.3.0-preview.4) (2026-08-14)
+
+### Bug Fixes
+
+* split generic catch in InjectDotnetBridge into specific exception types ([5d7dd1d](https://github.com/verisoft-ai/appium-desktop-driver/commit/5d7dd1d196b09fed8d7cdaf74f04bd83c2d46233)), closes [#63](https://github.com/verisoft-ai/appium-desktop-driver/issues/63)
+
 ## [2.3.0-preview.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.2...v2.3.0-preview.3) (2026-08-14)
 
 ### Features

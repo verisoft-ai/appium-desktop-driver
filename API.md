@@ -636,7 +636,7 @@ await driver.executeScript('windows: attachDotnetBridge', []);
 ```
 
 See [.NET Bridge Automation](#net-bridge-automation) for full setup
-and current scope (WinForms only — WPF not yet supported).
+and current scope (WinForms, DevExpress WinForms, and WPF).
 
 ---
 
@@ -946,7 +946,10 @@ The driver automates WinForms (and DevExpress WinForms) applications
 whose custom-drawn controls don't expose values through UI Automation
 — for example, ownerdraw controls that paint their own content via GDI,
 or DevExpress grids/trees that only surface a generic placeholder value
-("Column row N") to UIA regardless of the real cell content.
+("Column row N") to UIA regardless of the real cell content. The same
+bridge also automates plain WPF applications, including reading and
+mutating arbitrary elements that a `DataTemplate` renders independently
+of their bound value.
 
 ### How it works
 
@@ -957,9 +960,13 @@ C++/CLI mixed-mode assembly, so it has a real native entry point
 `CreateRemoteThread` can target, but runs managed reflection code once
 loaded) that starts a loopback TCP server inside the target process,
 writes its port to `%TEMP%\appium-dotnet-bridge-{pid}.port`, and serves
-element queries from the C# driver server. Mutating commands
-(`invoke`/`select`/`expand`/`setValue`) are marshaled onto the target's
-real UI thread before touching WinForms state.
+element queries from the C# driver server. Every command — reads
+(`getInfo`/`getChildren`/`getWindowRoot`) and mutating commands
+(`invoke`/`select`/`expand`/`setValue`/`requestFocus`) alike — is
+marshaled onto the target's real UI thread before touching WinForms
+state, or onto the WPF Dispatcher thread before touching a
+`DependencyObject`; WPF enforces this more strictly than WinForms does,
+throwing rather than silently misbehaving if violated.
 
 Bitness is detected automatically: 64-bit targets are injected directly,
 32-bit (WOW64) targets are injected via a separate 32-bit stub process,
@@ -1018,17 +1025,33 @@ await driver.executeScript('windows: attachDotnetBridge', []);
   custom-painted controls with blanked `AccessibleName`)
 - DevExpress WinForms: `XtraGrid` (including grouped grids), `XtraTreeList`,
   `ComboBoxEdit`, `TokenEdit`
+- Plain WPF elements — reads (getPageSource/getInfo/getChildren/getValue)
+  and mutating commands (invoke, select, expand, setValue, requestFocus)
+  both work against arbitrary `DependencyObject`/`FrameworkElement`
+  targets, correctly marshaled onto the WPF Dispatcher thread. This
+  includes owner-drawn WPF cells/elements (e.g. a `DataGridTemplateColumn`
+  whose cell content paints itself via `OnRender` and returns a
+  suppressed `AutomationPeer`) — genuinely UIA-blind, the WPF analog of
+  WinForms custom-draw, but read by the bridge's generic visual-tree walk
+  with **no dedicated reflection code**, since a WPF `DataTemplate`
+  always renders through a real `FrameworkElement` with gettable
+  properties (unlike WinForms owner-draw, which paints raw GDI pixels
+  with no backing element at all).
+- DevExpress WPF (`Xpf.*`) controls — probed against
+  `DevExpress.Xpf.Grid.GridControl` specifically: bound and unbound
+  columns are already fully readable via plain UIA (no bridge needed for
+  those), and `CellTemplate`-rendered cells are covered by the same
+  generic mechanism above — no dedicated `Xpf.Grid` reflection exists or
+  is needed.
+- Invoke on WPF `ButtonBase`-derived controls (`Button`, `RepeatButton`,
+  `ToggleButton`, ...) uses the protected `OnClick` method (the WPF
+  equivalent of WinForms' `PerformClick`), so no XAML/AutomationPeer
+  wiring is required on the target app's side.
 
 ### Limitations
 
 - **.NET Framework only** — targets hosting CoreCLR (.NET 5+ / .NET
   Core, detected via `coreclr.dll`) are rejected. Only classic
   `clr.dll`-hosted processes are supported.
-- **WinForms only — WPF is not yet supported.** Plain WPF windows are
-  partially readable (generic visual-tree walk covers read-only
-  queries), but mutating commands on WPF elements are not correctly
-  marshaled onto the WPF dispatcher yet, and there is no DevExpress-WPF
-  (`Xpf.*`) reflection at all — DevExpress WPF grids/trees fall back to
-  a generic, non-semantic walk. WPF support is planned.
 - **x64 and x86 (WOW64) targets only** — both are supported via
   automatic bitness detection.

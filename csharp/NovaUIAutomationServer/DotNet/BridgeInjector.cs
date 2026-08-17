@@ -89,6 +89,31 @@ internal static class BridgeInjector
     /// </summary>
     public static void InjectFromPidAutoBitness(int pid, string x64DllPath, string x86DllPath, string x86StubPath)
     {
+        // CoreCLR attach goes over the Diagnostics IPC named pipe, not CreateRemoteThread, so it
+        // skips the 32-bit-stub dance entirely. The profiler DLL itself is still architecture-
+        // specific, though — a 32-bit target needs the x86 build, not the x64 one.
+        if (DetectClrFramework(pid) == ClrFramework.CoreClr)
+        {
+            bool coreClrTargetIs32Bit;
+            try
+            {
+                coreClrTargetIs32Bit = DetectIs32Bit(pid);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Could not determine target process bitness for PID {pid}: {ex.Message}", ex);
+            }
+
+            string profilerDllPath = DefaultCoreClrProfilerDllPath(coreClrTargetIs32Bit ? x86DllPath : x64DllPath);
+            if (coreClrTargetIs32Bit && !File.Exists(profilerDllPath))
+                throw new InvalidOperationException(
+                    $"Target process (PID {pid}) is a 32-bit CoreCLR process, but the 32-bit CoreCLR " +
+                    $"profiler is not installed (expected '{profilerDllPath}'). Run " +
+                    "`npm run build:dotnet-bridge-profiler` to build it (builds both x64 and Win32).");
+            CoreClrAttacher.Attach(pid, profilerDllPath);
+            return;
+        }
+
         bool is32Bit;
         try
         {
@@ -138,13 +163,19 @@ internal static class BridgeInjector
                 (string.IsNullOrWhiteSpace(stderrOutput) ? "" : $" {stderrOutput.Trim()}"));
     }
 
+    // Native profiler DLL for CoreCLR targets — sibling of the Framework path's bridgeDll, built
+    // by dotnet-bridge-profiler/. See dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md.
+    private static string DefaultCoreClrProfilerDllPath(string bridgeDll) =>
+        Path.Combine(Path.GetDirectoryName(bridgeDll) ?? ".", "appium-dotnet-profiler.dll");
+
     public static void InjectFromPid(int pid, string bridgeDll)
     {
         var framework = DetectClrFramework(pid);
         if (framework == ClrFramework.CoreClr)
-            throw new InvalidOperationException(
-                "Target process is hosting CoreCLR (.NET 5+ / .NET Core). The .NET bridge only supports " +
-                ".NET Framework processes (clr.dll) in this version.");
+        {
+            CoreClrAttacher.Attach(pid, DefaultCoreClrProfilerDllPath(bridgeDll));
+            return;
+        }
         if (framework == ClrFramework.None)
             throw new InvalidOperationException(
                 "Target process has no CLR loaded (neither clr.dll nor coreclr.dll found among its modules). " +

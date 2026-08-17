@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plain C# port of dotnet-bridge-agent/BridgeAgent.cpp's managed half, for CoreCLR (.NET 5+)
+    targets — see dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md. BridgeAgent.cpp is compiled /clr
+    (C++/CLI mixed-mode), which has no CoreCLR equivalent, so it can't be reused as-is there. Its
+    logic (Json/ElementRegistry/Reflector/BridgeServer) has zero CLR-hosting-API surface though —
+    pure reflection over WinForms/WPF — so it ports mechanically to a plain class library here.
+
+    This assembly is loaded into the target process by the profiler-attach bootstrap IL (see
+    dotnet-bridge-profiler/), not injected directly — there is no CoreCLR equivalent of
+    LoadLibraryW-triggers-CLR-init, so something already running inside the target process has to
+    AssemblyLoadContext.LoadFromAssemblyPath this DLL and call BridgeStart itself.
+
+    Kept as a class library (not exe) with the same BridgeStart(object) entry point shape the
+    native DLL exports today, so BridgeAgentService.cs on the host side needs no changes either
+    way — see BridgeStart.cs.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>appium-dotnet-bridge-core</AssemblyName>
+    <RootNamespace>AppiumDotNetBridgeCore</RootNamespace>
+  </PropertyGroup>
+
+</Project>

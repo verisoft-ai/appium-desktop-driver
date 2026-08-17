@@ -561,6 +561,95 @@ export async function launchWpfMinimalExternally(): Promise<{ proc: ChildProcess
     return { proc, hwnd };
 }
 
+export const NET8_WINFORMS_MINIMAL_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WinformsMinimal.exe'
+);
+
+/**
+ * Launches the net8-winforms-minimal fixture externally — CoreCLR (.NET 8) twin of
+ * wpf-minimal/winform-combo, exercising BridgeInjector's CoreCLR attach path (profiler attach via
+ * CoreClrAttacher) instead of Win32 injection. See dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md.
+ */
+export async function launchNet8WinformsMinimalExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(NET8_WINFORMS_MINIMAL_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn net8-winforms-minimal app: ${NET8_WINFORMS_MINIMAL_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`net8-winforms-minimal app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
+export const NET8_WINFORMS_MINIMAL_X86_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'win-x86', 'Net8WinformsMinimal.exe'
+);
+
+/**
+ * 32-bit twin of launchNet8WinformsMinimalExternally — same fixture source, published with
+ * `-r win-x86`, genuinely loading a 32-bit CoreCLR (confirmed via IsWow64Process). Exercises
+ * BridgeInjector.InjectFromPidAutoBitness's CoreCLR branch picking the x86 profiler DLL and
+ * CoreClrAttacher picking the x86-published bridge-core.dll.
+ *
+ * Requires an x86 .NET 8 Desktop Runtime installed (`winget install
+ * Microsoft.DotNet.DesktopRuntime.8.x86`) — a 32-bit CoreCLR process needs its own
+ * architecture-specific runtime, separate from the machine's normal x64 .NET install.
+ */
+export async function launchNet8WinformsMinimalX86Externally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(NET8_WINFORMS_MINIMAL_X86_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn net8-winforms-minimal (x86) app: ${NET8_WINFORMS_MINIMAL_X86_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`net8-winforms-minimal (x86) app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
 export const WPF_DATAGRID_TEMPLATE_APP_PATH = resolve(
     process.cwd(), 'test-apps', 'wpf-datagrid-template', 'bin', 'WpfDataGridTemplate.exe'
 );

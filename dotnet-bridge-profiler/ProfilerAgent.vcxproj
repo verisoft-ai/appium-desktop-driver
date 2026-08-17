@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  x64|Release live-attach tested against a real CoreCLR target — see
+  dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md phases 2/2.5 for the full history (module scan,
+  RequestReJIT, IL rewrite, and the injected Assembly.LoadFrom bootstrap all confirmed working
+  against a real running process). Win32|Release added for 32-bit CoreCLR target support —
+  compiles against the local corprof.h/cor.h/CorHdr.h/CorError.h (NETFXSDK 4.8.1 — see
+  ProfilerCallback.h's header comment: those headers' ICorProfilerCallback interfaces are shared
+  with CoreCLR, so no separate vendoring from dotnet/runtime was needed), same source as x64, no
+  bitness-sensitive code expected (mirrors dotnet-bridge-agent/BridgeAgent.vcxproj's own
+  x64/Win32 split for the Framework path).
+
+  Plain C++ (no CLRSupport/`/clr`) — unlike dotnet-bridge-agent/BridgeAgent.vcxproj, this DLL
+  never runs managed code itself, it only rewrites another module's IL from the outside. See
+  dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md.
+-->
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8B3F1E4A-2D6C-4F9E-9A1B-7C5D4E3F2A10}</ProjectGuid>
+    <RootNamespace>ProfilerAgent</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <TargetName>appium-dotnet-profiler</TargetName>
+    <OutDir Condition="'$(Platform)'=='x64'">$(SolutionDir)..\native\win-x64\</OutDir>
+    <OutDir Condition="'$(Platform)'=='Win32'">$(SolutionDir)..\native\win-x86\</OutDir>
+    <!-- corprof.h/cor.h/CorHdr.h/CorError.h ship with the .NET Framework SDK (NETFXSDK), not
+         the plain Windows SDK — CoreCLR's ICorProfilerCallback ABI is identical, so these are
+         reused as-is rather than vendoring the same headers a second time from dotnet/runtime.
+         $(NETFXKitsDir) is set by the VS/NETFXSDK installer itself, so this tracks whichever
+         version is actually installed instead of pinning one; falls back to 4.8.1's fixed path
+         only if that property is somehow unset. -->
+    <NETFXKitsDir Condition="'$(NETFXKitsDir)' == ''">C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8.1\</NETFXKitsDir>
+    <IncludePath>$(NETFXKitsDir)Include\um;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>ole32.lib;uuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>ProfilerAgent.def</ModuleDefinitionFile>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="ProfilerCallback.cpp" />
+    <ClCompile Include="ClassFactory.cpp" />
+    <ClInclude Include="ProfilerCallback.h" />
+    <ClInclude Include="ClassFactory.h" />
+    <ClInclude Include="CallbackStubs.inc" />
+    <None Include="ProfilerAgent.def" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -1,3 +1,14 @@
+## [2.4.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0...v2.4.0) (2026-08-17)
+
+### Features
+
+* support CoreCLR (.NET 5+) targets in the .NET bridge ([a4177bd](https://github.com/verisoft-ai/appium-desktop-driver/commit/a4177bdcdbb5f134c3c05e0819764acb755cc4b1))
+
+### Bug Fixes
+
+* resolve NETFXSDK include path via NETFXKitsDir instead of hardcoded version ([812d2bf](https://github.com/verisoft-ai/appium-desktop-driver/commit/812d2bf11cfc850828b4e79163e5bf74c031657a))
+* wire CoreCLR bridge files into x86 stub build and build:all ([abc8709](https://github.com/verisoft-ai/appium-desktop-driver/commit/abc8709a4b3f6bfe22feb8eb9de99617d7ebfe42))
+
 ## [2.3.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.2...v2.3.0) (2026-08-14)
 
 ### Features

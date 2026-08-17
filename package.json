@@ -48,7 +48,7 @@
     "build:devexpress-test-app": "node scripts/build-devexpress-test-app.js",
     "build:devexpress-elements-gallery-test-app": "node scripts/build-devexpress-elements-gallery-test-app.js",
     "build:test-apps": "npm run build:winform-test-app && npm run build:wpf-minimal-test-app && npm run build:wpf-datagrid-template-test-app && npm run build:java-swing-test-app && npm run build:devexpress-test-app",
-    "build:all": "npm run build:java-agent && npm run build:dotnet-bridge && npm run build:dotnet-bridge-x86-stub && npm run build:native && npm run build:iebridge && npm run build",
+    "build:all": "npm run build:java-agent && npm run build:dotnet-bridge && npm run build:dotnet-bridge-x86-stub && npm run build:dotnet-bridge-core && npm run build:dotnet-bridge-core-x86 && npm run build:dotnet-bridge-profiler && npm run build:native && npm run build:iebridge && npm run build",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
     "test": "npx vitest run",

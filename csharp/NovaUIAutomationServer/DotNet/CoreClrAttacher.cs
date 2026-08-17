@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 
 namespace NovaUIAutomationServer.DotNet;
@@ -15,6 +17,16 @@ internal static class CoreClrAttacher
 
     public static void Attach(int pid, string profilerDllPath)
     {
+        // CoreCLR only allows one profiler per process for its entire lifetime — there is no
+        // detach path available to this profiler (it modifies metadata via IMetaDataEmit2 in
+        // GetReJITParameters, which CoreCLR's own detach rules permanently disqualify from
+        // detaching). A second attach attempt against a target this driver already attached to
+        // earlier in the same run (e.g. a prior WebDriver session against the same long-lived
+        // app) would otherwise fail with CORPROF_E_PROFILER_ALREADY_ACTIVE. The bridge's TCP
+        // listener from that first attach is still alive for the process' whole lifetime, though
+        // — reuse it instead of re-attaching.
+        if (IsBridgeAlreadyListening(pid)) return;
+
         if (!File.Exists(profilerDllPath))
             throw new InvalidOperationException(
                 $"CoreCLR bridge profiler not found at '{profilerDllPath}'. Run " +
@@ -80,6 +92,27 @@ internal static class CoreClrAttacher
         }
 
         return cachedDll;
+    }
+
+    // Port file surviving from an earlier attach only proves a listener existed at some point —
+    // confirm it's still actually accepting connections before trusting it (the target could have
+    // crashed or the listener thread could have died without cleaning up the file).
+    private static bool IsBridgeAlreadyListening(int pid)
+    {
+        string portFile = Path.Combine(Path.GetTempPath(), $"appium-dotnet-bridge-{pid}.port");
+        if (!File.Exists(portFile)) return false;
+        if (!int.TryParse(File.ReadAllText(portFile).Trim(), out int port)) return false;
+
+        try
+        {
+            using var probe = new TcpClient();
+            if (!probe.ConnectAsync(IPAddress.Loopback, port).Wait(500)) return false;
+            return probe.Connected;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void WaitForPortFile(int pid, TimeSpan timeout)

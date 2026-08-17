@@ -90,8 +90,8 @@ export function registerAppTools(server: McpServer, session: AppiumSession): voi
                 'Inject the .NET bridge into the CLR process owning the current session window. ' +
                 'Use this after creating a session (with appTopLevelWindow) when dotnetBridge was NOT set at session creation time. ' +
                 'Needed for WinForms/WPF apps built with custom-drawn control libraries (e.g. DevExpress) whose controls expose ' +
-                'little or nothing via plain UIA. Only works on already-running .NET Framework processes — there is no launch-time ' +
-                'injection path, and CoreCLR (.NET 5+) targets are not yet supported.',
+                'little or nothing via plain UIA. Only works on an already-running process — there is no launch-time injection path. ' +
+                'Both .NET Framework (clr.dll) and CoreCLR (.NET 5+, coreclr.dll) targets are supported automatically.',
             annotations: { destructiveHint: false },
             inputSchema: {},
         },

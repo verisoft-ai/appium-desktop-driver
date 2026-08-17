@@ -53,7 +53,7 @@ Call get_window_handles to list open windows, then switch_to_window to focus the
 If the user asks to automate a Java application (Swing, AWT, or any app launched via a JVM), always pass javaSwing: true to create_session. Without this flag, UIA will not see any elements inside the Java window.
 
 ## WinForms/WPF apps with custom-drawn controls (e.g. DevExpress)
-If get_page_source returns an empty or suspiciously shallow tree for a WinForms/WPF window (common with DevExpress and similar custom-drawn control libraries), attach to the window first with attachTopLevelWindow/appTopLevelWindow, then call attach_dotnet_bridge (or pass dotnetBridge: true at session creation alongside appTopLevelWindow). This only attaches to an already-running .NET Framework process — there is no launch-time injection, and CoreCLR (.NET 5+) targets are not yet supported.
+If get_page_source returns an empty or suspiciously shallow tree for a WinForms/WPF window (common with DevExpress and similar custom-drawn control libraries), attach to the window first with attachTopLevelWindow/appTopLevelWindow, then call attach_dotnet_bridge (or pass dotnetBridge: true at session creation alongside appTopLevelWindow). This only attaches to an already-running process — there is no launch-time injection. Both .NET Framework (clr.dll) and CoreCLR (.NET 5+, coreclr.dll) targets are supported; the driver detects which one is running and attaches accordingly, no extra configuration needed.
 
 ## Webview / hybrid apps
 Call get_contexts to list available contexts. If WEBVIEW contexts are present, ask the user which to switch to before calling set_context.

@@ -48,8 +48,12 @@
     <OutDir Condition="'$(Platform)'=='Win32'">$(SolutionDir)..\native\win-x86\</OutDir>
     <!-- corprof.h/cor.h/CorHdr.h/CorError.h ship with the .NET Framework SDK (NETFXSDK), not
          the plain Windows SDK — CoreCLR's ICorProfilerCallback ABI is identical, so these are
-         reused as-is rather than vendoring the same headers a second time from dotnet/runtime. -->
-    <IncludePath>C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8.1\Include\um;$(IncludePath)</IncludePath>
+         reused as-is rather than vendoring the same headers a second time from dotnet/runtime.
+         $(NETFXKitsDir) is set by the VS/NETFXSDK installer itself, so this tracks whichever
+         version is actually installed instead of pinning one; falls back to 4.8.1's fixed path
+         only if that property is somehow unset. -->
+    <NETFXKitsDir Condition="'$(NETFXKitsDir)' == ''">C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8.1\</NETFXKitsDir>
+    <IncludePath>$(NETFXKitsDir)Include\um;$(IncludePath)</IncludePath>
   </PropertyGroup>
 
   <ItemDefinitionGroup>

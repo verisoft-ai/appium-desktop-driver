@@ -1,3 +1,10 @@
+## [2.4.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.1...v2.4.2) (2026-08-17)
+
+### Bug Fixes
+
+* fix dotnet core element prefix missmatch ([c468f22](https://github.com/verisoft-ai/appium-desktop-driver/commit/c468f22129451875a49a579c2017d09441ab4859))
+* reuse an already-attached CoreCLR bridge instead of re-attaching ([b2615e8](https://github.com/verisoft-ai/appium-desktop-driver/commit/b2615e89bdf5e8372baf6534a8d5b7c6aba54e13))
+
 ## [2.4.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.0...v2.4.1) (2026-08-17)
 
 ### Bug Fixes

@@ -1,3 +1,9 @@
+## [2.4.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.0...v2.4.1) (2026-08-17)
+
+### Bug Fixes
+
+* include CoreCLR bridge DLLs in the published npm package ([71e9874](https://github.com/verisoft-ai/appium-desktop-driver/commit/71e9874802c717712fda4adc0f18bb0c2f422ddd))
+
 ## [2.4.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0...v2.4.0) (2026-08-17)
 
 ### Features

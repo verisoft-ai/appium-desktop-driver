@@ -7,7 +7,7 @@ import { createWinformComboSession, quitSession } from './helpers/session.js';
 // native UIA RuntimeId is null/empty must still be findable and usable,
 // keyed by a generated GUID instead of a dot-joined RuntimeId.
 //
-// winform-combo's NoRuntimeIdHost (test-apps/winform-combo/Program.cs)
+// winform-combo's NoRuntimeIdHost (appium-windows2-test-apps/winform-combo/Program.cs)
 // registers a raw UIA provider whose child fragment has no backing HWND, so
 // nothing auto-derives a RuntimeId for it — GetRuntimeId() genuinely returns
 // null, verified directly against the OS UIA client (not just this driver).

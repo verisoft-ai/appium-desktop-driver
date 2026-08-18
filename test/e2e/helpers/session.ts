@@ -11,6 +11,12 @@ export const APPIUM_SERVER = {
     path: '/',
 };
 
+/**
+ * Fixture apps live in the sibling appium-windows2-test-apps repo, not in this repo — override
+ * via env var for CI or a different checkout layout.
+ */
+export const TEST_APPS_DIR = process.env.TEST_APPS_DIR ?? resolve(process.cwd(), '..', 'appium-windows2-test-apps');
+
 export const CALCULATOR_APP_ID = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App';
 export const NOTEPAD_APP_PATH = 'C:\\Windows\\notepad.exe';
 export const TODO_APP_ID = 'Microsoft.Todos_8wekyb3d8bbwe!App';
@@ -208,7 +214,7 @@ export async function createIEProxySession(url: string, extraCaps?: Record<strin
 
 export const EXPLORER_APP_PATH = 'C:\\Windows\\explorer.exe';
 export const CHARMAP_APP_PATH = 'C:\\Windows\\System32\\charmap.exe';
-export const WINFORM_COMBO_APP_PATH = resolve(process.cwd(), 'test-apps', 'winform-combo', 'bin', 'WinformCombo.exe');
+export const WINFORM_COMBO_APP_PATH = resolve(TEST_APPS_DIR, 'winform-combo', 'bin', 'WinformCombo.exe');
 
 async function createSimpleAppSession(appPath: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({
@@ -239,7 +245,7 @@ export async function createExplorerSession(extraCaps?: Record<string, unknown>)
 export const JAVAW_EXE_PATH = process.env.JAVA_HOME
     ? `${process.env.JAVA_HOME}\\bin\\javaw.exe`
     : 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
-export const JAVA_SWING_FORM_CLASSPATH = resolve(process.cwd(), 'test-apps', 'java-swing-form');
+export const JAVA_SWING_FORM_CLASSPATH = resolve(TEST_APPS_DIR, 'java-swing-form');
 
 /**
  * Launches the Java Swing test form as an external process (without Appium agent injection).
@@ -314,7 +320,7 @@ export async function createJavaSwingFormSession(extraCaps?: Record<string, unkn
 }
 
 export const DEVEXPRESS_GRID_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'devexpress-grid-ownerdraw', 'bin', 'DevExpressGridOwnerDraw.exe'
+    TEST_APPS_DIR, 'devexpress-grid-ownerdraw', 'bin', 'DevExpressGridOwnerDraw.exe'
 );
 export const DEVEXPRESS_GRID_WINDOW_TITLE = 'DevExpress Grid OwnerDraw Fixture';
 
@@ -376,7 +382,7 @@ export async function launchDevExpressGridExternally(): Promise<{ proc: ChildPro
 }
 
 export const MINIMAL_OWNERDRAW_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'minimal-ownerdraw-winforms', 'bin', 'x64', 'Debug', 'net472', 'MinimalOwnerDraw.exe'
+    TEST_APPS_DIR, 'minimal-ownerdraw-winforms', 'bin', 'x64', 'Debug', 'net472', 'MinimalOwnerDraw.exe'
 );
 export const MINIMAL_OWNERDRAW_WINDOW_TITLE = 'Minimal OwnerDraw Fixture';
 
@@ -420,7 +426,7 @@ export async function launchMinimalOwnerDrawExternally(): Promise<{ proc: ChildP
 }
 
 export const MINIMAL_OWNERDRAW_X86_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'minimal-ownerdraw-x86', 'bin', 'x86', 'Debug', 'net472', 'MinimalOwnerDrawX86.exe'
+    TEST_APPS_DIR, 'minimal-ownerdraw-x86', 'bin', 'x86', 'Debug', 'net472', 'MinimalOwnerDrawX86.exe'
 );
 
 /**
@@ -480,13 +486,13 @@ export function isProcess32Bit(pid: number): boolean {
 }
 
 export const OWNERDRAW_GALLERY_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'ownerdraw-gallery', 'bin', 'x64', 'Debug', 'net472', 'OwnerDrawGallery.exe'
+    TEST_APPS_DIR, 'ownerdraw-gallery', 'bin', 'x64', 'Debug', 'net472', 'OwnerDrawGallery.exe'
 );
 
 /**
  * Launches the ownerdraw-gallery fixture externally (simulating a customer's app the driver has
  * no launch control over). No third-party dependency, no trial dialog to dismiss. See
- * test-apps/ownerdraw-gallery/Program.cs for the 5 element kinds it hosts.
+ * appium-windows2-test-apps/ownerdraw-gallery/Program.cs for the 5 element kinds it hosts.
  */
 export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
     const proc = spawn(OWNERDRAW_GALLERY_APP_PATH, [], { detached: true, stdio: 'ignore' });
@@ -521,11 +527,11 @@ export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildP
     return { proc, hwnd };
 }
 
-export const WPF_MINIMAL_APP_PATH = resolve(process.cwd(), 'test-apps', 'wpf-minimal', 'bin', 'WpfMinimal.exe');
+export const WPF_MINIMAL_APP_PATH = resolve(TEST_APPS_DIR, 'wpf-minimal', 'bin', 'WpfMinimal.exe');
 
 /**
  * Launches the wpf-minimal fixture externally (no DevExpress dependency, no trial dialog).
- * See test-apps/wpf-minimal/Program.cs — a TextBox, Button, and an owner-drawn list following the
+ * See appium-windows2-test-apps/wpf-minimal/Program.cs — a TextBox, Button, and an owner-drawn list following the
  * bridge's generic list convention, used to validate the WPF Dispatcher-marshaling fix.
  */
 export async function launchWpfMinimalExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
@@ -562,7 +568,7 @@ export async function launchWpfMinimalExternally(): Promise<{ proc: ChildProcess
 }
 
 export const NET8_WINFORMS_MINIMAL_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WinformsMinimal.exe'
+    TEST_APPS_DIR, 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WinformsMinimal.exe'
 );
 
 /**
@@ -604,7 +610,7 @@ export async function launchNet8WinformsMinimalExternally(): Promise<{ proc: Chi
 }
 
 export const NET8_WPF_MINIMAL_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'net8-wpf-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WpfMinimal.exe'
+    TEST_APPS_DIR, 'net8-wpf-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WpfMinimal.exe'
 );
 
 /**
@@ -648,7 +654,7 @@ export async function launchNet8WpfMinimalExternally(): Promise<{ proc: ChildPro
 }
 
 export const NET8_WINFORMS_MINIMAL_X86_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'win-x86', 'Net8WinformsMinimal.exe'
+    TEST_APPS_DIR, 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'win-x86', 'Net8WinformsMinimal.exe'
 );
 
 /**
@@ -695,12 +701,12 @@ export async function launchNet8WinformsMinimalX86Externally(): Promise<{ proc: 
 }
 
 export const WPF_DATAGRID_TEMPLATE_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'wpf-datagrid-template', 'bin', 'WpfDataGridTemplate.exe'
+    TEST_APPS_DIR, 'wpf-datagrid-template', 'bin', 'WpfDataGridTemplate.exe'
 );
 
 /**
  * Launches the wpf-datagrid-template fixture externally (no DevExpress dependency). See
- * test-apps/wpf-datagrid-template/Program.cs — a plain WPF DataGrid with two bound text columns
+ * appium-windows2-test-apps/wpf-datagrid-template/Program.cs — a plain WPF DataGrid with two bound text columns
  * and one DataGridTemplateColumn whose cell content is owner-drawn (OnRender + null
  * AutomationPeer), genuinely invisible to plain UIA.
  */
@@ -738,7 +744,7 @@ export async function launchWpfDataGridTemplateExternally(): Promise<{ proc: Chi
 }
 
 export const DEVEXPRESS_ELEMENTS_GALLERY_APP_PATH = resolve(
-    process.cwd(), 'test-apps', 'devexpress-elements-gallery', 'bin', 'DevExpressElementsGallery.exe'
+    TEST_APPS_DIR, 'devexpress-elements-gallery', 'bin', 'DevExpressElementsGallery.exe'
 );
 export const DEVEXPRESS_ELEMENTS_GALLERY_WINDOW_TITLE = 'DevExpress Elements Gallery';
 
@@ -747,7 +753,7 @@ export const DEVEXPRESS_ELEMENTS_GALLERY_WINDOW_TITLE = 'DevExpress Elements Gal
  * driver has no launch control over). Same trial-nag tolerance as launchDevExpressGridExternally
  * — an "About DevExpress" dialog pops inconsistently depending on build-cache state, so this polls
  * for the real window's title rather than assuming a dialog will or won't appear. See
- * test-apps/devexpress-elements-gallery/Program.cs for the 4 element kinds it hosts (TreeList,
+ * appium-windows2-test-apps/devexpress-elements-gallery/Program.cs for the 4 element kinds it hosts (TreeList,
  * ComboBoxEdit, TokenEdit, grouped GridControl) — each confirmed genuinely UIA-blind via a
  * throwaway probe before this fixture was written.
  */

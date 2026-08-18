@@ -9,8 +9,8 @@ import {
 } from './helpers/session.js';
 
 // Consolidated Phase 4 coverage: all 5 ownerdraw-gallery element kinds in one file, one shared
-// session/attach (see test-apps/ownerdraw-gallery/Program.cs for the fixture). Supersedes
-// dotnet-bridge-listbox-probe.e2e.ts / test-apps/listbox-probe-throwaway/, both throwaway.
+// session/attach (see appium-windows2-test-apps/ownerdraw-gallery/Program.cs for the fixture). Supersedes
+// dotnet-bridge-listbox-probe.e2e.ts / appium-windows2-test-apps/listbox-probe-throwaway/, both throwaway.
 
 type WindowInfo = { handle: string; title: string; className: string };
 

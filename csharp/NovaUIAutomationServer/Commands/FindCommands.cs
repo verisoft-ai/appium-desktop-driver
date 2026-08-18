@@ -29,8 +29,15 @@ public static class FindCommands
             return state.Java!.FindFirst(javaRoot!, conditionDto, scope);
         }
 
-        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
-        // the process the bridge was injected into.
+        // Route to .NET bridge only when context is already a bridge element —
+        // i.e. a caller is deliberately continuing a search inside a subtree it
+        // already knows is bridge-only (e.g. one returned by a prior splice).
+        // We deliberately do NOT route here just because the context/root's
+        // window belongs to the bridge-injected process: that would search the
+        // bridge's whole reflected tree (different shape from UIA) instead of
+        // the real UIA tree, for elements that are perfectly UIA-visible.
+        // Blind subtrees are instead reached transparently by the manual-walk
+        // fallback below (see TryFindInBridgeSplice).
         if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
         {
             return state.DotNetBridge!.FindFirst(dotnetRoot!, conditionDto, scope);
@@ -50,7 +57,7 @@ public static class FindCommands
         switch (scope.ToLowerInvariant())
         {
             case "descendants":
-                return FindFirstRecursively(searchRoot, condition, state, includeSelf: false);
+                return FindFirstRecursively(searchRoot, condition, conditionDto, state, includeSelf: false);
             case "children":
             {
                 var el = searchRoot.FindFirst(TreeScope.Children, condition);
@@ -62,7 +69,7 @@ public static class FindCommands
                 return el != null ? state.SaveElementAndReturnId(el) : null;
             }
             case "subtree":
-                return FindFirstRecursively(searchRoot, condition, state, includeSelf: true);
+                return FindFirstRecursively(searchRoot, condition, conditionDto, state, includeSelf: true);
             case "ancestors":
                 return FindFirstAncestor(searchRoot, condition, state);
             case "ancestors-or-self":
@@ -106,8 +113,8 @@ public static class FindCommands
             return state.Java!.FindAll(javaRoot!, conditionDto, scope);
         }
 
-        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
-        // the process the bridge was injected into.
+        // Route to .NET bridge only when context is already a bridge element — see
+        // the matching comment in FindElement above.
         if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
         {
             return state.DotNetBridge!.FindAll(dotnetRoot!, conditionDto, scope);
@@ -127,13 +134,13 @@ public static class FindCommands
         switch (scope.ToLowerInvariant())
         {
             case "descendants":
-                return FindAllRecursively(searchRoot, condition, state, includeSelf: false);
+                return FindAllRecursively(searchRoot, condition, conditionDto, state, includeSelf: false);
             case "children":
                 return SaveAll(searchRoot.FindAll(TreeScope.Children, condition), state);
             case "element":
                 return SaveAll(searchRoot.FindAll(TreeScope.Element, condition), state);
             case "subtree":
-                return FindAllRecursively(searchRoot, condition, state, includeSelf: true);
+                return FindAllRecursively(searchRoot, condition, conditionDto, state, includeSelf: true);
             case "ancestors":
                 return FindAllAncestors(searchRoot, condition, state);
             case "ancestors-or-self":
@@ -505,39 +512,67 @@ public static class FindCommands
     // ── .NET bridge routing ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns true when the find request should be routed to the .NET bridge.
+    /// Returns true when the find request should be routed to the .NET bridge —
+    /// only when the context is already a bridge element (a caller deliberately
+    /// continuing a search inside a subtree it already knows is bridge-only).
     /// Sets <paramref name="dotnetRoot"/> to the bridge element to search from.
     /// </summary>
     private static bool TryRouteToDotnet(SessionState state, string? contextElementId, out BridgeAgentElement? dotnetRoot)
     {
         dotnetRoot = null;
         if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return false;
+        if (contextElementId == null || !BridgeAgentElement.IsDotnetId(contextElementId)) return false;
 
-        // Context is already a bridge element — search within its subtree directly.
-        if (contextElementId != null && BridgeAgentElement.IsDotnetId(contextElementId))
+        dotnetRoot = state.DotNetBridge.GetById(contextElementId);
+        return true;
+    }
+
+    /// <summary>
+    /// Called from the manual UIA walk when an element has zero real UIA
+    /// children — the reason may be that it's a custom-drawn control library
+    /// UIA can't see into. Correlates the element to the bridge's reflected
+    /// tree and searches within that subtree for a match, so descendant
+    /// searches transparently reach bridge-only content instead of treating
+    /// every blind element as a genuine dead end. Returns null on any failure
+    /// (bridge inactive, element not on the bridge window, no correlation, no
+    /// match) — callers just keep walking siblings in that case.
+    /// </summary>
+    private static string? TryFindInBridgeSplice(IUIAutomationElement element, ConditionDto conditionDto, SessionState state)
+    {
+        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return null;
+        if (!state.IsDotnetBridgeWindowElement(element)) return null;
+        try
         {
-            dotnetRoot = state.DotNetBridge.GetById(contextElementId);
-            return true;
+            var hwnd = element.CurrentNativeWindowHandle;
+            var bridgeWindowRoot = state.DotNetBridge.GetWindowRoot(hwnd);
+            if (bridgeWindowRoot == null) return null;
+            var bridgeLeaf = DotNet.DotNetBridgeSplice.Correlate(state, element, bridgeWindowRoot);
+            if (bridgeLeaf == null) return null;
+            return state.DotNetBridge.FindFirst(bridgeLeaf, conditionDto, "subtree");
         }
-
-        IUIAutomationElement? uiaRoot = null;
-        if (contextElementId != null)
+        catch
         {
-            try { uiaRoot = state.GetElement(contextElementId); }
-            catch { return false; }
+            return null;
         }
-        else
+    }
+
+    private static string[] TryFindAllInBridgeSplice(IUIAutomationElement element, ConditionDto conditionDto, SessionState state)
+    {
+        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return Array.Empty<string>();
+        if (!state.IsDotnetBridgeWindowElement(element)) return Array.Empty<string>();
+        try
         {
-            uiaRoot = state.GetLiveRoot();
+            var hwnd = element.CurrentNativeWindowHandle;
+            var bridgeWindowRoot = state.DotNetBridge.GetWindowRoot(hwnd);
+            if (bridgeWindowRoot == null) return Array.Empty<string>();
+            var bridgeLeaf = DotNet.DotNetBridgeSplice.Correlate(state, element, bridgeWindowRoot);
+            if (bridgeLeaf == null) return Array.Empty<string>();
+            return state.DotNetBridge.FindAll(bridgeLeaf, conditionDto, "subtree");
         }
-
-        if (uiaRoot == null) return false;
-        if (!state.IsDotnetBridgeWindowElement(uiaRoot)) return false;
-
-        var hwnd = uiaRoot.CurrentNativeWindowHandle;
-        var title = uiaRoot.get_CurrentName() ?? "";
-        dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd, title);
-        return dotnetRoot != null;
+        catch
+        {
+            return Array.Empty<string>();
+        }
     }
 
     // Native UIA3 descendant search first — sub-millisecond on typical apps.
@@ -549,7 +584,7 @@ public static class FindCommands
     // driver's behaviour — tests that were passing before rely on it to find
     // elements the native scope skips.
 
-    private static string? FindFirstRecursively(IUIAutomationElement element, IUIAutomationCondition condition, SessionState state, bool includeSelf)
+    private static string? FindFirstRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, SessionState state, bool includeSelf)
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var native = element.FindFirst(scope, condition);
@@ -561,24 +596,31 @@ public static class FindCommands
             if (self != null) return state.TrySaveElementAndReturnId(self);
         }
         var trueCond = state.Automation.CreateTrueCondition();
-        return WalkForFirst(element, condition, trueCond, state);
+        return WalkForFirst(element, condition, conditionDto, trueCond, state);
     }
 
-    private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state)
+    private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, IUIAutomationCondition trueCond, SessionState state)
     {
         var direct = element.FindFirst(TreeScope.Children, condition);
         if (direct != null) return state.TrySaveElementAndReturnId(direct);
 
-        var children = element.FindAll(TreeScope.Children, trueCond);
-        foreach (var child in IterateArray(children))
+        var children = IterateArray(element.FindAll(TreeScope.Children, trueCond)).ToList();
+
+        if (children.Count == 0)
         {
-            var found = WalkForFirst(child, condition, trueCond, state);
+            var bridgeMatch = TryFindInBridgeSplice(element, conditionDto, state);
+            if (bridgeMatch != null) return bridgeMatch;
+        }
+
+        foreach (var child in children)
+        {
+            var found = WalkForFirst(child, condition, conditionDto, trueCond, state);
             if (found != null) return found;
         }
         return null;
     }
 
-    private static string[] FindAllRecursively(IUIAutomationElement element, IUIAutomationCondition condition, SessionState state, bool includeSelf)
+    private static string[] FindAllRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, SessionState state, bool includeSelf)
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var nativeResults = IterateArray(element.FindAll(scope, condition))
@@ -600,21 +642,30 @@ public static class FindCommands
             }
         }
         var trueCond = state.Automation.CreateTrueCondition();
-        WalkForAll(element, condition, trueCond, state, nativeResults!, seen);
+        WalkForAll(element, condition, conditionDto, trueCond, state, nativeResults!, seen);
         return nativeResults!.ToArray();
     }
 
-    private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
+    private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
     {
-        var children = element.FindAll(TreeScope.Children, trueCond);
-        foreach (var child in IterateArray(children))
+        var children = IterateArray(element.FindAll(TreeScope.Children, trueCond)).ToList();
+
+        if (children.Count == 0)
+        {
+            foreach (var id in TryFindAllInBridgeSplice(element, conditionDto, state))
+            {
+                if (seen.Add(id)) results.Add(id);
+            }
+        }
+
+        foreach (var child in children)
         {
             if (child.FindFirst(TreeScope.Element, condition) != null)
             {
                 var id = state.TrySaveElementAndReturnId(child);
                 if (id != null && seen.Add(id)) results.Add(id);
             }
-            WalkForAll(child, condition, trueCond, state, results, seen);
+            WalkForAll(child, condition, conditionDto, trueCond, state, results, seen);
         }
     }
 

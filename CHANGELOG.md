@@ -1,3 +1,15 @@
+## [2.4.5](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.4...v2.4.5) (2026-08-18)
+
+### Bug Fixes
+
+* **dotnet-bridge:** resolve correctness and perf regressions in bridge splice/find ([49e868b](https://github.com/verisoft-ai/appium-desktop-driver/commit/49e868b6317980789a9c8f87e30f58201188b405))
+
+### Code Refactoring
+
+* move test fixture apps to appium-windows2-test-apps ([f7ae7d9](https://github.com/verisoft-ai/appium-desktop-driver/commit/f7ae7d9568f68467fa9a2ab382ac51c27f2916b4))
+* remove MCP server, now maintained in windows2-mcp ([be0aeb0](https://github.com/verisoft-ai/appium-desktop-driver/commit/be0aeb09ba3756a4d956cfa39d84ea662a45811e))
+* remove vision-based finding, now maintained as an Appium plugin ([50f7754](https://github.com/verisoft-ai/appium-desktop-driver/commit/50f7754ff474273e7f9031df8ff1759c8d013cd8))
+
 ## [2.4.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.3...v2.4.4) (2026-08-18)
 
 ### Bug Fixes

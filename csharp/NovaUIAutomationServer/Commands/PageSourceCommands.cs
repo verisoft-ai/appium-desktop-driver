@@ -37,12 +37,7 @@ public static class PageSourceCommands
         // shape from UIA's control view), keep walking the real UIA tree and only
         // splice bridge content in at the points UIA itself reports as opaque
         // (zero UIA children) — see BuildPageSource below and DotNetBridgeSplice.
-        DotNet.BridgeAgentElement? dotnetWindowRoot = null;
-        if (state.DotNetBridgeEnabled && state.DotNetBridge != null && state.IsDotnetBridgeWindowElement(root))
-        {
-            var hwnd = root.CurrentNativeWindowHandle;
-            dotnetWindowRoot = state.DotNetBridge.GetWindowRoot(hwnd);
-        }
+        var dotnetWindowRoot = DotNet.BridgeSpliceContext.Build(state);
 
         var xmlDoc = new XmlDocument();
         BuildPageSource(root, xmlDoc, null, state, root, dotnetWindowRoot);
@@ -55,7 +50,7 @@ public static class PageSourceCommands
         XmlElement? parentXmlElement,
         SessionState state,
         IUIAutomationElement? rootForCoords,
-        DotNet.BridgeAgentElement? dotnetWindowRoot)
+        DotNet.BridgeSpliceContext? dotnetWindowRoot)
     {
         try
         {

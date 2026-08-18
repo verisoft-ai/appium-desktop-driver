@@ -97,6 +97,10 @@ internal static class BridgeUiaShaper
                 el.SetAttribute("y", GetString(info, "y") ?? "0");
                 el.SetAttribute("width", GetString(info, "width") ?? "0");
                 el.SetAttribute("height", GetString(info, "height") ?? "0");
+                // Not part of real UIA's page-source schema, but this is exactly
+                // the value UIA can't see (the whole reason this node got
+                // spliced in) — tests and callers scan page source text for it.
+                el.SetAttribute("Value", GetString(info, "Value") ?? "");
 
                 parent.AppendChild(el);
                 attachTo = el;

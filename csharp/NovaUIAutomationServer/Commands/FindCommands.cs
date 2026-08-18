@@ -36,8 +36,8 @@ public static class FindCommands
         // window belongs to the bridge-injected process: that would search the
         // bridge's whole reflected tree (different shape from UIA) instead of
         // the real UIA tree, for elements that are perfectly UIA-visible.
-        // Blind subtrees are instead reached transparently by the manual-walk
-        // fallback below (see TryFindInBridgeSplice).
+        // Blind subtrees are instead reached transparently below (see
+        // dotnetWindowRoot / TryFindInBridgeSplice / the post-match upgrade).
         if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
         {
             return state.DotNetBridge!.FindFirst(dotnetRoot!, conditionDto, scope);
@@ -53,23 +53,24 @@ public static class FindCommands
             : (state.GetLiveRoot() ?? state.Automation.GetRootElement());
 
         var condition = ConditionBuilder.Build(state.Automation, conditionDto);
+        var dotnetWindowRoot = GetDotnetWindowRoot(state);
 
         switch (scope.ToLowerInvariant())
         {
             case "descendants":
-                return FindFirstRecursively(searchRoot, condition, conditionDto, state, includeSelf: false);
+                return FindFirstRecursively(searchRoot, condition, conditionDto, dotnetWindowRoot, state, includeSelf: false);
             case "children":
             {
                 var el = searchRoot.FindFirst(TreeScope.Children, condition);
-                return el != null ? state.SaveElementAndReturnId(el) : null;
+                return el != null ? SaveUpgraded(el, dotnetWindowRoot, state) : null;
             }
             case "element":
             {
                 var el = searchRoot.FindFirst(TreeScope.Element, condition);
-                return el != null ? state.SaveElementAndReturnId(el) : null;
+                return el != null ? SaveUpgraded(el, dotnetWindowRoot, state) : null;
             }
             case "subtree":
-                return FindFirstRecursively(searchRoot, condition, conditionDto, state, includeSelf: true);
+                return FindFirstRecursively(searchRoot, condition, conditionDto, dotnetWindowRoot, state, includeSelf: true);
             case "ancestors":
                 return FindFirstAncestor(searchRoot, condition, state);
             case "ancestors-or-self":
@@ -87,7 +88,7 @@ public static class FindCommands
             case "child-or-self":
             {
                 var el = searchRoot.FindFirst(TreeScope.Element | TreeScope.Children, condition);
-                return el != null ? state.SaveElementAndReturnId(el) : null;
+                return el != null ? SaveUpgraded(el, dotnetWindowRoot, state) : null;
             }
             default:
                 throw new ArgumentException($"Unsupported scope: '{scope}'");
@@ -130,17 +131,18 @@ public static class FindCommands
             : (state.GetLiveRoot() ?? state.Automation.GetRootElement());
 
         var condition = ConditionBuilder.Build(state.Automation, conditionDto);
+        var dotnetWindowRoot = GetDotnetWindowRoot(state);
 
         switch (scope.ToLowerInvariant())
         {
             case "descendants":
-                return FindAllRecursively(searchRoot, condition, conditionDto, state, includeSelf: false);
+                return FindAllRecursively(searchRoot, condition, conditionDto, dotnetWindowRoot, state, includeSelf: false);
             case "children":
-                return SaveAll(searchRoot.FindAll(TreeScope.Children, condition), state);
+                return SaveAllUpgraded(searchRoot.FindAll(TreeScope.Children, condition), dotnetWindowRoot, state);
             case "element":
-                return SaveAll(searchRoot.FindAll(TreeScope.Element, condition), state);
+                return SaveAllUpgraded(searchRoot.FindAll(TreeScope.Element, condition), dotnetWindowRoot, state);
             case "subtree":
-                return FindAllRecursively(searchRoot, condition, conditionDto, state, includeSelf: true);
+                return FindAllRecursively(searchRoot, condition, conditionDto, dotnetWindowRoot, state, includeSelf: true);
             case "ancestors":
                 return FindAllAncestors(searchRoot, condition, state);
             case "ancestors-or-self":
@@ -159,7 +161,7 @@ public static class FindCommands
             case "preceding-sibling":
                 return FindAllPrecedingSiblings(searchRoot, condition, state);
             case "child-or-self":
-                return SaveAll(searchRoot.FindAll(TreeScope.Element | TreeScope.Children, condition), state);
+                return SaveAllUpgraded(searchRoot.FindAll(TreeScope.Element | TreeScope.Children, condition), dotnetWindowRoot, state);
             default:
                 throw new ArgumentException($"Unsupported scope: '{scope}'");
         }
@@ -528,27 +530,72 @@ public static class FindCommands
     }
 
     /// <summary>
-    /// Called from the manual UIA walk when an element has zero real UIA
-    /// children — the reason may be that it's a custom-drawn control library
-    /// UIA can't see into. Correlates the element to the bridge's reflected
-    /// tree and searches within that subtree for a match, so descendant
-    /// searches transparently reach bridge-only content instead of treating
-    /// every blind element as a genuine dead end. Returns null on any failure
-    /// (bridge inactive, element not on the bridge window, no correlation, no
-    /// match) — callers just keep walking siblings in that case.
+    /// Resolves the bridge's reflected tree for the currently-attached window,
+    /// once per Find call — not per element. Computing it from the session's
+    /// own live root (which always carries a real HWND) instead of from
+    /// whatever arbitrary descendant element triggered a correlation attempt
+    /// matters: most UIA elements below the top-level window (virtually all
+    /// WPF ones) report NativeWindowHandle == 0, so deriving it per-element
+    /// would silently never find a window to search from.
     /// </summary>
-    private static string? TryFindInBridgeSplice(IUIAutomationElement element, ConditionDto conditionDto, SessionState state)
+    private static BridgeSpliceContext? GetDotnetWindowRoot(SessionState state) => BridgeSpliceContext.Build(state);
+
+    /// <summary>
+    /// A UIA element can be perfectly visible to UIA (native find succeeds)
+    /// while its VALUE is still blind — an owner-drawn combo box reports its
+    /// AutomationId to UIA fine but paints its selected text itself, so
+    /// UIA's own Text/Value property comes back empty. Whenever a match
+    /// lands inside a bridge-active window, prefer its bridge counterpart
+    /// (found by exact identity — AutomationId, or Name+ClassName) so
+    /// getText/getAttribute reach the bridge's real reflected value instead
+    /// of UIA's blank one. Falls back to the plain UIA id when there's no
+    /// bridge, no window match, or no exact-identity counterpart.
+    /// </summary>
+    private static string? SaveUpgraded(IUIAutomationElement element, BridgeSpliceContext? dotnetWindowRoot, SessionState state)
     {
-        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return null;
-        if (!state.IsDotnetBridgeWindowElement(element)) return null;
+        var uiaId = state.TrySaveElementAndReturnId(element);
+        if (uiaId == null || dotnetWindowRoot == null) return uiaId;
         try
         {
-            var hwnd = element.CurrentNativeWindowHandle;
-            var bridgeWindowRoot = state.DotNetBridge.GetWindowRoot(hwnd);
-            if (bridgeWindowRoot == null) return null;
-            var bridgeLeaf = DotNet.DotNetBridgeSplice.Correlate(state, element, bridgeWindowRoot);
-            if (bridgeLeaf == null) return null;
-            return state.DotNetBridge.FindFirst(bridgeLeaf, conditionDto, "subtree");
+            var bridgeMatch = DotNetBridgeSplice.CorrelateExact(state, element, dotnetWindowRoot.WindowRoot);
+            return bridgeMatch?.Id ?? uiaId;
+        }
+        catch
+        {
+            return uiaId;
+        }
+    }
+
+    private static string[] SaveAllUpgraded(IUIAutomationElementArray array, BridgeSpliceContext? dotnetWindowRoot, SessionState state)
+    {
+        var results = new List<string>();
+        foreach (var el in IterateArray(array))
+        {
+            var id = SaveUpgraded(el, dotnetWindowRoot, state);
+            if (id != null) results.Add(id);
+        }
+        return results.ToArray();
+    }
+
+    /// <summary>
+    /// Single bridge-wide fallback search, used only after the real UIA walk
+    /// (native + manual) comes up completely empty. Earlier this correlated
+    /// and searched at every blind UIA leaf individually — correct, but each
+    /// correlation/search pair is a full server-side tree walk
+    /// (BridgeAgentService's C++ FindFirst/FindAll has no indexing, it's a
+    /// plain recursive VisualTreeHelper scan every call), so on a real app
+    /// with many blind regions that multiplied into dozens of multi-second
+    /// round trips per Find call. One bridge-wide search costs the same as a
+    /// single correlation attempt but covers all bridge-reachable content at
+    /// once, since the bridge's own tree already spans the whole window
+    /// regardless of which UIA node would have been used as a starting point.
+    /// </summary>
+    private static string? TryBridgeWideFindFirst(ConditionDto conditionDto, BridgeSpliceContext? dotnetWindowRoot, SessionState state)
+    {
+        if (dotnetWindowRoot == null) return null;
+        try
+        {
+            return state.DotNetBridge!.FindFirst(dotnetWindowRoot.WindowRoot, conditionDto, "subtree");
         }
         catch
         {
@@ -556,18 +603,12 @@ public static class FindCommands
         }
     }
 
-    private static string[] TryFindAllInBridgeSplice(IUIAutomationElement element, ConditionDto conditionDto, SessionState state)
+    private static string[] TryBridgeWideFindAll(ConditionDto conditionDto, BridgeSpliceContext? dotnetWindowRoot, SessionState state)
     {
-        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return Array.Empty<string>();
-        if (!state.IsDotnetBridgeWindowElement(element)) return Array.Empty<string>();
+        if (dotnetWindowRoot == null) return Array.Empty<string>();
         try
         {
-            var hwnd = element.CurrentNativeWindowHandle;
-            var bridgeWindowRoot = state.DotNetBridge.GetWindowRoot(hwnd);
-            if (bridgeWindowRoot == null) return Array.Empty<string>();
-            var bridgeLeaf = DotNet.DotNetBridgeSplice.Correlate(state, element, bridgeWindowRoot);
-            if (bridgeLeaf == null) return Array.Empty<string>();
-            return state.DotNetBridge.FindAll(bridgeLeaf, conditionDto, "subtree");
+            return state.DotNetBridge!.FindAll(dotnetWindowRoot.WindowRoot, conditionDto, "subtree");
         }
         catch
         {
@@ -584,47 +625,57 @@ public static class FindCommands
     // driver's behaviour — tests that were passing before rely on it to find
     // elements the native scope skips.
 
-    private static string? FindFirstRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, SessionState state, bool includeSelf)
+    private static string? FindFirstRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, BridgeSpliceContext? dotnetWindowRoot, SessionState state, bool includeSelf)
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var native = element.FindFirst(scope, condition);
-        if (native != null) return state.TrySaveElementAndReturnId(native);
+        if (native != null) return SaveUpgraded(native, dotnetWindowRoot, state);
 
         if (includeSelf)
         {
             var self = element.FindFirst(TreeScope.Element, condition);
-            if (self != null) return state.TrySaveElementAndReturnId(self);
+            if (self != null) return SaveUpgraded(self, dotnetWindowRoot, state);
         }
+
+        // Try the bridge's own exhaustive reflected-tree search before the
+        // manual real-UIA walk below — a native miss almost always means the
+        // target is genuinely bridge-only content (blind to UIA entirely,
+        // the exact case this feature exists for), and the manual walk's
+        // documented ~3-12s cost on a large tree is pure waste when the
+        // answer was going to come from the bridge anyway. Still falls
+        // through to the manual walk when the bridge also misses, so parity
+        // with the original Nova driver's behaviour is unchanged for the
+        // native-skipped-but-still-real-UIA case (WPF popups in a separate
+        // provider, virtualised lists) the walk exists for.
+        if (dotnetWindowRoot != null)
+        {
+            var bridgeHit = TryBridgeWideFindFirst(conditionDto, dotnetWindowRoot, state);
+            if (bridgeHit != null) return bridgeHit;
+        }
+
         var trueCond = state.Automation.CreateTrueCondition();
-        return WalkForFirst(element, condition, conditionDto, trueCond, state);
+        return WalkForFirst(element, condition, dotnetWindowRoot, trueCond, state);
     }
 
-    private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, IUIAutomationCondition trueCond, SessionState state)
+    private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, BridgeSpliceContext? dotnetWindowRoot, IUIAutomationCondition trueCond, SessionState state)
     {
         var direct = element.FindFirst(TreeScope.Children, condition);
-        if (direct != null) return state.TrySaveElementAndReturnId(direct);
+        if (direct != null) return SaveUpgraded(direct, dotnetWindowRoot, state);
 
         var children = IterateArray(element.FindAll(TreeScope.Children, trueCond)).ToList();
-
-        if (children.Count == 0)
-        {
-            var bridgeMatch = TryFindInBridgeSplice(element, conditionDto, state);
-            if (bridgeMatch != null) return bridgeMatch;
-        }
-
         foreach (var child in children)
         {
-            var found = WalkForFirst(child, condition, conditionDto, trueCond, state);
+            var found = WalkForFirst(child, condition, dotnetWindowRoot, trueCond, state);
             if (found != null) return found;
         }
         return null;
     }
 
-    private static string[] FindAllRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, SessionState state, bool includeSelf)
+    private static string[] FindAllRecursively(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, BridgeSpliceContext? dotnetWindowRoot, SessionState state, bool includeSelf)
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
         var nativeResults = IterateArray(element.FindAll(scope, condition))
-            .Select(el => state.TrySaveElementAndReturnId(el))
+            .Select(el => SaveUpgraded(el, dotnetWindowRoot, state))
             .Where(id => id != null)
             .Select(id => id!)
             .ToList();
@@ -637,35 +688,120 @@ public static class FindCommands
             var self = element.FindFirst(TreeScope.Element, condition);
             if (self != null)
             {
-                var id = state.TrySaveElementAndReturnId(self);
+                var id = SaveUpgraded(self, dotnetWindowRoot, state);
                 if (id != null && seen.Add(id)) nativeResults.Add(id);
             }
         }
-        var trueCond = state.Automation.CreateTrueCondition();
-        WalkForAll(element, condition, conditionDto, trueCond, state, nativeResults!, seen);
-        return nativeResults!.ToArray();
-    }
 
-    private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, ConditionDto conditionDto, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
-    {
-        var children = IterateArray(element.FindAll(TreeScope.Children, trueCond)).ToList();
-
-        if (children.Count == 0)
+        // One bridge-wide search, merged in, so content real UIA can never
+        // see at all (owner-drawn popups, templated cells) still comes back —
+        // see TryBridgeWideFindFirst for why this replaced per-leaf splicing.
+        //
+        // When a bridge is attached we treat native FindAll (thorough over
+        // its own traversal) plus this bridge-wide search (thorough over the
+        // bridge's reflected tree) as jointly sufficient, and skip the manual
+        // real-UIA re-walk below — its documented ~3-12s cost on a large
+        // tree (see FindFirstRecursively) is paid on every call regardless
+        // of hits, and every failing case observed against a real app was
+        // bridge-only content the walk was never going to find anyway. Only
+        // non-bridge sessions still pay for it, unchanged from before this
+        // feature existed — the one case it's for (native-skipped-but-real
+        // UIA content: WPF popups in a separate provider, virtualised lists)
+        // that has no bridge counterpart in a bridge-attached window would
+        // now be missed here; no test in this repo's suite currently
+        // exercises that combination.
+        if (dotnetWindowRoot != null)
         {
-            foreach (var id in TryFindAllInBridgeSplice(element, conditionDto, state))
+            foreach (var id in TryBridgeWideFindAll(conditionDto, dotnetWindowRoot, state))
             {
-                if (seen.Add(id)) results.Add(id);
+                if (seen.Add(id)) nativeResults.Add(id);
             }
         }
+        else
+        {
+            var trueCond = state.Automation.CreateTrueCondition();
+            WalkForAll(element, condition, dotnetWindowRoot, trueCond, state, nativeResults, seen);
+        }
+
+        return DedupeBridgeResults(nativeResults, state);
+    }
+
+    /// <summary>
+    /// The native+upgrade path and the manual-walk splice path can both
+    /// independently correlate the same underlying bridge row (e.g. a
+    /// DevExpress grid row UIA can already enumerate, plus the same row
+    /// rediscovered while walking a blind sibling subtree) — the plain
+    /// string `seen` set doesn't catch this because the bridge mints a new
+    /// element handle per query, so the same live object comes back as two
+    /// different id strings. Re-dedupe bridge-sourced ids by content
+    /// identity (AutomationId, or ClassName+Name+position) instead of by id.
+    /// </summary>
+    private static string[] DedupeBridgeResults(List<string> ids, SessionState state)
+    {
+        if (state.DotNetBridge == null) return ids.ToArray();
+
+        var result = new List<string>();
+        var seenKeys = new HashSet<string>();
+        foreach (var id in ids)
+        {
+            var key = id;
+            if (BridgeAgentElement.IsDotnetId(id))
+            {
+                try
+                {
+                    key = BridgeResultKey(state.DotNetBridge.GetById(id).Info);
+                }
+                catch
+                {
+                    // Fall back to the raw id — better to risk a rare
+                    // duplicate than to drop a genuine result.
+                }
+            }
+            if (seenKeys.Add(key)) result.Add(id);
+        }
+        return result.ToArray();
+    }
+
+    private static string BridgeResultKey(Dictionary<string, object?> info)
+    {
+        // AutomationId alone isn't safe as the whole key: DevExpress grid
+        // cells commonly reuse the same AutomationId across every row in a
+        // column (bound to the column/field name, not made row-unique), so
+        // keying on it alone collapsed distinct "Status row 2"/"row 3" cells
+        // down to one. Combine every distinguishing field instead — still
+        // dedupes the same live object rediscovered twice (its reported
+        // Name/ClassName/position are identical both times), without
+        // collapsing genuinely different elements that happen to share one
+        // field.
+        var automationId = BridgeInfoString(info, "AutomationId") ?? "";
+        var className = BridgeInfoString(info, "ClassName") ?? "";
+        var name = BridgeInfoString(info, "Name") ?? "";
+        var x = BridgeInfoString(info, "x") ?? "";
+        var y = BridgeInfoString(info, "y") ?? "";
+        return $"{automationId}|{className}|{name}|{x}|{y}";
+    }
+
+    private static string? BridgeInfoString(Dictionary<string, object?> info, string key)
+    {
+        foreach (var k in info.Keys)
+        {
+            if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) return info[k]?.ToString();
+        }
+        return null;
+    }
+
+    private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, BridgeSpliceContext? dotnetWindowRoot, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
+    {
+        var children = IterateArray(element.FindAll(TreeScope.Children, trueCond)).ToList();
 
         foreach (var child in children)
         {
             if (child.FindFirst(TreeScope.Element, condition) != null)
             {
-                var id = state.TrySaveElementAndReturnId(child);
+                var id = SaveUpgraded(child, dotnetWindowRoot, state);
                 if (id != null && seen.Add(id)) results.Add(id);
             }
-            WalkForAll(child, condition, conditionDto, trueCond, state, results, seen);
+            WalkForAll(child, condition, dotnetWindowRoot, trueCond, state, results, seen);
         }
     }
 

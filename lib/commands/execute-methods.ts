@@ -4,7 +4,7 @@
  * single args object clients send into positional arguments (per the map entry's
  * `params.required`/`params.optional` order), so every wrapper here accepts individual
  * named params and reassembles them into the object shape the existing `windows:`
- * implementations (in `extension.ts` / `native.ts` / `vision.ts`) already expect.
+ * implementations (in `extension.ts` / `native.ts`) already expect.
  * Behavior is not duplicated here - each wrapper just bridges args and delegates.
  */
 import { W3C_ELEMENT_KEY } from 'appium/driver';
@@ -12,7 +12,6 @@ import { Element } from '@appium/types';
 import { AppiumDesktopDriver } from '../driver';
 import { ClickType } from '../enums';
 import { executeGetNativeChildren } from './native';
-import { executeFindByVision } from './vision';
 import {
     patternInvoke,
     patternExpand,
@@ -493,20 +492,4 @@ export async function emStopRecordingScreen(
  */
 export async function emGetDpiScale(this: AppiumDesktopDriver): Promise<number> {
     return executeGetDpiScale.call(this);
-}
-
-/**
- * `executeMethod` wrapper for {@link executeFindByVision}.
- * @param prompt - A natural-language description of the element to locate.
- * @param model - The vision model id to use.
- * @param includeAnnotatedImage - Whether to include a base64 annotated screenshot in the result.
- * @returns The located element's screen coordinates, a label, and the reasoning steps taken.
- */
-export async function emFindByVision(
-    this: AppiumDesktopDriver,
-    prompt: string,
-    model: string,
-    includeAnnotatedImage?: boolean,
-) {
-    return await executeFindByVision.call(this, { prompt, model, includeAnnotatedImage });
 }

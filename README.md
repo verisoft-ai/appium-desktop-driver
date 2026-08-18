@@ -13,7 +13,7 @@ Key advantages over WinAppDriver:
 - .NET/WinForms automation via injected CLR bridge — reads custom-drawn (ownerdraw) and DevExpress control values invisible to plain UIA
 - WebView2, Chrome, and Edge embedded content via CDP
 - Internet Explorer 11 automation via built-in IE DOM Bridge (no IEDriverServer required)
-- Built-in screen recording, clipboard API, and vision-based finding
+- Built-in screen recording and clipboard API
 
 ## Installation
 
@@ -24,6 +24,8 @@ appium driver install --source=npm appium-desktop-driver
 Requires Appium 3 and Windows 10 or later.
 
 For AI-agent use via MCP, see [windows2-mcp](https://github.com/verisoft-ai/windows2-mcp) — a separate package that drives this Appium server's `desktopdriver` sessions over the WebDriver protocol.
+
+For LLM vision-based element finding (`windows: findByVision`), see [appium-window2-vision-plugin](https://github.com/verisoft-ai/appium-window2-vision-plugin) — an installable Appium plugin, kept separate so its dependencies (OpenCV, canvas, provider SDKs) aren't required by default.
 
 ## Capabilities
 
@@ -392,8 +394,8 @@ await driver.deleteSession();
 ## API Reference
 
 Full reference for all locator strategies, `windows:` extension
-commands, WebView/CDP automation, screen recording, and vision-based
-finding: [API.md](API.md).
+commands, WebView/CDP automation, and screen recording:
+[API.md](API.md).
 
 ## Development
 

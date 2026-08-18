@@ -381,39 +381,11 @@ const video = await driver.executeScript(
 
 ### Vision-Based Finding
 
-#### windows: findByVision
-
-Takes a screenshot, annotates candidate UI regions (detected locally via
-CV contour detection) with numbered tags, and sends it to a vision LLM to
-pick the tag matching a natural language description (Set-of-Mark
-prompting). Returns `{ x, y, label }`.
-
-| Argument | Type | Required | Description |
-| --- | --- | --- | --- |
-| `prompt` | string | yes | Natural language description |
-| `model` | string | yes | LLM model identifier |
-| `includeAnnotatedImage` | boolean | no | When `true`, also returns `annotatedImageBase64` — the numbered-badge screenshot actually sent to the model. Default `false`. |
-
-Supported providers:
-
-| Provider | Model prefix | Environment variable |
-| --- | --- | --- |
-| Anthropic | `claude-` | `ANTHROPIC_API_KEY` |
-| OpenAI | `gpt-`, `o1`, `o3`, `o4` | `OPENAI_API_KEY` |
-| Google | `gemini-` | `GEMINI_API_KEY` |
-| Amazon Bedrock | `amazon.nova-` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` |
-
-For Amazon Bedrock, set `AWS_REGION` to select the region
-(default: `us-east-1`). IAM roles and standard AWS credential
-profiles are supported via the default credential chain.
-
-```js
-const { x, y } = await driver.executeScript('windows: findByVision', [{
-  prompt: 'Save button in the toolbar',
-  model: 'claude-sonnet-4-6',
-}]);
-await driver.executeScript('windows: click', [{ x, y }]);
-```
+`windows: findByVision` moved to a separate installable plugin —
+[appium-window2-vision-plugin](https://github.com/verisoft-ai/appium-window2-vision-plugin) —
+so driver users who don't need LLM-based vision finding don't pay for its
+dependencies. See that repo's README for setup and usage; the command's
+argument shape and supported providers are unchanged.
 
 ### PowerShell Execution
 

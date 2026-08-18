@@ -61,17 +61,12 @@
     "appium": "^3.0.0-rc.2"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "~0.82.0",
     "@appium/css-locator-to-native": "^1.0.6",
     "@appium/support": "^7.2.6",
-    "@aws-sdk/client-bedrock-runtime": "^3.1035.0",
-    "@napi-rs/canvas": "^1.0.2",
-    "@techstark/opencv-js": "^5.0.0-release.1",
     "appium-chromedriver": "^8.3.1",
     "asyncbox": "^6.3.5",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
-    "pngjs": "^7.0.0",
     "xpath-analyzer": "^3.0.1"
   },
   "appium": {
@@ -89,7 +84,6 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^24.8.1",
-    "@types/pngjs": "^6.0.5",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^9.38.0",
     "globals": "^15.15.0",

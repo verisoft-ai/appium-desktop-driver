@@ -47,6 +47,7 @@
     "build:wpf-minimal-test-app": "dotnet publish test-apps/wpf-minimal/WpfMinimal.csproj -c Release -o test-apps/wpf-minimal/bin",
     "build:net8-winforms-minimal-test-app": "dotnet build test-apps/net8-winforms-minimal/Net8WinformsMinimal.csproj -c Debug",
     "build:net8-winforms-minimal-x86-test-app": "dotnet build test-apps/net8-winforms-minimal/Net8WinformsMinimal.csproj -c Debug -r win-x86 --self-contained false",
+    "build:net8-wpf-minimal-test-app": "dotnet build test-apps/net8-wpf-minimal/Net8WpfMinimal.csproj -c Debug",
     "build:wpf-datagrid-template-test-app": "dotnet publish test-apps/wpf-datagrid-template/WpfDataGridTemplate.csproj -c Release -o test-apps/wpf-datagrid-template/bin",
     "build:java-swing-test-app": "javac -d test-apps/java-swing-form test-apps/java-swing-form/TestForm.java",
     "build:devexpress-test-app": "node scripts/build-devexpress-test-app.js",

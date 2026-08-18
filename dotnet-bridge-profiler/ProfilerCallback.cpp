@@ -60,8 +60,19 @@ const GUID CLSID_AppiumDotNetBridgeProfiler =
 // on the stack blocking in its message loop by the time attach happens, so it's never re-entered.
 // Control.WndProc runs continuously (once per window message), so the ReJIT'd body actually fires
 // — see CORECLR-BRIDGE-SPEC.md phase 2 for the live-attach history.
+//
+// MS.Win32.HwndWrapper.WndProc is WPF's equivalent: every WPF HwndSource (i.e. every Window) is
+// backed internally by an HwndWrapper, and this private instance method is its real per-message
+// pump entry (same shape and role as Control.WndProc — fires continuously after attach) — added
+// after a pure-WPF target (no System.Windows.Forms module ever loaded) was found to hang the
+// whole attach for 15s with NO anchor candidate ever matching, since the original list only
+// covered WinForms. Lives in WindowsBase.dll (not PresentationCore/PresentationFramework — a
+// first guess of System.Windows.Interop.HwndSource.WndProc was checked against the real WPF
+// metadata via System.Reflection.Metadata and doesn't exist; HwndWrapper.WndProc, found the same
+// way, does). See CORECLR-BRIDGE-SPEC.md's WPF-anchor section.
 static const ProfilerCallback::AnchorCandidate kAnchorCandidates[] = {
     { L"System.Windows.Forms", L"System.Windows.Forms.Control", L"WndProc" },
+    { L"WindowsBase", L"MS.Win32.HwndWrapper", L"WndProc" },
 };
 
 ProfilerCallback::~ProfilerCallback()
@@ -211,7 +222,11 @@ void ProfilerCallback::TryRequestReJitForAnchor(ModuleID moduleId)
         mdMethodDef methodIds[1] = { methodToken };
         HRESULT hr = _info->RequestReJIT(1, moduleIds, methodIds);
         DebugLog("  RequestReJIT hr=0x%08lX", hr);
-        if (SUCCEEDED(hr)) _rejitRequested = true;
+        if (SUCCEEDED(hr))
+        {
+            _rejitRequested = true;
+            _matchedAnchorDescription = std::wstring(candidate.typeName) + L"." + candidate.methodName;
+        }
         return; // found the right module either way — no point trying other candidates against it
     }
 }
@@ -512,14 +527,17 @@ HRESULT STDMETHODCALLTYPE ProfilerCallback::GetReJITParameters(
     if (hasMoreSects)
     {
         DebugLog("  BAILING: method has EH clauses, not rewritten");
-        ReportAttachFailure(
-            "CoreCLR bridge: the anchor method (System.Windows.Forms.Control.WndProc) has "
-            "exception-handling clauses (try/catch/finally) in this .NET runtime's compiled "
-            "System.Windows.Forms.dll. Rewriting such methods is NOT YET SUPPORTED by this "
-            "profiler (see dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md, 'Known remaining "
-            "limitations' — the EH clause offset table needs to be walked and corrected for the "
-            "inserted bytes, which is not implemented). This is a known, scoped gap, not a bug: "
-            "if you're hitting this, please file it so it can be prioritized for a real fix.");
+        char message[768];
+        sprintf_s(message,
+            "CoreCLR bridge: the anchor method (%ls) has exception-handling clauses "
+            "(try/catch/finally) in this .NET runtime's compiled assembly. Rewriting such methods "
+            "is NOT YET SUPPORTED by this profiler (see dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md, "
+            "'Known remaining limitations' — the EH clause offset table needs to be walked and "
+            "corrected for the inserted bytes, which is not implemented). This is a known, scoped "
+            "gap, not a bug: if you're hitting this, please file it so it can be prioritized for a "
+            "real fix.",
+            _matchedAnchorDescription.c_str());
+        ReportAttachFailure(message);
         return CORPROF_E_NOT_REJITABLE_METHODS;
     }
 

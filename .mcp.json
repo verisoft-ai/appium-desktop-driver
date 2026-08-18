@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "desktop-driver-mcp": {
-      "command": "node",
-      "args": ["./build/lib/mcp/index.js"],
+    "windows2-mcp": {
+      "command": "npx",
+      "args": ["-y", "windows2-mcp"],
       "env": {}
     }
   }

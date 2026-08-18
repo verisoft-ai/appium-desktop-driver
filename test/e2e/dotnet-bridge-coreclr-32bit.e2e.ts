@@ -8,7 +8,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// 32-bit twin of dotnet-bridge-coreclr.e2e.ts — same fixture source (test-apps/net8-winforms-
+// 32-bit twin of dotnet-bridge-coreclr.e2e.ts — same fixture source (appium-windows2-test-apps/net8-winforms-
 // minimal/), published with -r win-x86 so it genuinely loads a 32-bit CoreCLR. Exercises
 // BridgeInjector.InjectFromPidAutoBitness's CoreCLR branch picking the x86 profiler DLL and
 // CoreClrAttacher picking the x86-published bridge-core.dll — see

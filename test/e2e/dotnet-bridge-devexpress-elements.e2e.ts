@@ -9,7 +9,7 @@ import {
 } from './helpers/session.js';
 
 // Phase 2b/4 coverage: 4 real DevExpress-specific element shapes in one file, one shared
-// session/attach (see test-apps/devexpress-elements-gallery/Program.cs). Each shape was
+// session/attach (see appium-windows2-test-apps/devexpress-elements-gallery/Program.cs). Each shape was
 // empirically confirmed genuinely UIA-blind via a throwaway probe before being added to the
 // fixture — two other DevExpress-specific candidates (BarManager/PopupMenu, SchedulerControl)
 // were probed and dropped because they turned out to already be UIA-visible.

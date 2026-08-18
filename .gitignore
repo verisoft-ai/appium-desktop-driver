@@ -7,55 +7,6 @@ iebridge/IEBridge.exe
 iebridge/x86/
 native/
 
-# WinForms test-fixture app — built at test time via build:winform-test-app, not committed
-test-apps/winform-combo/bin/
-test-apps/winform-combo/obj/
-
-# Java Swing test-fixture app — compiled ad hoc at test time (javac), not committed
-test-apps/java-swing-form/*.class
-
-# DevExpress grid owner-draw test-fixture app — source is checked in, but build output/obj is
-# not (built at test time via build:devexpress-test-app)
-test-apps/devexpress-grid-ownerdraw/bin/
-test-apps/devexpress-grid-ownerdraw/obj/
-
-# Minimal owner-draw test-fixture app — source is checked in, build output/obj is not
-test-apps/minimal-ownerdraw-winforms/bin/
-test-apps/minimal-ownerdraw-winforms/obj/
-
-# 32-bit twin of the above — proves the .NET bridge's x86 injection path
-test-apps/minimal-ownerdraw-x86/bin/
-test-apps/minimal-ownerdraw-x86/obj/
-
-# OwnerDraw gallery test-fixture app — source is checked in, build output/obj is not
-test-apps/ownerdraw-gallery/bin/
-test-apps/ownerdraw-gallery/obj/
-
-# DevExpress-specific elements gallery test-fixture app — source is checked in, build output/obj
-# is not (built at test time via build:devexpress-elements-gallery-test-app)
-test-apps/devexpress-elements-gallery/bin/
-test-apps/devexpress-elements-gallery/obj/
-
-# WPF minimal test-fixture app — source is checked in, build output/obj is not (built at test time
-# via build:wpf-minimal-test-app)
-test-apps/wpf-minimal/bin/
-test-apps/wpf-minimal/obj/
-
-# WPF DataGrid templated-column test-fixture app — source is checked in, build output/obj is not
-# (built at test time via build:wpf-datagrid-template-test-app)
-test-apps/wpf-datagrid-template/bin/
-test-apps/wpf-datagrid-template/obj/
-
-# net8 WinForms minimal test-fixture app (CoreCLR bridge target, see
-# dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md) — source is checked in, build output/obj is not
-# (built at test time via build:net8-winforms-minimal-test-app)
-test-apps/net8-winforms-minimal/bin/
-test-apps/net8-winforms-minimal/obj/
-
-# net8-wpf-minimal — same deal, WPF twin used to reproduce/verify the profiler's WPF anchor fix
-test-apps/net8-wpf-minimal/bin/
-test-apps/net8-wpf-minimal/obj/
-
 # C++/CLI native bridge build artifacts — MSBuild's default IntDir nests under a
 # project-name subfolder (dotnet-bridge-agent/BridgeAgent/x64/Release/...), not directly under
 # dotnet-bridge-agent/x64/ as a naive guess would suggest. Final output lands in native/win-x64/

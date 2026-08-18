@@ -1,3 +1,9 @@
+## [2.4.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.3...v2.4.4) (2026-08-18)
+
+### Bug Fixes
+
+* **dotnet-bridge:** splice bridge tree into UIA shape instead of replacing it ([295f304](https://github.com/verisoft-ai/appium-desktop-driver/commit/295f3049774ac19eca5b09b16fea51dde82454d1))
+
 ## [2.4.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.2...v2.4.3) (2026-08-18)
 
 ### Bug Fixes

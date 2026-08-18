@@ -78,10 +78,6 @@ export const executeMethodMap: ExecuteMethodMap<AppiumDesktopDriver> = {
     'windows: getWindowElement': { command: 'getWindowElement' },
     'windows: getMonitors': { command: 'windowsGetMonitors' },
     'windows: getDpiScale': { command: 'emGetDpiScale' },
-    'windows: findByVision': {
-        command: 'emFindByVision',
-        params: { required: ['prompt', 'model'], optional: ['includeAnnotatedImage'] },
-    },
     'windows: attachJavaSwing': { command: 'emAttachJavaSwing', params: { optional: ['jdkPath'] } },
     'windows: attachDotnetBridge': { command: 'emAttachDotnetBridge', params: {} },
     'windows: switchToWindowByTitle': {

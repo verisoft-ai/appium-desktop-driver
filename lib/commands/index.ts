@@ -7,7 +7,6 @@ import * as executeMethods from './execute-methods';
 import * as device from './device';
 import * as system from './system';
 import * as app from './app';
-import * as vision from './vision';
 import * as contexts from './contexts';
 import * as native from './native';
 
@@ -22,7 +21,6 @@ const commands = {
     ...device,
     ...app,
     ...contexts,
-    ...vision,
     ...native,
     // add the rest of the commands here
 };

@@ -10,7 +10,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: test-apps/devexpress-grid-ownerdraw/ — a bespoke single-window WinForms app (not a
+// Fixture: appium-windows2-test-apps/devexpress-grid-ownerdraw/ — a bespoke single-window WinForms app (not a
 // cloned DevExpress-Examples repo; two prior clones both turned out to already be visible to
 // plain UIA). A DevExpress XtraGrid GridControl bound to three rows:
 //   Id 1 / Name "Alpha"   / Status "Healthy"  (row handle 0)

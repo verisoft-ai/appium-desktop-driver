@@ -1,3 +1,72 @@
+## [2.4.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.2...v2.4.3) (2026-08-18)
+
+### Bug Fixes
+
+* add WPF anchor for CoreCLR profiler attach ([56a3485](https://github.com/verisoft-ai/appium-desktop-driver/commit/56a348561795d7c5d951bb48a4ac72731c4e90bb))
+
+## [2.4.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.1...v2.4.2) (2026-08-17)
+
+### Bug Fixes
+
+* fix dotnet core element prefix missmatch ([c468f22](https://github.com/verisoft-ai/appium-desktop-driver/commit/c468f22129451875a49a579c2017d09441ab4859))
+* reuse an already-attached CoreCLR bridge instead of re-attaching ([b2615e8](https://github.com/verisoft-ai/appium-desktop-driver/commit/b2615e89bdf5e8372baf6534a8d5b7c6aba54e13))
+
+## [2.4.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.0...v2.4.1) (2026-08-17)
+
+### Bug Fixes
+
+* include CoreCLR bridge DLLs in the published npm package ([71e9874](https://github.com/verisoft-ai/appium-desktop-driver/commit/71e9874802c717712fda4adc0f18bb0c2f422ddd))
+
+## [2.4.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0...v2.4.0) (2026-08-17)
+
+### Features
+
+* support CoreCLR (.NET 5+) targets in the .NET bridge ([a4177bd](https://github.com/verisoft-ai/appium-desktop-driver/commit/a4177bdcdbb5f134c3c05e0819764acb755cc4b1))
+
+### Bug Fixes
+
+* resolve NETFXSDK include path via NETFXKitsDir instead of hardcoded version ([812d2bf](https://github.com/verisoft-ai/appium-desktop-driver/commit/812d2bf11cfc850828b4e79163e5bf74c031657a))
+* wire CoreCLR bridge files into x86 stub build and build:all ([abc8709](https://github.com/verisoft-ai/appium-desktop-driver/commit/abc8709a4b3f6bfe22feb8eb9de99617d7ebfe42))
+
+## [2.3.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.2.2...v2.3.0) (2026-08-14)
+
+### Features
+
+* add .NET/CLR injection bridge for WinForms/WPF custom-drawn controls (v0) ([88510e8](https://github.com/verisoft-ai/appium-desktop-driver/commit/88510e8a89da3d2da8926a979cede3dc54a9c78f))
+* add CSS selector -> native UIA locator transform ([4b85a6f](https://github.com/verisoft-ai/appium-desktop-driver/commit/4b85a6f3ffbe00f8457f44c9085a627aa06caa0b))
+* DevExpress-specific element fixtures (TreeList, ComboBoxEdit, TokenEdit, grouped grid) ([b53f768](https://github.com/verisoft-ai/appium-desktop-driver/commit/b53f76891f66d9ebc48d5af5febbaa0976c4f805))
+* **execute:** adopt standard executeMethodMap, remove legacy windows: dispatcher ([5a6cf28](https://github.com/verisoft-ai/appium-desktop-driver/commit/5a6cf2843eb833d511689b07b18c3907b86403ea))
+* generic list/tree bridge elements, ownerdraw-gallery fixture, UI-thread marshaling fix ([556c382](https://github.com/verisoft-ai/appium-desktop-driver/commit/556c38206f25c089583bcf652705e9eeb1b20443))
+* support attaching the .NET bridge to 32-bit target processes ([08e25ec](https://github.com/verisoft-ai/appium-desktop-driver/commit/08e25ec5cd307a2af97c486c85c2b6fa4cd8ae84))
+* support WPF apps in the .NET bridge ([e9b87d6](https://github.com/verisoft-ai/appium-desktop-driver/commit/e9b87d6c75bb612eaddcd2f3841ad86ff9db47db))
+
+### Bug Fixes
+
+* satisfy eslint curly-brace rule and drop unused imports in e2e helpers ([87c1c19](https://github.com/verisoft-ai/appium-desktop-driver/commit/87c1c19783958dfb92a7a3d38d166a3a7c396e7b))
+* split generic catch in InjectDotnetBridge into specific exception types ([5d7dd1d](https://github.com/verisoft-ai/appium-desktop-driver/commit/5d7dd1d196b09fed8d7cdaf74f04bd83c2d46233)), closes [#63](https://github.com/verisoft-ai/appium-desktop-driver/issues/63)
+* xpath attribute predicates against bridge elements ([140b32b](https://github.com/verisoft-ai/appium-desktop-driver/commit/140b32b1428c048c246a23ad399dbcdfb4882977))
+
+### Reverts
+
+* Revert "chore: add debug logging to screenshot rect" ([8156fbe](https://github.com/verisoft-ai/appium-desktop-driver/commit/8156fbe17c722af4610e41b1c9643a4a4ec3c34f))
+* Revert "fix: use Desktop Windows Manager extended-frame-bounds for screenshot and root rect" ([84db773](https://github.com/verisoft-ai/appium-desktop-driver/commit/84db77300cd63687b4dcb5985ab7c1140c2aa27c))
+
+### Miscellaneous Chores
+
+* add dependabot workflow for dependency scan ([0ad39fa](https://github.com/verisoft-ai/appium-desktop-driver/commit/0ad39fa49d0bdc815972f019a581a00070e4d043))
+* add JSDoc to all exported functions ([ce31b73](https://github.com/verisoft-ai/appium-desktop-driver/commit/ce31b73180ff3daedecbdd15f09d619e5d37cf8d))
+* add logging to every catch block ([9123524](https://github.com/verisoft-ai/appium-desktop-driver/commit/9123524cd2e988a421289df810977df1357fa530))
+* deprecated legacy APIs ([54197f8](https://github.com/verisoft-ai/appium-desktop-driver/commit/54197f8d9fd1d8ca08c7382566ee76fe6e7a07b0))
+* drop WPF bridge support planning doc ([95bc2c8](https://github.com/verisoft-ai/appium-desktop-driver/commit/95bc2c8cac132c1215f4274b29024b484afd93ae))
+* match minor updates for anthropic-ai sdk dependency ([110fe23](https://github.com/verisoft-ai/appium-desktop-driver/commit/110fe23db6a1df7a8b2f092ad8966db3b7323fda))
+* **release:** 2.3.0-preview.1 [skip ci] ([a162175](https://github.com/verisoft-ai/appium-desktop-driver/commit/a1621757ef73a02ba99a196e56469a2002b3f531))
+* **release:** 2.3.0-preview.2 [skip ci] ([fdff9e9](https://github.com/verisoft-ai/appium-desktop-driver/commit/fdff9e96b40c1f41330df40fb7c790fec1b4ab4d))
+* **release:** 2.3.0-preview.3 [skip ci] ([940990b](https://github.com/verisoft-ai/appium-desktop-driver/commit/940990bae1b758a59f6b6604a735419128dc29ad))
+* **release:** 2.3.0-preview.4 [skip ci] ([261a5c2](https://github.com/verisoft-ai/appium-desktop-driver/commit/261a5c25331cf4c3dbc3e5571da67ea1d2ce6bc1))
+* remove base driver direct dependency ([ac9aed1](https://github.com/verisoft-ai/appium-desktop-driver/commit/ac9aed117df69a55b2dc0602ddf93969de97a6ef))
+* remove duplicate eslint recommended config ([574618d](https://github.com/verisoft-ai/appium-desktop-driver/commit/574618d38b87346c30a9c776ee85844cfb7c2a63))
+* replace Date.now with monotonic API performance.now ([23f3907](https://github.com/verisoft-ai/appium-desktop-driver/commit/23f390793665775b41d08fade7b8a8317c9c7bbe))
+
 ## [2.3.0-preview.4](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.3.0-preview.3...v2.3.0-preview.4) (2026-08-14)
 
 ### Bug Fixes

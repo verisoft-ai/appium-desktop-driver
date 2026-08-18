@@ -9,7 +9,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: test-apps/minimal-ownerdraw-winforms/ — single StatusIndicator Control that paints
+// Fixture: appium-windows2-test-apps/minimal-ownerdraw-winforms/ — single StatusIndicator Control that paints
 // "Healthy" manually via GDI and blanks AccessibleName, so plain UIA can never see the value.
 // Minimum bar for the bridge: it must read that value where plain UIA genuinely cannot.
 

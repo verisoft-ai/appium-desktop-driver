@@ -10,7 +10,6 @@ npm run watch          # Watch mode compilation
 npm run lint           # ESLint validation
 npm run test           # Unit tests (Vitest)
 npm run test:e2e       # E2E tests (requires Windows + Appium setup)
-npm run mcp:start      # Launch MCP server
 ```
 
 Run a single test file:
@@ -21,10 +20,7 @@ npx vitest run test/path/to/file.test.ts
 
 ## Architecture
 
-This is an **Appium driver** for Windows desktop UI automation. It exposes two interfaces:
-
-1. **Appium WebDriver API** — used by test frameworks (Selenium-style)
-2. **MCP Server** (`lib/mcp/`) — exposes 30+ tools over Model Context Protocol for AI agent use
+This is an **Appium driver** for Windows desktop UI automation, exposed via the standard Appium WebDriver API (Selenium-style). An MCP server for AI-agent use previously lived here (`lib/mcp/`) but has moved to its own repo, [windows2-mcp](https://github.com/verisoft-ai/windows2-mcp) — it talks to this driver purely over the WebDriver protocol against a running Appium server, so it has no dependency on this codebase's internals.
 
 ### Core driver flow
 
@@ -48,10 +44,6 @@ All driver commands live in `lib/commands/` and are mixed into the driver class 
 - `extension.ts` — `executeScript()` platform-specific commands
 - `powershell.ts` — raw PowerShell execution
 - `screen-recorder.ts` — FFmpeg-based recording
-
-### MCP server
-
-`lib/mcp/` is an independent MCP server binary (`appiumdesktop-mcp`). It auto-starts and manages an Appium server process, creates WebdriverIO sessions, and exposes tools grouped by domain in `lib/mcp/tools/`. The server communicates via stdio using the `@modelcontextprotocol/sdk`.
 
 ### TypeScript paths
 

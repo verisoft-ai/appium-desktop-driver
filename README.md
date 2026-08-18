@@ -14,7 +14,6 @@ Key advantages over WinAppDriver:
 - WebView2, Chrome, and Edge embedded content via CDP
 - Internet Explorer 11 automation via built-in IE DOM Bridge (no IEDriverServer required)
 - Built-in screen recording, clipboard API, and vision-based finding
-- MCP server for direct use with AI coding agents
 
 ## Installation
 
@@ -23,6 +22,8 @@ appium driver install --source=npm appium-desktop-driver
 ```
 
 Requires Appium 3 and Windows 10 or later.
+
+For AI-agent use via MCP, see [windows2-mcp](https://github.com/verisoft-ai/windows2-mcp) — a separate package that drives this Appium server's `desktopdriver` sessions over the WebDriver protocol.
 
 ## Capabilities
 

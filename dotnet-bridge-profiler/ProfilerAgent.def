@@ -1,0 +1,7 @@
+; See ClassFactory.cpp's header comment: DllGetClassObject/DllCanUnloadNow are defined as plain
+; extern "C" functions (no __declspec(dllexport), which conflicts with combaseapi.h's own
+; declaration of the same names) — this .def file is what actually marks them exported.
+LIBRARY appium-dotnet-profiler
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

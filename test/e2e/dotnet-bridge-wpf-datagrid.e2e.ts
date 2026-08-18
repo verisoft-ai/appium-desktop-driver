@@ -9,11 +9,11 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: test-apps/wpf-datagrid-template/ — a plain System.Windows.Controls.DataGrid (no
+// Fixture: appium-windows2-test-apps/wpf-datagrid-template/ — a plain System.Windows.Controls.DataGrid (no
 // DevExpress dependency) with two bound text columns (Id, Name) and one DataGridTemplateColumn
 // whose cell content is a custom FrameworkElement that paints its own text via OnRender and
 // returns a null AutomationPeer — genuinely invisible to plain UIA, the WPF analog of
-// test-apps/devexpress-grid-ownerdraw/'s CustomDrawCell "Status" column. Confirmed empirically
+// appium-windows2-test-apps/devexpress-grid-ownerdraw/'s CustomDrawCell "Status" column. Confirmed empirically
 // (see the first test below): plain UIA sees the bound Alpha/Bravo/Charlie values but never the
 // templated Healthy/Degraded/Offline values, anywhere.
 

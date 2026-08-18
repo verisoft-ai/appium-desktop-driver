@@ -1,6 +1,6 @@
 {
   "name": "appium-desktop-driver",
-  "version": "2.3.0-preview.4",
+  "version": "2.4.3",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -21,14 +21,15 @@
     "native/win-x64/appium-dotnet-bridge.dll",
     "native/win-x86/appium-dotnet-bridge.dll",
     "native/win-x86/BridgeInjectorX86Stub.exe",
+    "native/win-x64/appium-dotnet-profiler.dll",
+    "native/win-x86/appium-dotnet-profiler.dll",
+    "native/win-x64/appium-dotnet-bridge-core.dll",
+    "native/win-x86/appium-dotnet-bridge-core.dll",
     "scripts/postinstall.js",
     "LICENSE",
     "README.md",
     "CHANGELOG.md"
   ],
-  "bin": {
-    "desktop-driver-mcp": "build/lib/mcp/index.js"
-  },
   "scripts": {
     "build": "tsc -b",
     "build:native": "dotnet publish csharp/NovaUIAutomationServer/NovaUIAutomationServer.csproj -c Release -o native/win-x64/",
@@ -36,20 +37,15 @@
     "build:java-agent": "cd java-agent && build.bat",
     "build:dotnet-bridge": "cd dotnet-bridge-agent && build.bat",
     "build:dotnet-bridge-x86-stub": "dotnet publish csharp/BridgeInjectorX86Stub/BridgeInjectorX86Stub.csproj -c Release -r win-x86 -o native/win-x86/ --self-contained",
-    "build:winform-test-app": "dotnet publish test-apps/winform-combo/WinformCombo.csproj -c Release -o test-apps/winform-combo/bin",
-    "build:wpf-minimal-test-app": "dotnet publish test-apps/wpf-minimal/WpfMinimal.csproj -c Release -o test-apps/wpf-minimal/bin",
-    "build:wpf-datagrid-template-test-app": "dotnet publish test-apps/wpf-datagrid-template/WpfDataGridTemplate.csproj -c Release -o test-apps/wpf-datagrid-template/bin",
-    "build:java-swing-test-app": "javac -d test-apps/java-swing-form test-apps/java-swing-form/TestForm.java",
-    "build:devexpress-test-app": "node scripts/build-devexpress-test-app.js",
-    "build:devexpress-elements-gallery-test-app": "node scripts/build-devexpress-elements-gallery-test-app.js",
-    "build:test-apps": "npm run build:winform-test-app && npm run build:wpf-minimal-test-app && npm run build:wpf-datagrid-template-test-app && npm run build:java-swing-test-app && npm run build:devexpress-test-app",
-    "build:all": "npm run build:java-agent && npm run build:dotnet-bridge && npm run build:dotnet-bridge-x86-stub && npm run build:native && npm run build:iebridge && npm run build",
+    "build:dotnet-bridge-core": "dotnet publish dotnet-bridge-agent-core/BridgeAgentCore.csproj -c Release -r win-x64 -o native/win-x64/ --self-contained false",
+    "build:dotnet-bridge-core-x86": "dotnet publish dotnet-bridge-agent-core/BridgeAgentCore.csproj -c Release -r win-x86 -o native/win-x86/ --self-contained false",
+    "build:dotnet-bridge-profiler": "cd dotnet-bridge-profiler && build.bat",
+    "build:all": "npm run build:java-agent && npm run build:dotnet-bridge && npm run build:dotnet-bridge-x86-stub && npm run build:dotnet-bridge-core && npm run build:dotnet-bridge-core-x86 && npm run build:dotnet-bridge-profiler && npm run build:native && npm run build:iebridge && npm run build",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
     "test": "npx vitest run",
     "test:e2e": "npx vitest run --config vitest.e2e.config.ts",
     "postinstall": "node scripts/postinstall.js",
-    "mcp:start": "node build/lib/mcp/index.js",
     "pack:dist": "node scripts/pack-dist.js"
   },
   "author": "Automate The Planet",
@@ -69,7 +65,6 @@
     "@appium/css-locator-to-native": "^1.0.6",
     "@appium/support": "^7.2.6",
     "@aws-sdk/client-bedrock-runtime": "^3.1035.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
     "@napi-rs/canvas": "^1.0.2",
     "@techstark/opencv-js": "^5.0.0-release.1",
     "appium-chromedriver": "^8.3.1",
@@ -77,9 +72,7 @@
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
     "pngjs": "^7.0.0",
-    "webdriverio": "^9.0.0",
-    "xpath-analyzer": "^3.0.1",
-    "zod": "^4.3.6"
+    "xpath-analyzer": "^3.0.1"
   },
   "appium": {
     "driverName": "desktopdriver",
@@ -103,6 +96,7 @@
     "semantic-release": "^25.0.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "webdriverio": "^9.30.1"
   }
 }

@@ -1,3 +1,9 @@
+## [2.4.3](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.2...v2.4.3) (2026-08-18)
+
+### Bug Fixes
+
+* add WPF anchor for CoreCLR profiler attach ([56a3485](https://github.com/verisoft-ai/appium-desktop-driver/commit/56a348561795d7c5d951bb48a4ac72731c4e90bb))
+
 ## [2.4.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.1...v2.4.2) (2026-08-17)
 
 ### Bug Fixes

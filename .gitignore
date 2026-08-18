@@ -52,6 +52,10 @@ test-apps/wpf-datagrid-template/obj/
 test-apps/net8-winforms-minimal/bin/
 test-apps/net8-winforms-minimal/obj/
 
+# net8-wpf-minimal — same deal, WPF twin used to reproduce/verify the profiler's WPF anchor fix
+test-apps/net8-wpf-minimal/bin/
+test-apps/net8-wpf-minimal/obj/
+
 # C++/CLI native bridge build artifacts — MSBuild's default IntDir nests under a
 # project-name subfolder (dotnet-bridge-agent/BridgeAgent/x64/Release/...), not directly under
 # dotnet-bridge-agent/x64/ as a naive guess would suggest. Final output lands in native/win-x64/

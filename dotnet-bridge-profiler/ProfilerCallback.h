@@ -66,4 +66,8 @@ private:
     // Absolute path of appium-dotnet-bridge-core.dll, received via InitializeForAttach's
     // pvClientData (see CoreClrAttacher.cs) — needed for GetReJITParameters' Assembly.LoadFrom call.
     std::wstring _bridgeCoreDllPath;
+    // "Type.Method" of whichever kAnchorCandidates entry actually matched — set once in
+    // TryRequestReJitForAnchor, read by GetReJITParameters' EH-clause bail message so it names the
+    // real anchor instead of a hardcoded one now that there's more than one candidate.
+    std::wstring _matchedAnchorDescription;
 };

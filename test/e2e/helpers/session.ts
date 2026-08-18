@@ -603,6 +603,50 @@ export async function launchNet8WinformsMinimalExternally(): Promise<{ proc: Chi
     return { proc, hwnd };
 }
 
+export const NET8_WPF_MINIMAL_APP_PATH = resolve(
+    process.cwd(), 'test-apps', 'net8-wpf-minimal', 'bin', 'Debug', 'net8.0-windows', 'Net8WpfMinimal.exe'
+);
+
+/**
+ * Launches the net8-wpf-minimal fixture externally — CoreCLR (.NET 8) WPF twin of
+ * net8-winforms-minimal, used to prove/fix the profiler's anchor-discovery gap: unlike the
+ * WinForms fixture, this process never loads System.Windows.Forms.dll, so
+ * ProfilerCallback.cpp's WndProc-only kAnchorCandidates list can never find an anchor here. See
+ * dotnet-bridge-agent/CORECLR-BRIDGE-SPEC.md.
+ */
+export async function launchNet8WpfMinimalExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(NET8_WPF_MINIMAL_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn net8-wpf-minimal app: ${NET8_WPF_MINIMAL_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`net8-wpf-minimal app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
 export const NET8_WINFORMS_MINIMAL_X86_APP_PATH = resolve(
     process.cwd(), 'test-apps', 'net8-winforms-minimal', 'bin', 'Debug', 'net8.0-windows', 'win-x86', 'Net8WinformsMinimal.exe'
 );

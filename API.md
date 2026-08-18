@@ -1055,3 +1055,4 @@ await driver.executeScript('windows: attachDotnetBridge', []);
   `clr.dll`-hosted processes are supported.
 - **x64 and x86 (WOW64) targets only** — both are supported via
   automatic bitness detection.
+

@@ -257,6 +257,7 @@ public class CommandHandler {
         }
 
         addTableRootInfo(info, ac);
+        addTableCellInfo(info, ac);
 
         return info;
     }

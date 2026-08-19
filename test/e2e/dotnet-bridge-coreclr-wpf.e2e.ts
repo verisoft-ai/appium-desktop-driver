@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser } from 'webdriverio';
+import type { Browser, Selector } from 'webdriverio';
 import {
     launchNet8WpfMinimalExternally,
     createDotnetBridgeAttachSession,
@@ -45,7 +45,13 @@ describe('.NET Bridge — CoreCLR profiler attach (net8-wpf-minimal fixture)', (
     });
 
     it('selectElement moves real state on an owner-drawn CoreCLR WPF list element', async () => {
-        const item = await driver.$('//BridgeListItem[contains(@Name,"Banana")]');
+        // Owner-drawn list items are genuinely invisible to real UIA — reached via the
+        // explicit .NET bridge find, not standard find (which stays pure UIA even here).
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'xpath', value: '//BridgeListItem[contains(@Name,"Banana")]' }]
+        );
+        expect(found).not.toBeNull();
+        const item = await driver.$(found as unknown as Selector);
         expect(await item.isExisting()).toBe(true);
         expect(await item.getAttribute('IsSelected')).toBe(false);
 

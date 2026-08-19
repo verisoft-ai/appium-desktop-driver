@@ -55,7 +55,7 @@ describe('.NET Bridge — 32-bit target support', () => {
     it('windows: attachDotnetBridge routes through the x86 injector stub and makes the value readable', async () => {
         await driver.executeScript('windows: attachDotnetBridge', [{}]);
         await driver.waitUntil(
-            async () => (await driver.getPageSource()).includes('Healthy'),
+            async () => (await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string).includes('Healthy'),
             { timeout: 10_000, interval: 500, timeoutMsg: 'Painted value never appeared after attachDotnetBridge on a 32-bit target' }
         );
     });

@@ -68,7 +68,7 @@ import { handleFunctionCall } from './functions';
 
 const log = logger.getLogger('xpath');
 
-type SendCommandFn = (method: string, params: Record<string, unknown>) => Promise<unknown>;
+export type SendCommandFn = (method: string, params: Record<string, unknown>) => Promise<unknown>;
 
 const OptimizeLastStep = Symbol.for('LastStep');
 

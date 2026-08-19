@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml;
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
@@ -32,24 +33,57 @@ public static class PageSourceCommands
             }
         }
 
-        // Same for the .NET bridge — when active and the root belongs to the injected
-        // process, build the page source from the bridge's reflected control tree instead
-        // of UIA (which sees custom-drawn control libraries like DevExpress as opaque panes).
-        if (state.DotNetBridgeEnabled && state.DotNetBridge != null && state.IsDotnetBridgeWindowElement(root))
-        {
-            var hwnd = root.CurrentNativeWindowHandle;
-            var dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd);
-            if (dotnetRoot != null)
-            {
-                var dotnetDoc = new XmlDocument();
-                state.DotNetBridge.BuildXml(dotnetRoot, dotnetDoc, null);
-                return dotnetDoc.OuterXml;
-            }
-        }
-
+        // Unlike Java Swing above, the .NET bridge never auto-swaps standard page source —
+        // even on a bridge-attached window, getPageSource() always reflects real UIA only.
+        // Bridge-reflected content (custom-drawn control libraries like DevExpress that UIA
+        // sees as opaque panes) is reached explicitly via "windows: getPageSourceViaDotnetBridge".
         var xmlDoc = new XmlDocument();
         BuildPageSource(root, xmlDoc, null, state, root);
         return xmlDoc.OuterXml;
+    }
+
+    /// <summary>
+    /// "windows: getPageSourceViaDotnetBridge" — dumps the .NET bridge's own reflected
+    /// tree directly (its full tree, no correlation with real UIA), for the specific
+    /// content a bridge-attached app's real UIA tree can't see. See FindCommands'
+    /// FindElementDotnetBridge for the equivalent find-side opt-in.
+    /// </summary>
+    public static object? GetPageSourceDotnetBridge(SessionState state, JsonElement? parameters)
+    {
+        string? contextElementId = null;
+        if (parameters?.TryGetProperty("contextElementId", out var ctxProp) == true && ctxProp.ValueKind == JsonValueKind.String)
+        {
+            contextElementId = ctxProp.GetString();
+        }
+
+        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null)
+        {
+            throw new InvalidOperationException(
+                "The .NET bridge is not attached to this session. Call 'windows: attachDotnetBridge' first.");
+        }
+
+        BridgeAgentElement dotnetRoot;
+        if (contextElementId != null)
+        {
+            if (!BridgeAgentElement.IsDotnetId(contextElementId))
+            {
+                throw new ArgumentException(
+                    "contextElementId must be a .NET bridge element id (returned by a *ViaDotnetBridge command).");
+            }
+            dotnetRoot = state.DotNetBridge.GetById(contextElementId);
+        }
+        else
+        {
+            var uiaRoot = state.GetLiveRoot()
+                ?? throw new InvalidOperationException("No active window for this session.");
+            var hwnd = uiaRoot.CurrentNativeWindowHandle;
+            dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd)
+                ?? throw new InvalidOperationException("Could not resolve the .NET bridge's window root for the current window.");
+        }
+
+        var dotnetDoc = new XmlDocument();
+        state.DotNetBridge.BuildXml(dotnetRoot, dotnetDoc, null);
+        return dotnetDoc.OuterXml;
     }
 
     private static void BuildPageSource(

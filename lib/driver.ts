@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { BaseDriver, W3C_ELEMENT_KEY, errors } from 'appium/driver';
+import { BaseDriver, errors } from 'appium/driver';
 import { join } from 'node:path';
 import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
@@ -8,20 +8,14 @@ import {
     NovaWindowsDriverConstraints,
     UI_AUTOMATION_DRIVER_CONSTRAINTS
 } from './constraints';
-import {
-    convertStringToCondition,
-} from './powershell/converter';
-import { conditionToDto } from './server/converter-bridge';
 import { NovaUIAutomationClient } from './server/client';
-import { propertyCondition } from './server/conditions';
-import type { ConditionDto } from './server/protocol';
 import { attachLogFileMirror, LogFileMirror } from './log-file';
 import { DRIVER_VERSION } from './version';
 import { executeMethodMap } from './execute-method-map';
 import {
     assertSupportedEasingFunction
 } from './util';
-import { xpathToElIdOrIds } from './xpath';
+import { locateElements } from './commands/find-via';
 import { cssToNativeLocator } from './css';
 
 import type { Chromedriver } from 'appium-chromedriver';
@@ -179,55 +173,13 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
             }
         }
 
-        let condition: ConditionDto;
-        switch (strategy) {
-            case 'id':
-                condition = propertyCondition('RuntimeId', selector.split('.').map(Number));
-                break;
-            case 'tag name':
-                // WinAppDriver matches LocalizedControlType (lowercase, locale-dependent: "button", "edit").
-                // Nova historically matches ControlType (PascalCase: "Button", "Edit").
-                // Detect which style the selector uses to support both transparently.
-                condition = selector === selector.toLowerCase()
-                    ? propertyCondition('LocalizedControlType', selector)
-                    : propertyCondition('ControlType', selector);
-                break;
-            case 'accessibility id':
-                condition = propertyCondition('AutomationId', selector);
-                break;
-            case 'name':
-                condition = propertyCondition('Name', selector);
-                break;
-            case 'class name':
-                condition = propertyCondition('ClassName', selector);
-                break;
-            case '-windows uiautomation':
-                condition = conditionToDto(convertStringToCondition(selector));
-                break;
-            case 'xpath':
-                return await xpathToElIdOrIds(selector, mult, context, this.sendCommand.bind(this));
-            default:
-                throw new errors.InvalidArgumentError(`Invalid find strategy ${strategy}`);
+        if (strategy === 'css selector') {
+            throw new errors.InvalidArgumentError(`Invalid find strategy ${strategy}`);
         }
 
-        const params: Record<string, unknown> = {
-            scope: 'descendants',
-            condition,
-            contextElementId: context ?? null,
-        };
-
-        if (mult) {
-            const result = await this.sendCommand('findElements', params) as string[];
-            return (result ?? []).map((elId) => ({ [W3C_ELEMENT_KEY]: elId }));
-        }
-
-        const result = await this.sendCommand('findElement', params) as string | null;
-
-        if (!result) {
-            throw new errors.NoSuchElementError();
-        }
-
-        return { [W3C_ELEMENT_KEY]: result };
+        return mult
+            ? await locateElements(strategy, selector, true, context, this.sendCommand.bind(this))
+            : await locateElements(strategy, selector, false, context, this.sendCommand.bind(this));
     }
 
     override async createSession(

@@ -29,8 +29,9 @@ public static class FindCommands
             return state.Java!.FindFirst(javaRoot!, conditionDto, scope);
         }
 
-        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
-        // the process the bridge was injected into.
+        // Route to .NET bridge only when context is already a bridge element — see
+        // TryRouteToDotnet. Bridge-only content is reached via the explicit
+        // *ViaDotnetBridge commands, never automatically from here.
         if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
         {
             return state.DotNetBridge!.FindFirst(dotnetRoot!, conditionDto, scope);
@@ -106,8 +107,9 @@ public static class FindCommands
             return state.Java!.FindAll(javaRoot!, conditionDto, scope);
         }
 
-        // Route to .NET bridge when context is a bridge element or the UIA root belongs to
-        // the process the bridge was injected into.
+        // Route to .NET bridge only when context is already a bridge element — see
+        // TryRouteToDotnet. Bridge-only content is reached via the explicit
+        // *ViaDotnetBridge commands, never automatically from here.
         if (TryRouteToDotnet(state, contextElementId, out var dotnetRoot))
         {
             return state.DotNetBridge!.FindAll(dotnetRoot!, conditionDto, scope);
@@ -505,39 +507,89 @@ public static class FindCommands
     // ── .NET bridge routing ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns true when the find request should be routed to the .NET bridge.
-    /// Sets <paramref name="dotnetRoot"/> to the bridge element to search from.
+    /// Returns true when the find request should be routed to the .NET bridge —
+    /// only when the context is already a bridge element (a caller deliberately
+    /// continuing a search inside a subtree it already knows is bridge-only, e.g.
+    /// one returned by "windows: findElementViaDotnetBridge"). Standard find never
+    /// auto-routes into the bridge just because the current window happens to have
+    /// one attached — real UIA content stays reachable through the normal find
+    /// commands even on a bridge-attached window; the bridge is opt-in via the
+    /// dedicated *ViaDotnetBridge commands below (see FindElementDotnetBridge).
     /// </summary>
     private static bool TryRouteToDotnet(SessionState state, string? contextElementId, out BridgeAgentElement? dotnetRoot)
     {
         dotnetRoot = null;
         if (!state.DotNetBridgeEnabled || state.DotNetBridge == null) return false;
+        if (contextElementId == null || !BridgeAgentElement.IsDotnetId(contextElementId)) return false;
 
-        // Context is already a bridge element — search within its subtree directly.
-        if (contextElementId != null && BridgeAgentElement.IsDotnetId(contextElementId))
+        dotnetRoot = state.DotNetBridge.GetById(contextElementId);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves the .NET bridge subtree a *ViaDotnetBridge command should search —
+    /// either the bridge element named by an explicit contextElementId (continuing a
+    /// search a caller already started in bridge-land), or the whole window's
+    /// reflected tree when no context is given.
+    /// </summary>
+    private static BridgeAgentElement ResolveDotnetBridgeRoot(SessionState state, string? contextElementId)
+    {
+        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null)
         {
-            dotnetRoot = state.DotNetBridge.GetById(contextElementId);
-            return true;
+            throw new InvalidOperationException(
+                "The .NET bridge is not attached to this session. Call 'windows: attachDotnetBridge' first.");
         }
 
-        IUIAutomationElement? uiaRoot = null;
         if (contextElementId != null)
         {
-            try { uiaRoot = state.GetElement(contextElementId); }
-            catch { return false; }
-        }
-        else
-        {
-            uiaRoot = state.GetLiveRoot();
+            if (!BridgeAgentElement.IsDotnetId(contextElementId))
+            {
+                throw new ArgumentException(
+                    "contextElementId must be a .NET bridge element id (returned by a *ViaDotnetBridge command) " +
+                    "— the bridge tree isn't correlated to the real UIA tree, so a plain UIA element id can't be used as a bridge search root.");
+            }
+            return state.DotNetBridge.GetById(contextElementId);
         }
 
-        if (uiaRoot == null) return false;
-        if (!state.IsDotnetBridgeWindowElement(uiaRoot)) return false;
-
+        var uiaRoot = state.GetLiveRoot()
+            ?? throw new InvalidOperationException("No active window for this session.");
         var hwnd = uiaRoot.CurrentNativeWindowHandle;
         var title = uiaRoot.get_CurrentName() ?? "";
-        dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd, title);
-        return dotnetRoot != null;
+        return state.DotNetBridge.GetWindowRoot(hwnd, title)
+            ?? throw new InvalidOperationException("Could not resolve the .NET bridge's window root for the current window.");
+    }
+
+    /// <summary>
+    /// "windows: findElementViaDotnetBridge" — searches the .NET bridge's own
+    /// reflected tree directly (its full tree, no correlation with real UIA),
+    /// bypassing UIA entirely. The explicit opt-in counterpart to FindElement,
+    /// for the specific elements a bridge-attached app's real UIA tree can't see.
+    /// </summary>
+    public static object? FindElementDotnetBridge(SessionState state, JsonElement? parameters)
+    {
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var conditionDto = JsonSerializer.Deserialize<ConditionDto>(p.GetProperty("condition").GetRawText())
+            ?? throw new ArgumentException("condition is required.");
+        string? contextElementId = p.TryGetProperty("contextElementId", out var ctxProp) && ctxProp.ValueKind == JsonValueKind.String
+            ? ctxProp.GetString()
+            : null;
+
+        var root = ResolveDotnetBridgeRoot(state, contextElementId);
+        return state.DotNetBridge!.FindFirst(root, conditionDto, "subtree");
+    }
+
+    /// <summary>"windows: findElementsViaDotnetBridge" — see FindElementDotnetBridge.</summary>
+    public static object? FindElementsDotnetBridge(SessionState state, JsonElement? parameters)
+    {
+        var p = parameters ?? throw new ArgumentException("Parameters required.");
+        var conditionDto = JsonSerializer.Deserialize<ConditionDto>(p.GetProperty("condition").GetRawText())
+            ?? throw new ArgumentException("condition is required.");
+        string? contextElementId = p.TryGetProperty("contextElementId", out var ctxProp) && ctxProp.ValueKind == JsonValueKind.String
+            ? ctxProp.GetString()
+            : null;
+
+        var root = ResolveDotnetBridgeRoot(state, contextElementId);
+        return state.DotNetBridge!.FindAll(root, conditionDto, "subtree");
     }
 
     // Native UIA3 descendant search first — sub-millisecond on typical apps.

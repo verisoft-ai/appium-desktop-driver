@@ -5,10 +5,10 @@ import { system } from 'appium/support';
 import type { ScreenRecorder } from './commands/screen-recorder';
 import commands from './commands';
 import {
-    NovaWindowsDriverConstraints,
+    DesktopDriverConstraints,
     UI_AUTOMATION_DRIVER_CONSTRAINTS
 } from './constraints';
-import { NovaUIAutomationClient } from './server/client';
+import { DesktopDriverServerClient } from './server/client';
 import { attachLogFileMirror, LogFileMirror } from './log-file';
 import { DRIVER_VERSION } from './version';
 import { executeMethodMap } from './execute-method-map';
@@ -31,8 +31,8 @@ import type {
     W3CDriverCaps
 } from '@appium/types';
 
-type W3CNovaWindowsDriverCaps = W3CDriverCaps<NovaWindowsDriverConstraints>;
-type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<NovaWindowsDriverConstraints>;
+type W3CDesktopDriverCaps = W3CDriverCaps<DesktopDriverConstraints>;
+type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<DesktopDriverConstraints>;
 
 type KeyboardState = {
     pressed: Set<string>,
@@ -77,10 +77,10 @@ const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
     ['POST', new RegExp('^/session/[^/]+/se/log$')],
 ];
 
-export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
+export class AppiumDesktopDriver extends BaseDriver<DesktopDriverConstraints, StringRecord> {
     static executeMethodMap = executeMethodMap;
 
-    serverClient?: NovaUIAutomationClient;
+    serverClient?: DesktopDriverServerClient;
     mouseButtonsDown: Set<number> = new Set();
     keyboardState: KeyboardState = {
         pressed: new Set(),
@@ -117,7 +117,7 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
 
     async sendCommand(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
         if (!this.serverClient) {
-            throw new errors.UnknownError('NovaUIAutomationServer is not running.');
+            throw new errors.UnknownError('DesktopDriverServer is not running.');
         }
         return await this.serverClient.sendCommand(method, params);
     }
@@ -183,9 +183,9 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
     }
 
     override async createSession(
-        jwpCaps: W3CNovaWindowsDriverCaps,
-        reqCaps?: W3CNovaWindowsDriverCaps,
-        w3cCaps?: W3CNovaWindowsDriverCaps,
+        jwpCaps: W3CDesktopDriverCaps,
+        reqCaps?: W3CDesktopDriverCaps,
+        w3cCaps?: W3CDesktopDriverCaps,
         driverData?: DriverData[]
     ): Promise<DefaultWindowsCreateSessionResult> {
         if (!system.isWindows()) {
@@ -239,7 +239,7 @@ export class AppiumDesktopDriver extends BaseDriver<NovaWindowsDriverConstraints
             }
 
             if (this.caps.systemPort) {
-                this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. NovaWindows uses stdin/stdout IPC.`);
+                this.log.info(`systemPort capability (${this.caps.systemPort}) is ignored. AppiumDesktopDriver uses stdin/stdout IPC.`);
             }
 
             // UIA server always starts. IEDriverServer starts lazily on first IE window switch.

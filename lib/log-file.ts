@@ -12,7 +12,7 @@ export type LogFileMirror = {
     detach: () => void;
 };
 
-const DEFAULT_SUBDIR = 'novawindows-driver';
+const DEFAULT_SUBDIR = 'appium-desktop-driver';
 const MIRRORED_LEVELS = ['silly', 'verbose', 'debug', 'info', 'http', 'warn', 'error'] as const;
 
 function resolveLogPath(value: unknown): string {
@@ -77,7 +77,7 @@ export function attachLogFileMirror(log: LogLike, value: unknown): LogFileMirror
         });
     }
 
-    writeLine(stream, 'info', [`NovaWindows driver log mirror attached at ${path}`]);
+    writeLine(stream, 'info', [`AppiumDesktopDriver log mirror attached at ${path}`]);
 
     let detached = false;
     return {

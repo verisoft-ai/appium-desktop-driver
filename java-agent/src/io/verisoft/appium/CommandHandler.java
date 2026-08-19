@@ -256,7 +256,44 @@ public class CommandHandler {
             info.put("IndexInParent", 0);
         }
 
+        addTableRootInfo(info, ac);
+        addTableCellInfo(info, ac);
+
         return info;
+    }
+
+    /**
+     * If ac represents a table (e.g. JTable), exposes its dimensions so consumers
+     * don't have to count children. Mirrors what UiPath surfaces for Java tables.
+     */
+    private static void addTableRootInfo(Map<String, Object> info, AccessibleContext ac) {
+        if (ac == null) return;
+        AccessibleTable table = ac.getAccessibleTable();
+        if (table == null) return;
+        info.put("RowCount", table.getAccessibleRowCount());
+        info.put("ColumnCount", table.getAccessibleColumnCount());
+    }
+
+    /**
+     * If ac is a cell inside a table (AccessibleJTable$AccessibleJTableCell and similar),
+     * resolves its row/column via the parent's AccessibleTable — a cell's own
+     * AccessibleContext carries no row/column info by itself.
+     */
+    private static void addTableCellInfo(Map<String, Object> info, AccessibleContext ac) {
+        if (ac == null) return;
+        Accessible parent = ac.getAccessibleParent();
+        if (parent == null) return;
+        AccessibleContext parentAc = parent.getAccessibleContext();
+        if (parentAc == null) return;
+        AccessibleTable table = parentAc.getAccessibleTable();
+        // AccessibleTable itself has no flat-index-to-row/col mapping — only
+        // JTable's AccessibleExtendedTable (an AccessibleTable subinterface) does.
+        if (!(table instanceof AccessibleExtendedTable)) return;
+        AccessibleExtendedTable extTable = (AccessibleExtendedTable) table;
+        int index = ac.getAccessibleIndexInParent();
+        if (index < 0) return;
+        info.put("TableRow", extTable.getAccessibleRow(index));
+        info.put("TableColumn", extTable.getAccessibleColumn(index));
     }
 
     static Map<String, Object> buildInfoFromAccessible(Accessible a, String id) {
@@ -316,6 +353,9 @@ public class CommandHandler {
 
             info.put("childCount", ac.getAccessibleChildrenCount());
             info.put("IndexInParent", ac.getAccessibleIndexInParent());
+
+            addTableRootInfo(info, ac);
+            addTableCellInfo(info, ac);
         } else {
             info.put("Name", "");
             info.put("AutomationId", "");

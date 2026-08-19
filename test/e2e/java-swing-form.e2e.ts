@@ -632,6 +632,65 @@ describe('Java Swing Form', () => {
         });
     });
 
+    describe('JTable row/column info', () => {
+        it('dataTable exists and reports RowCount/ColumnCount', async () => {
+            const table = await driver.$('~dataTable');
+            expect(await table.isExisting()).toBe(true);
+            expect(Number(await table.getAttribute('RowCount'))).toBe(3);
+            expect(Number(await table.getAttribute('ColumnCount'))).toBe(2);
+        });
+
+        it('page source exposes RowCount/ColumnCount on the table element', async () => {
+            const source = await driver.getPageSource();
+            expect(source).toContain('RowCount="3"');
+            expect(source).toContain('ColumnCount="2"');
+        });
+
+        it('cells carry TableRow/TableColumn identifying their position', async () => {
+            const cells = await driver.$$('//Table[@Name="dataTable"]/*');
+            expect(cells.length).toBe(6); // 3 rows x 2 cols
+
+            const positions = new Set<string>();
+            for (const cell of cells) {
+                const row = await cell.getAttribute('TableRow');
+                const col = await cell.getAttribute('TableColumn');
+                expect(row).not.toBe('');
+                expect(col).not.toBe('');
+                positions.add(`${row},${col}`);
+            }
+
+            // every (row, col) pair for a 3x2 table is present, and uniquely so
+            expect(positions.size).toBe(6);
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 2; c++) {
+                    expect(positions.has(`${r},${c}`)).toBe(true);
+                }
+            }
+        });
+
+        it('the cell at row 1, col 0 contains "Bob"', async () => {
+            const cells = await driver.$$('//Table[@Name="dataTable"]/*');
+            let match: (typeof cells)[number] | undefined;
+            for (const cell of cells) {
+                const row = await cell.getAttribute('TableRow');
+                const col = await cell.getAttribute('TableColumn');
+                if (String(row) === '1' && String(col) === '0') {
+                    match = cell;
+                    break;
+                }
+            }
+            expect(match).toBeDefined();
+            const text = await match!.getText();
+            expect(text).toBe('Bob');
+        });
+
+        it('non-table elements do not report TableRow/TableColumn', async () => {
+            const btn = await driver.$('~submitButton');
+            expect(await btn.getAttribute('TableRow')).toBe('');
+            expect(await btn.getAttribute('TableColumn')).toBe('');
+        });
+    });
+
     describe('JavaClass XPath attribute', () => {
         it('//*[@JavaClass="javax.swing.JTextField"] finds all three text fields', async () => {
             const fields = await driver.$$('//*[@JavaClass="javax.swing.JTextField"]');

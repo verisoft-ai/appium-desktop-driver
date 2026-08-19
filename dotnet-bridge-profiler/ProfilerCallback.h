@@ -15,7 +15,7 @@
 #include <corprof.h>
 
 // CLSID this profiler answers to in DllGetClassObject — must match CoreClrAttacher.ProfilerClsid
-// in csharp/NovaUIAutomationServer/DotNet/CoreClrAttacher.cs. Keep both sides in sync by hand;
+// in csharp/DesktopDriverServer/DotNet/CoreClrAttacher.cs. Keep both sides in sync by hand;
 // there is no shared source of truth across the C++/C# boundary.
 // {6F1A2E8C-6F9B-4B7D-9A3E-2C4B8E7F1A90}
 extern const GUID CLSID_AppiumDotNetBridgeProfiler;

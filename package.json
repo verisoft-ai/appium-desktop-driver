@@ -16,7 +16,7 @@
     "build/lib/**/*",
     "iedriver/**/*",
     "iebridge/IEBridge.exe",
-    "native/win-x64/NovaUIAutomationServer.exe",
+    "native/win-x64/DesktopDriverServer.exe",
     "native/win-x64/appium-desktop-agent.jar",
     "native/win-x64/appium-dotnet-bridge.dll",
     "native/win-x86/appium-dotnet-bridge.dll",
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "build:native": "dotnet publish csharp/NovaUIAutomationServer/NovaUIAutomationServer.csproj -c Release -o native/win-x64/",
+    "build:native": "dotnet publish csharp/DesktopDriverServer/DesktopDriverServer.csproj -c Release -o native/win-x64/",
     "build:iebridge": "dotnet publish csharp/IEBridge/IEBridge.csproj -r win-x86 -c Release -o iebridge/x86 && node -e \"const fs=require('fs');fs.copyFileSync('iebridge/x86/IEBridge.exe','iebridge/IEBridge.exe');\"",
     "build:java-agent": "cd java-agent && build.bat",
     "build:dotnet-bridge": "cd dotnet-bridge-agent && build.bat",

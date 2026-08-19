@@ -28,8 +28,8 @@ export class NovaUIAutomationClient {
 
     private getServerPath(): string {
         // Allow overriding the server exe path via environment variable
-        if (process.env.NOVA_WINDOWS_PATH) {
-            return process.env.NOVA_WINDOWS_PATH;
+        if (process.env.DESKTOP_DRIVER_SERVER_PATH) {
+            return process.env.DESKTOP_DRIVER_SERVER_PATH;
         }
         // __dirname at runtime is build/lib/server/, so go up 3 levels to project root
         return join(__dirname, '..', '..', '..', 'native', 'win-x64', SERVER_EXE_NAME);

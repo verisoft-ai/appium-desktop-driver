@@ -1,5 +1,5 @@
 /**
- * Postinstall hook for appium-novawindows-driver.
+ * Postinstall hook for appium-desktop-driver.
  *
  * When end users install the published npm package, the prebuilt
  * `native/win-x64/NovaUIAutomationServer.exe` is already bundled —

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml;
+using NovaUIAutomationServer.DotNet;
 using NovaUIAutomationServer.Java;
 using NovaUIAutomationServer.Server;
 using NovaUIAutomationServer.State;
@@ -32,16 +33,34 @@ public static class PageSourceCommands
             }
         }
 
-        // Same for the .NET bridge — but rather than swapping the whole tree for
-        // the bridge's own reflected-tree walk (which has a completely different
-        // shape from UIA's control view), keep walking the real UIA tree and only
-        // splice bridge content in at the points UIA itself reports as opaque
-        // (zero UIA children) — see BuildPageSource below and DotNetBridgeSplice.
-        var dotnetWindowRoot = DotNet.BridgeSpliceContext.Build(state);
-
+        // Unlike Java Swing above, the .NET bridge never auto-swaps standard page source —
+        // even on a bridge-attached window, getPageSource() always reflects real UIA only.
+        // Bridge-reflected content (custom-drawn control libraries like DevExpress that UIA
+        // sees as opaque panes) is reached explicitly via "windows: getPageSourceViaDotnetBridge".
         var xmlDoc = new XmlDocument();
-        BuildPageSource(root, xmlDoc, null, state, root, dotnetWindowRoot);
+        BuildPageSource(root, xmlDoc, null, state, root);
         return xmlDoc.OuterXml;
+    }
+
+    /// <summary>
+    /// "windows: getPageSourceViaDotnetBridge" — dumps the .NET bridge's own reflected
+    /// tree directly (its full tree, no correlation with real UIA), for the specific
+    /// content a bridge-attached app's real UIA tree can't see. See FindCommands'
+    /// FindElementDotnetBridge for the equivalent find-side opt-in.
+    /// </summary>
+    public static object? GetPageSourceDotnetBridge(SessionState state, JsonElement? parameters)
+    {
+        string? contextElementId = null;
+        if (parameters?.TryGetProperty("contextElementId", out var ctxProp) == true && ctxProp.ValueKind == JsonValueKind.String)
+        {
+            contextElementId = ctxProp.GetString();
+        }
+
+        var dotnetRoot = FindCommands.ResolveDotnetBridgeRoot(state, contextElementId);
+
+        var dotnetDoc = new XmlDocument();
+        state.DotNetBridge!.BuildXml(dotnetRoot, dotnetDoc, null);
+        return dotnetDoc.OuterXml;
     }
 
     private static void BuildPageSource(
@@ -49,8 +68,7 @@ public static class PageSourceCommands
         XmlDocument xmlDoc,
         XmlElement? parentXmlElement,
         SessionState state,
-        IUIAutomationElement? rootForCoords,
-        DotNet.BridgeSpliceContext? dotnetWindowRoot)
+        IUIAutomationElement? rootForCoords)
     {
         try
         {
@@ -142,29 +160,10 @@ public static class PageSourceCommands
             // Walk all children unconditionally, matching the traversal FindCommands
             // uses (native find ignores TreeFilter; its manual-walk fallback uses
             // TrueCondition). Keeps page source and findElement seeing the same tree.
-            var children = FindCommands.IterateArray(
-                element.FindAll(TreeScope.Children, state.Automation.CreateTrueCondition())).ToList();
-
-            if (children.Count == 0 && dotnetWindowRoot != null)
+            var children = element.FindAll(TreeScope.Children, state.Automation.CreateTrueCondition());
+            foreach (var child in FindCommands.IterateArray(children))
             {
-                // UIA reports this element as a leaf — the real reason may be that
-                // it's a custom-drawn control library UIA can't see into. Try to
-                // correlate it to the bridge's reflected tree and splice that
-                // subtree in, reshaped to look like UIA (BridgeUiaShaper), instead
-                // of leaving it as a dead end.
-                var bridgeNode = DotNet.DotNetBridgeSplice.Correlate(state, element, dotnetWindowRoot);
-                if (bridgeNode != null)
-                {
-                    DotNet.BridgeUiaShaper.BuildSplicedXml(
-                        state.DotNetBridge!, bridgeNode, xmlDoc, newXmlElement, element.CurrentProcessId);
-                }
-            }
-            else
-            {
-                foreach (var child in children)
-                {
-                    BuildPageSource(child, xmlDoc, newXmlElement, state, rootForCoords, dotnetWindowRoot);
-                }
+                BuildPageSource(child, xmlDoc, newXmlElement, state, rootForCoords);
             }
         }
         catch

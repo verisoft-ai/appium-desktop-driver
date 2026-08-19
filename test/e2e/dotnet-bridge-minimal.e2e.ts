@@ -45,7 +45,7 @@ describe('.NET Bridge — minimal owner-draw fixture, minimum requirement', () =
         expect(source).not.toContain('Healthy');
     });
 
-    it('with the bridge attached, the painted value becomes readable', async () => {
+    it('with the bridge attached, standard getPageSource stays pure UIA — the painted value is not there', async () => {
         await quitSession(driver);
 
         const launched = await launchMinimalOwnerDrawExternally();
@@ -53,6 +53,11 @@ describe('.NET Bridge — minimal owner-draw fixture, minimum requirement', () =
         driver = await createDotnetBridgeAttachSession(launched.hwnd);
 
         const source = await driver.getPageSource();
+        expect(source).not.toContain('Healthy');
+    });
+
+    it('windows: getPageSourceViaDotnetBridge exposes the painted value explicitly', async () => {
+        const source = await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string;
         expect(source).toContain('Healthy');
     });
 });

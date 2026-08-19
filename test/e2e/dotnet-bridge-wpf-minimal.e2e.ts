@@ -62,7 +62,13 @@ describe('.NET Bridge — WPF Dispatcher marshaling (wpf-minimal fixture)', () =
     });
 
     it('selectElement moves real state on an owner-drawn WPF list element (no Control ancestor to marshal onto)', async () => {
-        const item = await driver.$('//BridgeListItem[contains(@Name,"Banana")]');
+        // Owner-drawn list items are genuinely invisible to real UIA — reached via the
+        // explicit .NET bridge find, not standard find (which stays pure UIA even here).
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'xpath', value: '//BridgeListItem[contains(@Name,"Banana")]' }]
+        );
+        expect(found).not.toBeNull();
+        const item = await driver.$(found as unknown as Selector);
         expect(await item.isExisting()).toBe(true);
         expect(await item.getAttribute('IsSelected')).toBe(false);
 

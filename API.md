@@ -607,8 +607,84 @@ resolved from the session's current root window.
 await driver.executeScript('windows: attachDotnetBridge', []);
 ```
 
+Attaching the bridge does not change what `findElement`/`findElements`/
+`getPageSource` see — those stay pure UIA always. Reach bridge-only
+content with the three commands below instead.
+
 See [.NET Bridge Automation](#net-bridge-automation) for full setup
 and current scope (WinForms, DevExpress WinForms, and WPF).
+
+#### windows: findElementViaDotnetBridge
+
+Searches the .NET bridge's own reflected control tree directly — not
+real UIA — for the specific values a custom-drawn control never
+exposes to UIA at all (an owner-drawn list's item text, a DevExpress
+grid cell's real value, ...). Standard `findElement` never auto-routes
+into the bridge even when one is attached, so this is the explicit
+opt-in.
+
+- `using` (required) — locator strategy: `xpath`, `accessibility id`,
+  `name`, `class name`, `tag name`, `id`, or `-windows uiautomation`.
+  `xpath` supports the same predicates as standard find, including
+  `contains()`.
+- `value` (required) — the locator value for the chosen strategy.
+- `contextElementId` (optional) — a .NET bridge element id (from a
+  prior `*ViaDotnetBridge` call) to search within, instead of the
+  whole window.
+
+Returns the matching element, or `null` if none was found — unlike
+standard `findElement`, this does not throw `NoSuchElementError`.
+
+```js
+const el = await driver.executeScript('windows: findElementViaDotnetBridge', [{
+  using: 'xpath',
+  value: '//BridgeListItem[contains(@Name,"Banana")]',
+}]);
+```
+
+The returned reference works with every other `windows:` command
+exactly like an element from standard find — `invoke`, `select`,
+`expand`, `setValue`, `getValue`, `click`, and the rest all dispatch
+on the element id's prefix regardless of how it was found.
+
+To use it with WebdriverIO's chainable element API (`.getText()`,
+`.getAttribute()`, `.isExisting()`, ...), wrap it with `driver.$()`:
+
+```js
+const found = await driver.executeScript('windows: findElementViaDotnetBridge', [{
+  using: 'xpath',
+  value: '//BridgeListItem[contains(@Name,"Banana")]',
+}]);
+const item = await driver.$(found);
+await item.click();
+```
+
+#### windows: findElementsViaDotnetBridge
+
+Plural counterpart to `windows: findElementViaDotnetBridge` — same
+`using`/`value`/`contextElementId` arguments, returns all matching
+elements (empty array if none).
+
+```js
+const items = await driver.executeScript('windows: findElementsViaDotnetBridge', [{
+  using: 'xpath',
+  value: '//BridgeListItem',
+}]);
+```
+
+#### windows: getPageSourceViaDotnetBridge
+
+Dumps the .NET bridge's own reflected tree directly, as XML — for the
+specific content a bridge-attached app's real UIA tree can't see.
+Standard `getPageSource()` always reflects real UIA only, even on a
+bridge-attached window.
+
+- `contextElementId` (optional) — a .NET bridge element id to scope
+  the dump to a subtree instead of the whole window.
+
+```js
+const source = await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]);
+```
 
 ---
 
@@ -944,6 +1020,16 @@ Bitness is detected automatically: 64-bit targets are injected directly,
 32-bit (WOW64) targets are injected via a separate 32-bit stub process,
 since a 64-bit host cannot `CreateRemoteThread` across bitness.
 
+Attaching the bridge is purely additive — it never changes what
+`findElement`/`findElements`/`getPageSource` see or how the tree is
+shaped. Those stay pure UIA always, attached or not. Bridge-only
+content is reached explicitly, one lookup at a time, via
+`windows: findElementViaDotnetBridge` / `findElementsViaDotnetBridge` /
+`getPageSourceViaDotnetBridge` (see [.NET Bridge](#net-bridge) above)
+— the idea being that most of a typical app is already visible to
+plain UIA, so only the specific blind elements need the bridge, not
+the whole tree.
+
 There is no launch-time injection path — the target process must
 already be running before the bridge can attach.
 
@@ -979,8 +1065,10 @@ const driver = await remote({ ..., capabilities: {
 // 2. Inject at any point
 await driver.executeScript('windows: attachDotnetBridge', []);
 
-// 3. Real control values (not the generic UIA placeholder) are now readable
-const source = await driver.getPageSource();
+// 3. Real control values (not the generic UIA placeholder) are now readable —
+//    explicitly, via the bridge-specific commands; standard getPageSource()
+//    is unaffected and stays pure UIA.
+const source = await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]);
 ```
 
 If you started from `app: Root`, switch to the target window first:

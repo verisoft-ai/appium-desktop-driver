@@ -31,6 +31,8 @@ public class CommandDispatcher
             ["findElementFocused"] = FindCommands.FindElementFocused,
             ["saveRootElementToTable"] = FindCommands.SaveRootElementToTable,
             ["lookupElement"] = FindCommands.LookupElement,
+            ["findElementDotnetBridge"] = FindCommands.FindElementDotnetBridge,
+            ["findElementsDotnetBridge"] = FindCommands.FindElementsDotnetBridge,
 
             // Element
             ["getProperty"] = ElementCommands.GetProperty,
@@ -69,6 +71,7 @@ public class CommandDispatcher
 
             // Page source & screenshots
             ["getPageSource"] = PageSourceCommands.GetPageSource,
+            ["getPageSourceDotnetBridge"] = PageSourceCommands.GetPageSourceDotnetBridge,
             ["getScreenshot"] = ScreenshotCommands.GetScreenshot,
             ["getElementScreenshot"] = ScreenshotCommands.GetElementScreenshot,
 

@@ -11,6 +11,7 @@ import { propertyCondition } from '../server/conditions';
 import { conditionToDto } from '../server/converter-bridge';
 import { convertStringToCondition } from '../powershell/converter';
 import type { RectResult } from '../server/protocol';
+import { locateElements, wrapForDotnetBridge, type LocateStrategy } from './find-via';
 import { sleep } from '../util';
 import { click } from './element';
 import { DEFAULT_EXT, ScreenRecorder, UploadOptions, uploadRecordedMedia } from './screen-recorder';
@@ -1195,4 +1196,73 @@ export async function executeAttachDotnetBridge(this: AppiumDesktopDriver): Prom
     // Injects the bridge DLL into the process owning the current root window,
     // then connects. The C# side resolves the PID from the root element's HWND.
     await this.sendCommand('injectDotnetBridge', {});
+}
+
+/**
+ * `windows: findElementViaDotnetBridge` execute-method handler: searches the .NET
+ * bridge's own reflected tree directly (its full tree, no correlation with real UIA),
+ * bypassing UIA entirely. Standard `findElement`/`getPageSource` never auto-consult the
+ * bridge even when one is attached — real UIA content stays reachable through them as
+ * always — so this (and its plural/page-source siblings below) is the explicit opt-in
+ * for the specific elements a bridge-attached app's real UIA tree can't see. The
+ * element reference this returns works with every other `windows:` command
+ * (invoke/select/expand/setValue/click/...) exactly like one from standard find — those
+ * already dispatch on the `dotnet:`/`dotnetcore:` id prefix regardless of how the
+ * element was found.
+ * @param args.using - Locator strategy: `xpath`, `accessibility id`, `name`,
+ * `class name`, `tag name`, `id`, or `-windows uiautomation`.
+ * @param args.value - The locator value for the chosen strategy.
+ * @param args.contextElementId - Optional .NET bridge element id (from a prior
+ * `*ViaDotnetBridge` call) to search within instead of the whole window.
+ * @returns The matching element, or `null` if none was found.
+ */
+export async function findElementViaDotnetBridge(
+    this: AppiumDesktopDriver,
+    args: { using: LocateStrategy, value: string, contextElementId?: string }
+): Promise<Element | null> {
+    try {
+        return await locateElements(
+            args.using, args.value, false, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
+        );
+    } catch (e) {
+        if (e instanceof errors.NoSuchElementError) {
+            return null;
+        }
+        throw e;
+    }
+}
+
+/**
+ * `windows: findElementsViaDotnetBridge` execute-method handler — see
+ * {@link findElementViaDotnetBridge}.
+ * @param args.using - Locator strategy, same options as {@link findElementViaDotnetBridge}.
+ * @param args.value - The locator value for the chosen strategy.
+ * @param args.contextElementId - Optional .NET bridge element id to search within.
+ * @returns All matching elements (empty array if none).
+ */
+export async function findElementsViaDotnetBridge(
+    this: AppiumDesktopDriver,
+    args: { using: LocateStrategy, value: string, contextElementId?: string }
+): Promise<Element[]> {
+    return await locateElements(
+        args.using, args.value, true, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
+    );
+}
+
+/**
+ * `windows: getPageSourceViaDotnetBridge` execute-method handler: dumps the .NET
+ * bridge's own reflected tree directly, for the specific content a bridge-attached
+ * app's real UIA tree can't see. Standard `getPageSource()` always reflects real UIA
+ * only, even on a bridge-attached window — see {@link findElementViaDotnetBridge}.
+ * @param args.contextElementId - Optional .NET bridge element id to scope the dump to
+ * a subtree instead of the whole window.
+ * @returns The bridge tree as XML.
+ */
+export async function getPageSourceViaDotnetBridge(
+    this: AppiumDesktopDriver,
+    args?: { contextElementId?: string }
+): Promise<string> {
+    return await this.sendCommand('getPageSourceDotnetBridge', {
+        contextElementId: args?.contextElementId ?? null,
+    }) as string;
 }

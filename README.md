@@ -93,6 +93,15 @@ Two injection paths are available:
 - **Path A** — attach at session time (`appium:appTopLevelWindow` + `appium:dotnetBridge: true`). No `appium:app` launch path exists for .NET; the target process must already be running.
 - **Path B** — inject mid-session via `windows: attachDotnetBridge`. Start any session, switch to the target window, then call the command.
 
+Standard `findElement`/`findElements`/`getPageSource` always reflect real UIA
+only — attaching the bridge never changes what they see or how the tree is
+shaped. Bridge-only content (values a custom-drawn control never exposes to
+UIA at all) is reached explicitly via `windows: findElementViaDotnetBridge`,
+`windows: findElementsViaDotnetBridge`, and `windows: getPageSourceViaDotnetBridge`.
+Elements returned by these behave exactly like any other element reference —
+every other `windows:` command (`invoke`, `select`, `expand`, `setValue`,
+`click`, ...) already works on them without any special handling.
+
 See [API.md — .NET Bridge Automation](./API.md#net-bridge-automation) for full examples and supported scope.
 
 ### Desktop root: click an icon and switch windows

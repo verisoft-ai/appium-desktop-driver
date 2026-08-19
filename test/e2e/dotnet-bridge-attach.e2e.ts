@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser } from 'webdriverio';
+import type { Browser, Selector } from 'webdriverio';
 import { remote } from 'webdriverio';
 import {
     APPIUM_SERVER,
@@ -46,45 +46,61 @@ describe('.NET Bridge — appTopLevelWindow + dotnetBridge attach', () => {
         killProc(appProc);
     });
 
-    it('getPageSource reflects real grid cell values, not the generic UIA placeholder', async () => {
+    // Grid rows/cells are custom-drawn — genuinely invisible to real UIA (only a generic
+    // "<Column> row <N>" placeholder is ever exposed there) — so every query below goes
+    // through the explicit .NET bridge find, not standard find.
+    async function findViaBridge(xpath: string) {
+        const found = await driver.executeScript('windows: findElementViaDotnetBridge', [{ using: 'xpath', value: xpath }]);
+        return found ? driver.$(found as unknown as Selector) : null;
+    }
+
+    it('standard getPageSource stays pure UIA — never the generic UIA placeholder, never a real grid value', async () => {
         const source = await driver.getPageSource();
+        expect(source).not.toContain('Healthy');
+        expect(source).not.toContain('Degraded');
+        expect(source).not.toContain('Offline');
+    });
+
+    it('windows: getPageSourceViaDotnetBridge reflects real grid cell values', async () => {
+        const source = await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string;
         expect(source).toContain('Healthy');
         expect(source).toContain('Degraded');
         expect(source).toContain('Offline');
     });
 
     it('finds all grid rows and the count matches the three known rows', async () => {
-        const rows = await driver.$$('//GridRow');
-        expect(rows.length).toBe(3);
+        const rows = await driver.executeScript('windows: findElementsViaDotnetBridge', [{ using: 'xpath', value: '//GridRow' }]);
+        expect((rows as unknown[]).length).toBe(3);
     });
 
     it('reads a real unbound Status cell value by name, proving custom-drawn column data reaches the bridge', async () => {
-        const cell = await driver.$('//GridCell[contains(@Name,"Status row 1")]');
-        expect(await cell.isExisting()).toBe(true);
-        expect(await cell.getText()).toBe('Healthy');
+        const cell = await findViaBridge('//GridCell[contains(@Name,"Status row 1")]');
+        expect(cell).not.toBeNull();
+        expect(await cell!.isExisting()).toBe(true);
+        expect(await cell!.getText()).toBe('Healthy');
     });
 
     it('reads a real bound Name cell value, proving bound columns are also unavailable via plain UIA but readable via the bridge', async () => {
-        const cell = await driver.$('//GridCell[contains(@Name,"Name row 2")]');
-        expect(await cell.getText()).toBe('Bravo');
+        const cell = await findViaBridge('//GridCell[contains(@Name,"Name row 2")]');
+        expect(await cell!.getText()).toBe('Bravo');
     });
 
     it('isEnabled and isDisplayed report real (non-hardcoded) state for a visible cell', async () => {
-        const cell = await driver.$('//GridCell[contains(@Name,"Status row 3")]');
-        expect(await cell.isEnabled()).toBe(true);
-        expect(await cell.isDisplayed()).toBe(true);
+        const cell = await findViaBridge('//GridCell[contains(@Name,"Status row 3")]');
+        expect(await cell!.isEnabled()).toBe(true);
+        expect(await cell!.isDisplayed()).toBe(true);
     });
 
     it('selectElement moves the real DevExpress FocusedRowHandle, not just a fake success', async () => {
-        const row1 = await driver.$('//GridRow[contains(@Name,"Row 1")]');
-        expect(await row1.getAttribute('IsSelected')).toBe(true);
+        const row1 = await findViaBridge('//GridRow[contains(@Name,"Row 1")]');
+        expect(await row1!.getAttribute('IsSelected')).toBe(true);
 
-        const row2 = await driver.$('//GridRow[contains(@Name,"Row 2")]');
-        const elementId: string = await row2.elementId;
+        const row2 = await findViaBridge('//GridRow[contains(@Name,"Row 2")]');
+        const elementId: string = await row2!.elementId;
         await driver.executeScript('windows: select', [{ elementId }]);
 
-        expect(await row2.getAttribute('IsSelected')).toBe(true);
-        expect(await row1.getAttribute('IsSelected')).toBe(false);
+        expect(await row2!.getAttribute('IsSelected')).toBe(true);
+        expect(await row1!.getAttribute('IsSelected')).toBe(false);
     });
 });
 
@@ -123,15 +139,19 @@ describe('.NET Bridge — windows: attachDotnetBridge post-session', () => {
         expect(source).not.toContain('Offline');
     });
 
-    it('after windows: attachDotnetBridge, real cell values become visible', async () => {
+    it('after windows: attachDotnetBridge, real cell values become visible via the bridge', async () => {
         await driver.executeScript('windows: attachDotnetBridge', [{}]);
 
         await driver.waitUntil(
-            async () => (await driver.getPageSource()).includes('Healthy'),
+            async () => (await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string).includes('Healthy'),
             { timeout: 10_000, interval: 500, timeoutMsg: 'Real cell values never appeared after attachDotnetBridge' }
         );
 
-        const cell = await driver.$('//GridCell[contains(@Name,"Status row 2")]');
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'xpath', value: '//GridCell[contains(@Name,"Status row 2")]' }]
+        );
+        expect(found).not.toBeNull();
+        const cell = await driver.$(found as unknown as Selector);
         expect(await cell.getText()).toBe('Degraded');
     });
 });
@@ -168,7 +188,11 @@ describe('.NET Bridge — root session, launch external, switchToWindow, then at
     });
 
     it('reads a real cell value after root→switch→attach', async () => {
-        const cell = await driver.$('//GridCell[contains(@Name,"Status row 3")]');
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'xpath', value: '//GridCell[contains(@Name,"Status row 3")]' }]
+        );
+        expect(found).not.toBeNull();
+        const cell = await driver.$(found as unknown as Selector);
         expect(await cell.isExisting()).toBe(true);
         expect(await cell.getText()).toBe('Offline');
     });

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -209,25 +210,6 @@ internal sealed class BridgeAgentService : IDisposable
         BuildXmlRecursive(node, doc, parent, 0);
     }
 
-    /// <summary>
-    /// Live children of a bridge node. Used both by BuildXml's raw dump (below)
-    /// and by BridgeUiaShaper, which reshapes the same children to look like UIA.
-    /// </summary>
-    public List<BridgeAgentElement> GetChildren(BridgeAgentElement node)
-    {
-        var result = new List<BridgeAgentElement>();
-        var childrenResult = Call("getChildren", new { id = node.Id });
-        if (childrenResult?.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var childJson in childrenResult.Value.EnumerateArray())
-            {
-                var child = SaveFromResult(childJson);
-                if (child != null) result.Add(child);
-            }
-        }
-        return result;
-    }
-
     private void BuildXmlRecursive(BridgeAgentElement node, XmlDocument doc, XmlElement? parent, int depth)
     {
         if (depth > 100) return;
@@ -254,9 +236,13 @@ internal sealed class BridgeAgentService : IDisposable
             if (parent == null) doc.AppendChild(el);
             else parent.AppendChild(el);
 
-            foreach (var child in GetChildren(node))
+            var childrenResult = Call("getChildren", new { id = node.Id });
+            if (childrenResult?.ValueKind == JsonValueKind.Array)
             {
-                BuildXmlRecursive(child, doc, el, depth + 1);
+                foreach (var child in childrenResult.Value.EnumerateArray().Select(SaveFromResult))
+                {
+                    if (child != null) BuildXmlRecursive(child, doc, el, depth + 1);
+                }
             }
         }
         catch (Exception ex)

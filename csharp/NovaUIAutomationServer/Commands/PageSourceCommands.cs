@@ -32,15 +32,23 @@ public static class PageSourceCommands
             }
         }
 
-        // Same for the .NET bridge — but rather than swapping the whole tree for
-        // the bridge's own reflected-tree walk (which has a completely different
-        // shape from UIA's control view), keep walking the real UIA tree and only
-        // splice bridge content in at the points UIA itself reports as opaque
-        // (zero UIA children) — see BuildPageSource below and DotNetBridgeSplice.
-        var dotnetWindowRoot = DotNet.BridgeSpliceContext.Build(state);
+        // Same for the .NET bridge — when active and the root belongs to the injected
+        // process, build the page source from the bridge's reflected control tree instead
+        // of UIA (which sees custom-drawn control libraries like DevExpress as opaque panes).
+        if (state.DotNetBridgeEnabled && state.DotNetBridge != null && state.IsDotnetBridgeWindowElement(root))
+        {
+            var hwnd = root.CurrentNativeWindowHandle;
+            var dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd);
+            if (dotnetRoot != null)
+            {
+                var dotnetDoc = new XmlDocument();
+                state.DotNetBridge.BuildXml(dotnetRoot, dotnetDoc, null);
+                return dotnetDoc.OuterXml;
+            }
+        }
 
         var xmlDoc = new XmlDocument();
-        BuildPageSource(root, xmlDoc, null, state, root, dotnetWindowRoot);
+        BuildPageSource(root, xmlDoc, null, state, root);
         return xmlDoc.OuterXml;
     }
 
@@ -49,8 +57,7 @@ public static class PageSourceCommands
         XmlDocument xmlDoc,
         XmlElement? parentXmlElement,
         SessionState state,
-        IUIAutomationElement? rootForCoords,
-        DotNet.BridgeSpliceContext? dotnetWindowRoot)
+        IUIAutomationElement? rootForCoords)
     {
         try
         {
@@ -142,29 +149,10 @@ public static class PageSourceCommands
             // Walk all children unconditionally, matching the traversal FindCommands
             // uses (native find ignores TreeFilter; its manual-walk fallback uses
             // TrueCondition). Keeps page source and findElement seeing the same tree.
-            var children = FindCommands.IterateArray(
-                element.FindAll(TreeScope.Children, state.Automation.CreateTrueCondition())).ToList();
-
-            if (children.Count == 0 && dotnetWindowRoot != null)
+            var children = element.FindAll(TreeScope.Children, state.Automation.CreateTrueCondition());
+            foreach (var child in FindCommands.IterateArray(children))
             {
-                // UIA reports this element as a leaf — the real reason may be that
-                // it's a custom-drawn control library UIA can't see into. Try to
-                // correlate it to the bridge's reflected tree and splice that
-                // subtree in, reshaped to look like UIA (BridgeUiaShaper), instead
-                // of leaving it as a dead end.
-                var bridgeNode = DotNet.DotNetBridgeSplice.Correlate(state, element, dotnetWindowRoot);
-                if (bridgeNode != null)
-                {
-                    DotNet.BridgeUiaShaper.BuildSplicedXml(
-                        state.DotNetBridge!, bridgeNode, xmlDoc, newXmlElement, element.CurrentProcessId);
-                }
-            }
-            else
-            {
-                foreach (var child in children)
-                {
-                    BuildPageSource(child, xmlDoc, newXmlElement, state, rootForCoords, dotnetWindowRoot);
-                }
+                BuildPageSource(child, xmlDoc, newXmlElement, state, rootForCoords);
             }
         }
         catch

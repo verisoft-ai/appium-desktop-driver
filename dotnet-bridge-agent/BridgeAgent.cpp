@@ -509,19 +509,7 @@ public:
         return result;
     }
 
-    // includeExpensiveValues gates the handful of fields that require an
-    // actual cross-thread Control.Invoke/Dispatcher marshal to compute
-    // (GridCellHandle's cell value, DevExpressTreeListNodeHandle's
-    // per-column real values) — real work, not reflection overhead, easily
-    // multiple ms to compute PER FIELD. CollectMatches calls BuildInfo via
-    // MatchesCondition for every single node it visits while searching, so
-    // on a tree with many grid cells / treelist columns this dominates a
-    // find call's cost even though most conditions only ever test cheap
-    // fields (ClassName, AutomationId) — see MatchesProperty below, which
-    // passes false unless the condition specifically needs Value/Name here.
-    static Dictionary<String^, Object^>^ BuildInfo(Object^ target) { return BuildInfo(target, true); }
-
-    static Dictionary<String^, Object^>^ BuildInfo(Object^ target, bool includeExpensiveValues)
+    static Dictionary<String^, Object^>^ BuildInfo(Object^ target)
     {
         auto info = gcnew Dictionary<String^, Object^>();
         if (target == nullptr) return info;
@@ -614,11 +602,8 @@ public:
             info["IsEnabled"] = true;
             info["IsOffscreen"] = false;
 
-            if (includeExpensiveValues)
-            {
-                Object^ value = GetDevExpressRowCellValue(cell->View, cell->RowHandle, cell->Column);
-                info["Value"] = value != nullptr ? value->ToString() : "";
-            }
+            Object^ value = GetDevExpressRowCellValue(cell->View, cell->RowHandle, cell->Column);
+            info["Value"] = value != nullptr ? value->ToString() : "";
             return info;
         }
         if (auto item = dynamic_cast<ListItemHandle^>(target))
@@ -737,61 +722,56 @@ public:
             // CustomUnboundColumnData-reachable API that proved this node's "Status" column
             // invisible to plain UIA. Concatenated generically across all visible columns rather
             // than hardcoding a field name, so this isn't tied to any one fixture's column shape.
-            // This is the expensive part (a marshaled Invoke per visible column) — Name and Value
-            // are the same computed string here, so both are gated together.
-            if (includeExpensiveValues)
+            auto nameParts = gcnew List<String^>();
+            try
             {
-                auto nameParts = gcnew List<String^>();
-                try
+                auto columnsProp = tlNode->TreeList->GetType()->GetProperty("Columns");
+                auto columns = columnsProp != nullptr
+                    ? dynamic_cast<System::Collections::IEnumerable^>(columnsProp->GetValue(tlNode->TreeList, nullptr))
+                    : nullptr;
+                // Unbound columns resolve through TreeList's own CustomUnboundColumnData event,
+                // same as the grid — only fires reliably when invoked on the UI thread.
+                Control^ treeListCtrl = dynamic_cast<Control^>(tlNode->TreeList);
+                if (columns != nullptr)
                 {
-                    auto columnsProp = tlNode->TreeList->GetType()->GetProperty("Columns");
-                    auto columns = columnsProp != nullptr
-                        ? dynamic_cast<System::Collections::IEnumerable^>(columnsProp->GetValue(tlNode->TreeList, nullptr))
-                        : nullptr;
-                    // Unbound columns resolve through TreeList's own CustomUnboundColumnData event,
-                    // same as the grid — only fires reliably when invoked on the UI thread.
-                    Control^ treeListCtrl = dynamic_cast<Control^>(tlNode->TreeList);
-                    if (columns != nullptr)
+                    for each (Object ^ column in columns)
                     {
-                        for each (Object ^ column in columns)
+                        auto visibleProp = column->GetType()->GetProperty("Visible");
+                        if (visibleProp != nullptr && !safe_cast<bool>(visibleProp->GetValue(column, nullptr))) continue;
+
+                        auto captionProp = column->GetType()->GetProperty("Caption");
+                        String^ caption = captionProp != nullptr ? (String^)captionProp->GetValue(column, nullptr) : "";
+
+                        Object^ value = nullptr;
+                        auto getCellValueForColumn = tlNode->TreeList->GetType()->GetMethod(
+                            "GetRowCellValue", gcnew array<Type^> { tlNode->Node->GetType(), column->GetType() });
+                        if (getCellValueForColumn != nullptr)
                         {
-                            auto visibleProp = column->GetType()->GetProperty("Visible");
-                            if (visibleProp != nullptr && !safe_cast<bool>(visibleProp->GetValue(column, nullptr))) continue;
-
-                            auto captionProp = column->GetType()->GetProperty("Caption");
-                            String^ caption = captionProp != nullptr ? (String^)captionProp->GetValue(column, nullptr) : "";
-
-                            Object^ value = nullptr;
-                            auto getCellValueForColumn = tlNode->TreeList->GetType()->GetMethod(
-                                "GetRowCellValue", gcnew array<Type^> { tlNode->Node->GetType(), column->GetType() });
-                            if (getCellValueForColumn != nullptr)
+                            auto args = gcnew array<Object^> { tlNode->Node, column };
+                            try
                             {
-                                auto args = gcnew array<Object^> { tlNode->Node, column };
-                                try
+                                if (treeListCtrl != nullptr && treeListCtrl->IsHandleCreated && treeListCtrl->InvokeRequired)
                                 {
-                                    if (treeListCtrl != nullptr && treeListCtrl->IsHandleCreated && treeListCtrl->InvokeRequired)
-                                    {
-                                        auto invoker = gcnew GenericMethodInvoker(getCellValueForColumn, tlNode->TreeList, args);
-                                        value = treeListCtrl->Invoke(gcnew Func<Object^>(invoker, &GenericMethodInvoker::Run));
-                                    }
-                                    else
-                                    {
-                                        value = getCellValueForColumn->Invoke(tlNode->TreeList, args);
-                                    }
+                                    auto invoker = gcnew GenericMethodInvoker(getCellValueForColumn, tlNode->TreeList, args);
+                                    value = treeListCtrl->Invoke(gcnew Func<Object^>(invoker, &GenericMethodInvoker::Run));
                                 }
-                                catch (Exception^) { /* best-effort */ }
+                                else
+                                {
+                                    value = getCellValueForColumn->Invoke(tlNode->TreeList, args);
+                                }
                             }
-
-                            nameParts->Add(String::Format("{0}: {1}", caption, value != nullptr ? value->ToString() : ""));
+                            catch (Exception^) { /* best-effort */ }
                         }
+
+                        nameParts->Add(String::Format("{0}: {1}", caption, value != nullptr ? value->ToString() : ""));
                     }
                 }
-                catch (Exception^) { /* best-effort */ }
-
-                String^ combined = String::Join(" | ", nameParts);
-                info["Name"] = combined;
-                info["Value"] = combined;
             }
+            catch (Exception^) { /* best-effort */ }
+
+            String^ combined = String::Join(" | ", nameParts);
+            info["Name"] = combined;
+            info["Value"] = combined;
             return info;
         }
         if (auto item = dynamic_cast<DevExpressItemHandle^>(target))
@@ -1135,46 +1115,16 @@ public:
     //    its (fixture-local) Rectangle is translated to screen coordinates via the owner's
     //    PointToScreen so native mouse .click() has real bounds to work with; otherwise bounds
     //    default to 0,0,0,0 and interaction must go through selectElement.
-    // Reflection member lookup (GetProperty/GetMethod by name) is a function of the TYPE alone,
-    // not the instance — but this probe (and IsTreeHost below) has no cheap type-name pre-filter
-    // by design, since the whole point is duck-typing any control shape, not just known ones. It
-    // runs unconditionally on every node CollectMatches' tree walk touches, so on a deeply-skinned
-    // real app (hundreds of internal nodes, many sharing the same handful of concrete types) the
-    // repeated GetProperty/GetMethod lookups dominated a bridge-wide search's cost — confirmed
-    // against the devexpress-elements-gallery e2e fixture, where a single findFirst/findAll RPC
-    // was taking ~10s regardless of target. Caching per-Type turns that into one lookup per
-    // distinct type encountered instead of one per node.
-    ref class OwnerDrawListShape
-    {
-    public:
-        PropertyInfo^ ItemCountProp;
-        MethodInfo^ GetItemTextMethod;
-        MethodInfo^ SelectItemMethod;
-        bool IsMatch;
-    };
-
-    static Dictionary<Type^, OwnerDrawListShape^>^ _ownerDrawListShapeCache = gcnew Dictionary<Type^, OwnerDrawListShape^>();
-
-    static OwnerDrawListShape^ GetOwnerDrawListShape(Type^ type)
-    {
-        OwnerDrawListShape^ cached;
-        if (_ownerDrawListShapeCache->TryGetValue(type, cached)) return cached;
-
-        auto shape = gcnew OwnerDrawListShape();
-        shape->ItemCountProp = type->GetProperty("ItemCount");
-        shape->GetItemTextMethod = type->GetMethod("GetItemText", gcnew array<Type^> { int::typeid });
-        shape->SelectItemMethod = type->GetMethod("SelectItem", gcnew array<Type^> { int::typeid });
-        shape->IsMatch = shape->ItemCountProp != nullptr && shape->GetItemTextMethod != nullptr && shape->SelectItemMethod != nullptr;
-        _ownerDrawListShapeCache[type] = shape;
-        return shape;
-    }
-
     static List<Object^>^ TryGetOwnerDrawListItems(Object^ target)
     {
-        auto shape = GetOwnerDrawListShape(target->GetType());
-        if (!shape->IsMatch) return nullptr;
+        auto type = target->GetType();
+        auto itemCountProp = type->GetProperty("ItemCount");
+        auto getItemTextMethod = type->GetMethod("GetItemText", gcnew array<Type^> { int::typeid });
+        auto selectItemMethod = type->GetMethod("SelectItem", gcnew array<Type^> { int::typeid });
+        if (itemCountProp == nullptr || getItemTextMethod == nullptr || selectItemMethod == nullptr)
+            return nullptr;
 
-        int count = safe_cast<int>(shape->ItemCountProp->GetValue(target, nullptr));
+        int count = safe_cast<int>(itemCountProp->GetValue(target, nullptr));
         auto result = gcnew List<Object^>();
         for (int i = 0; i < count; i++)
             result->Add(gcnew ListItemHandle(target, i));
@@ -1192,22 +1142,13 @@ public:
     //    GetChildNodeIds when the owner reports the node expanded — a collapsed node's children
     //    are genuinely absent from the tree, not just hidden, which is what makes Expand's
     //    ToggleExpand call a real, observable state change instead of a no-op.
-    // Same per-Type caching rationale as OwnerDrawListShape above — five unfiltered GetMethod
-    // lookups per node otherwise.
-    static Dictionary<Type^, bool>^ _treeHostCache = gcnew Dictionary<Type^, bool>();
-
     static bool IsTreeHost(Type^ type)
     {
-        bool cached;
-        if (_treeHostCache->TryGetValue(type, cached)) return cached;
-
-        bool isMatch = type->GetMethod("GetChildNodeIds", gcnew array<Type^> { int::typeid }) != nullptr
+        return type->GetMethod("GetChildNodeIds", gcnew array<Type^> { int::typeid }) != nullptr
             && type->GetMethod("GetNodeText", gcnew array<Type^> { int::typeid }) != nullptr
             && type->GetMethod("NodeHasChildren", gcnew array<Type^> { int::typeid }) != nullptr
             && type->GetMethod("IsNodeExpanded", gcnew array<Type^> { int::typeid }) != nullptr
             && type->GetMethod("ToggleExpand", gcnew array<Type^> { int::typeid }) != nullptr;
-        _treeHostCache[type] = isMatch;
-        return isMatch;
     }
 
     static array<int>^ GetChildNodeIds(Object^ owner, int parentNodeId)
@@ -1473,13 +1414,8 @@ private:
     static bool MatchesProperty(Object^ target, String^ property, String^ value)
     {
         if (property == nullptr) return false;
+        auto info = BuildInfo(target);
         String^ prop = property->ToLowerInvariant();
-        // "Name" is included here too: for DevExpressTreeListNodeHandle, Name IS the expensive
-        // per-column value (see BuildInfo) — so a Name-matching condition still needs it computed.
-        // Every other property (ClassName, AutomationId, ...) is cheap on every node kind, so skip
-        // the expensive Value/Name computation entirely during this per-node search-time check.
-        bool needsExpensive = prop == "value" || prop == "name";
-        auto info = BuildInfo(target, needsExpensive);
 
         String^ key = nullptr;
         for each (String ^ k in info->Keys)

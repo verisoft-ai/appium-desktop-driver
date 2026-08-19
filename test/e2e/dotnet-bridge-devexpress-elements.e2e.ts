@@ -18,11 +18,6 @@ function killProc(proc: ChildProcess | null): void {
     try { proc?.kill(); } catch { /* already exited */ }
 }
 
-// This fixture bundles 4 DevExpress control kinds (TreeList, ComboBoxEdit, TokenEdit, grouped
-// GridControl) in one window purely to exercise their bridge coverage — the window's real
-// WinForms control tree is large as a result. findElements (plural) queries can't early-exit like
-// findElement can, so they pay the cost of a full walk of that tree; individual tests here take up
-// to ~50s. 60s keeps headroom above that instead of the suite's default 30s.
 describe('.NET Bridge — DevExpress-specific elements gallery', () => {
     let driver: Browser;
     let appProc: ChildProcess;
@@ -83,7 +78,7 @@ describe('.NET Bridge — DevExpress-specific elements gallery', () => {
         expect(await childAfter.isExisting()).toBe(true);
 
         await driver.executeScript('windows: select', [{ elementId }]);
-    }, 60_000);
+    });
 
     // ─── ComboBoxEdit ───────────────────────────────────────────────────────
 
@@ -102,7 +97,7 @@ describe('.NET Bridge — DevExpress-specific elements gallery', () => {
         // selection genuinely changed the underlying EditValue rather than the closed-box text.
         const combo = await driver.$('//*[@AutomationId="ElementsCombo"]');
         expect(await combo.getAttribute('Value')).toBe('shownGreen');
-    }, 60_000);
+    });
 
     // ─── TokenEdit ──────────────────────────────────────────────────────────
 
@@ -114,7 +109,7 @@ describe('.NET Bridge — DevExpress-specific elements gallery', () => {
         expect(await alpha.isExisting()).toBe(true);
         const bravo = await driver.$('//DevExpressToken[contains(@Name,"BravoReal")]');
         expect(await bravo.isExisting()).toBe(true);
-    }, 60_000);
+    });
 
     // ─── Grouped GridControl ────────────────────────────────────────────────
 
@@ -126,5 +121,5 @@ describe('.NET Bridge — DevExpress-specific elements gallery', () => {
 
         const vegGroup = await driver.$('//GridGroupRow[contains(@Name,"Veg")]');
         expect(await vegGroup.getAttribute('Name')).toBe('Veg (1 items)');
-    }, 60_000);
+    });
 });

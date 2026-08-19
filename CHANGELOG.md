@@ -1,3 +1,18 @@
+## [2.6.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.5.0...v2.6.0) (2026-08-19)
+
+### Features
+
+* **java-bridge:** expose table row/column info for JTable cells ([6e05fba](https://github.com/verisoft-ai/appium-desktop-driver/commit/6e05fbaac5f8a760e03e1947bdd98a65ae364f38))
+
+### Bug Fixes
+
+* **java-bridge:** add TableRow/TableColumn to the Component-backed info path too ([6cae649](https://github.com/verisoft-ai/appium-desktop-driver/commit/6cae64936eaf6255c8bc54e86799ab3766effa60))
+
+### Code Refactoring
+
+* rename leftover NovaWindows references to this driver's name ([546b104](https://github.com/verisoft-ai/appium-desktop-driver/commit/546b1045916fa5e94ea27973d3361755f08cc893))
+* rename NovaUIAutomationServer to DesktopDriverServer ([f775791](https://github.com/verisoft-ai/appium-desktop-driver/commit/f7757911c1c85163a115cd3139cdd8f721c9523a))
+
 ## [2.5.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.5...v2.5.0) (2026-08-19)
 
 ### Features

@@ -51,7 +51,7 @@ static void ReportGenericStepFailure(const char* step, HRESULT hr)
 }
 
 // {6F1A2E8C-6F9B-4B7D-9A3E-2C4B8E7F1A90} — must match CoreClrAttacher.ProfilerClsid in
-// csharp/NovaUIAutomationServer/DotNet/CoreClrAttacher.cs.
+// csharp/DesktopDriverServer/DotNet/CoreClrAttacher.cs.
 const GUID CLSID_AppiumDotNetBridgeProfiler =
 { 0x6f1a2e8c, 0x6f9b, 0x4b7d, { 0x9a, 0x3e, 0x2c, 0x4b, 0x8e, 0x7f, 0x1a, 0x90 } };
 

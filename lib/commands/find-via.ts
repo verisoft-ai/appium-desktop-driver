@@ -58,7 +58,7 @@ export async function locateElements(
             break;
         case 'tag name':
             // WinAppDriver matches LocalizedControlType (lowercase, locale-dependent: "button", "edit").
-            // Nova historically matches ControlType (PascalCase: "Button", "Edit").
+            // This driver historically matches ControlType (PascalCase: "Button", "Edit").
             // Detect which style the selector uses to support both transparently.
             condition = selector === selector.toLowerCase()
                 ? propertyCondition('LocalizedControlType', selector)

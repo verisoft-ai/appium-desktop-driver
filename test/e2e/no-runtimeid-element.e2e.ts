@@ -3,7 +3,7 @@ import type { Browser } from 'webdriverio';
 import { createWinformComboSession, quitSession } from './helpers/session.js';
 
 // Regression for SessionState.SaveElementAndReturnId's uuid fallback
-// (csharp/NovaUIAutomationServer/State/SessionState.cs): elements whose
+// (csharp/DesktopDriverServer/State/SessionState.cs): elements whose
 // native UIA RuntimeId is null/empty must still be findable and usable,
 // keyed by a generated GUID instead of a dot-joined RuntimeId.
 //

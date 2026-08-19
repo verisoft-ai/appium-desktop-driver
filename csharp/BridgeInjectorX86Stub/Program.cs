@@ -1,4 +1,4 @@
-using NovaUIAutomationServer.DotNet;
+using DesktopDriverServer.DotNet;
 
 // args[0] = target pid, args[1] = path to the x86 build of appium-dotnet-bridge.dll.
 // Exit 0 on success. On failure, the exception message goes to stderr and the exit code is

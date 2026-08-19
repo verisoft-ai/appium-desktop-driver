@@ -8,7 +8,7 @@ import {
     DesktopDriverConstraints,
     UI_AUTOMATION_DRIVER_CONSTRAINTS
 } from './constraints';
-import { NovaUIAutomationClient } from './server/client';
+import { DesktopDriverServerClient } from './server/client';
 import { attachLogFileMirror, LogFileMirror } from './log-file';
 import { DRIVER_VERSION } from './version';
 import { executeMethodMap } from './execute-method-map';
@@ -80,7 +80,7 @@ const CHROMEDRIVER_NO_PROXY: RouteMatcher[] = [
 export class AppiumDesktopDriver extends BaseDriver<DesktopDriverConstraints, StringRecord> {
     static executeMethodMap = executeMethodMap;
 
-    serverClient?: NovaUIAutomationClient;
+    serverClient?: DesktopDriverServerClient;
     mouseButtonsDown: Set<number> = new Set();
     keyboardState: KeyboardState = {
         pressed: new Set(),
@@ -117,7 +117,7 @@ export class AppiumDesktopDriver extends BaseDriver<DesktopDriverConstraints, St
 
     async sendCommand(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
         if (!this.serverClient) {
-            throw new errors.UnknownError('NovaUIAutomationServer is not running.');
+            throw new errors.UnknownError('DesktopDriverServer is not running.');
         }
         return await this.serverClient.sendCommand(method, params);
     }

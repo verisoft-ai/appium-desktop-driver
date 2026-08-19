@@ -4,9 +4,9 @@ import { createWriteStream, WriteStream } from 'node:fs';
 import { errors } from 'appium/driver';
 import type { ServerRequest, ServerResponse } from './protocol';
 
-const SERVER_EXE_NAME = 'NovaUIAutomationServer.exe';
+const SERVER_EXE_NAME = 'DesktopDriverServer.exe';
 
-export class NovaUIAutomationClient {
+export class DesktopDriverServerClient {
     private process?: ChildProcessWithoutNullStreams;
     private requestId = 0;
     private buffer = '';
@@ -19,7 +19,7 @@ export class NovaUIAutomationClient {
     private log: { info: (...args: unknown[]) => void; debug: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
     private recordingStream?: WriteStream;
 
-    constructor(log: NovaUIAutomationClient['log'], recordingPath?: string) {
+    constructor(log: DesktopDriverServerClient['log'], recordingPath?: string) {
         this.log = log;
         if (recordingPath) {
             this.recordingStream = createWriteStream(recordingPath, { encoding: 'utf8' });
@@ -37,7 +37,7 @@ export class NovaUIAutomationClient {
 
     async start(recordingPath?: string, env?: NodeJS.ProcessEnv): Promise<void> {
         const serverPath = this.getServerPath();
-        this.log.info(`Starting NovaUIAutomationServer from: ${serverPath}`);
+        this.log.info(`Starting DesktopDriverServer from: ${serverPath}`);
 
         const args: string[] = [];
         if (recordingPath) {
@@ -62,7 +62,7 @@ export class NovaUIAutomationClient {
         });
 
         this.process.on('exit', (code) => {
-            this.log.info(`NovaUIAutomationServer exited with code ${code}`);
+            this.log.info(`DesktopDriverServer exited with code ${code}`);
             // Reject all pending requests
             for (const [id, pending] of this.pendingRequests) {
                 pending.reject(new errors.UnknownError(`Server process exited while waiting for response to ${pending.method} (id=${id})`));
@@ -76,12 +76,12 @@ export class NovaUIAutomationClient {
 
         // Verify the server is running with a ping
         const result = await this.sendCommand('debug:ping', {});
-        this.log.info(`NovaUIAutomationServer started: ${JSON.stringify(result)}`);
+        this.log.info(`DesktopDriverServer started: ${JSON.stringify(result)}`);
     }
 
     async sendCommand(method: string, params: Record<string, unknown>): Promise<unknown> {
         if (!this.process) {
-            throw new errors.UnknownError('NovaUIAutomationServer is not running.');
+            throw new errors.UnknownError('DesktopDriverServer is not running.');
         }
 
         const process = this.process;

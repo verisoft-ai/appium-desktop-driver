@@ -1,6 +1,6 @@
 import { normalize } from 'node:path';
 import { AppiumDesktopDriver } from '../driver';
-import { NovaUIAutomationClient } from '../server/client';
+import { DesktopDriverServerClient } from '../server/client';
 import { findFreePort } from '../util';
 import { getAllWindowHandles, getWindowAllHandlesForProcessIds, isIEWindowHwnd, trySetForegroundWindow } from '../winapi/user32';
 
@@ -41,7 +41,7 @@ export async function startServerSession(this: AppiumDesktopDriver): Promise<voi
     // a .NET type initializer fails it stays broken for the process lifetime.
     // The only recovery is to restart the server process and try again.
     for (let attempt = 1; attempt <= MAX_INIT_RETRIES; attempt++) {
-        this.serverClient = new NovaUIAutomationClient(this.log);
+        this.serverClient = new DesktopDriverServerClient(this.log);
         await this.serverClient.start(undefined, serverEnv);
 
         try {
@@ -179,8 +179,8 @@ export async function terminateServerSession(this: AppiumDesktopDriver): Promise
         return;
     }
 
-    this.log.debug(`Terminating NovaUIAutomationServer session...`);
+    this.log.debug(`Terminating DesktopDriverServer session...`);
     await this.serverClient.dispose();
     this.serverClient = undefined;
-    this.log.debug(`NovaUIAutomationServer session terminated successfully.`);
+    this.log.debug(`DesktopDriverServer session terminated successfully.`);
 }

@@ -2,7 +2,7 @@
  * Postinstall hook for appium-desktop-driver.
  *
  * When end users install the published npm package, the prebuilt
- * `native/win-x64/NovaUIAutomationServer.exe` is already bundled —
+ * `native/win-x64/DesktopDriverServer.exe` is already bundled —
  * no native build is needed, and users do not need the .NET SDK.
  *
  * When developers install from a git checkout (no prebuilt exe),
@@ -30,10 +30,10 @@ function checkX86BridgeSupport() {
     }
 }
 
-const prebuiltExe = join(__dirname, '..', 'native', 'win-x64', 'NovaUIAutomationServer.exe');
+const prebuiltExe = join(__dirname, '..', 'native', 'win-x64', 'DesktopDriverServer.exe');
 
 if (existsSync(prebuiltExe)) {
-    console.log('[postinstall] Prebuilt NovaUIAutomationServer.exe found — skipping native build.');
+    console.log('[postinstall] Prebuilt DesktopDriverServer.exe found — skipping native build.');
     checkX86BridgeSupport();
     process.exit(0);
 }

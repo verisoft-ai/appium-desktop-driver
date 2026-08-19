@@ -56,33 +56,10 @@ public static class PageSourceCommands
             contextElementId = ctxProp.GetString();
         }
 
-        if (!state.DotNetBridgeEnabled || state.DotNetBridge == null)
-        {
-            throw new InvalidOperationException(
-                "The .NET bridge is not attached to this session. Call 'windows: attachDotnetBridge' first.");
-        }
-
-        BridgeAgentElement dotnetRoot;
-        if (contextElementId != null)
-        {
-            if (!BridgeAgentElement.IsDotnetId(contextElementId))
-            {
-                throw new ArgumentException(
-                    "contextElementId must be a .NET bridge element id (returned by a *ViaDotnetBridge command).");
-            }
-            dotnetRoot = state.DotNetBridge.GetById(contextElementId);
-        }
-        else
-        {
-            var uiaRoot = state.GetLiveRoot()
-                ?? throw new InvalidOperationException("No active window for this session.");
-            var hwnd = uiaRoot.CurrentNativeWindowHandle;
-            dotnetRoot = state.DotNetBridge.GetWindowRoot(hwnd)
-                ?? throw new InvalidOperationException("Could not resolve the .NET bridge's window root for the current window.");
-        }
+        var dotnetRoot = FindCommands.ResolveDotnetBridgeRoot(state, contextElementId);
 
         var dotnetDoc = new XmlDocument();
-        state.DotNetBridge.BuildXml(dotnetRoot, dotnetDoc, null);
+        state.DotNetBridge!.BuildXml(dotnetRoot, dotnetDoc, null);
         return dotnetDoc.OuterXml;
     }
 

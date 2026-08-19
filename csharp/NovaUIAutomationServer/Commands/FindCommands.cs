@@ -530,9 +530,11 @@ public static class FindCommands
     /// Resolves the .NET bridge subtree a *ViaDotnetBridge command should search —
     /// either the bridge element named by an explicit contextElementId (continuing a
     /// search a caller already started in bridge-land), or the whole window's
-    /// reflected tree when no context is given.
+    /// reflected tree when no context is given. Internal (not private) so
+    /// PageSourceCommands.GetPageSourceDotnetBridge shares this instead of
+    /// re-implementing the same resolution.
     /// </summary>
-    private static BridgeAgentElement ResolveDotnetBridgeRoot(SessionState state, string? contextElementId)
+    internal static BridgeAgentElement ResolveDotnetBridgeRoot(SessionState state, string? contextElementId)
     {
         if (!state.DotNetBridgeEnabled || state.DotNetBridge == null)
         {

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -238,9 +239,8 @@ internal sealed class BridgeAgentService : IDisposable
             var childrenResult = Call("getChildren", new { id = node.Id });
             if (childrenResult?.ValueKind == JsonValueKind.Array)
             {
-                foreach (var childJson in childrenResult.Value.EnumerateArray())
+                foreach (var child in childrenResult.Value.EnumerateArray().Select(SaveFromResult))
                 {
-                    var child = SaveFromResult(childJson);
                     if (child != null) BuildXmlRecursive(child, doc, el, depth + 1);
                 }
             }

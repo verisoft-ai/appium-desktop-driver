@@ -244,6 +244,10 @@ internal sealed class JavaAgentService : IDisposable
             el.SetAttribute("IsOffscreen", GetString(info, "IsOffscreen") ?? "False");
             el.SetAttribute("IndexInParent", GetString(info, "IndexInParent") ?? "0");
             el.SetAttribute("RuntimeId", node.Id);
+            el.SetAttribute("TableRow", GetString(info, "TableRow") ?? "");
+            el.SetAttribute("TableColumn", GetString(info, "TableColumn") ?? "");
+            el.SetAttribute("RowCount", GetString(info, "RowCount") ?? "");
+            el.SetAttribute("ColumnCount", GetString(info, "ColumnCount") ?? "");
 
             if (parent == null) doc.AppendChild(el);
             else parent.AppendChild(el);

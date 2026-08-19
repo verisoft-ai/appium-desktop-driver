@@ -1,3 +1,17 @@
+## [2.5.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.5...v2.5.0) (2026-08-19)
+
+### Features
+
+* **dotnet-bridge:** make bridge content an explicit opt-in, not automatic ([864770e](https://github.com/verisoft-ai/appium-desktop-driver/commit/864770ea4749849e560b9b3f3fb46f7575df36d5))
+
+### Performance Improvements
+
+* **dotnet-bridge:** restore agent-side reflection caching reverted with the splice rollback ([21c9b1e](https://github.com/verisoft-ai/appium-desktop-driver/commit/21c9b1edf65528af25d0c188b5b5b724e988eda2))
+
+### Code Refactoring
+
+* **dotnet-bridge:** address review nits from PR [#71](https://github.com/verisoft-ai/appium-desktop-driver/issues/71) ([87c700e](https://github.com/verisoft-ai/appium-desktop-driver/commit/87c700e8f26e5138579463f88bfaf8c3fa66d313))
+
 ## [2.4.5](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.4.4...v2.4.5) (2026-08-18)
 
 ### Bug Fixes

@@ -445,6 +445,51 @@ internal static class Reflector
                 }
             }
 
+            // Xpf.Grid's LightweightCellEditor (unfocused/off-screen cells rendered via a cheap
+            // non-editing surrogate, DevExpress's own perf feature for virtualized rows/columns)
+            // has none of the three candidates above -- confirmed live against a real
+            // DevExpress.Xpf.Grid 26.1 GridControl (appium-windows2-test-apps' wpf-devexpress-
+            // lightweight fixture), it exposes no Text/EditValue/DisplayText at all. But its
+            // RowData.Row is the actual bound data item and Column.FieldName names the bound
+            // property on that item -- reading the value that way needs no DevExpress-internal
+            // API, just the row object's own property by name, so unlike the WinForms XtraGrid /
+            // TreeList adapters elsewhere in this file this doesn't depend on a specific
+            // DevExpress version's private method shapes: RowData and FieldName are long-standing,
+            // publicly documented Xpf.Grid concepts. Only runs when the probes above found
+            // nothing, since a real editor's own Text/EditValue is always more authoritative when
+            // present (e.g. an actively-focused cell that already swapped to a full editor).
+            if (!(info.TryGetValue("Value", out var existingValue) && !string.IsNullOrEmpty(existingValue as string)))
+            {
+                try
+                {
+                    var rowDataProp = target.GetType().GetProperty(
+                        "RowData", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var rowData = rowDataProp?.GetValue(target);
+                    var rowProp = rowData?.GetType().GetProperty(
+                        "Row", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var boundRow = rowProp?.GetValue(rowData);
+
+                    var columnProp = target.GetType().GetProperty(
+                        "Column", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var column = columnProp?.GetValue(target);
+                    var fieldNameProp = column?.GetType().GetProperty("FieldName");
+                    var fieldName = fieldNameProp?.GetValue(column) as string;
+
+                    if (boundRow != null && !string.IsNullOrEmpty(fieldName))
+                    {
+                        var fieldProp = boundRow.GetType().GetProperty(fieldName);
+                        var fieldValue = fieldProp?.GetValue(boundRow);
+                        if (fieldValue != null)
+                        {
+                            info["Value"] = fieldValue.ToString();
+                            if (string.IsNullOrEmpty(info.GetValueOrDefault("Name") as string))
+                                info["Name"] = fieldValue.ToString();
+                        }
+                    }
+                }
+                catch (Exception) { /* best-effort */ }
+            }
+
             var selectedProp = target.GetType().GetProperty("Selected");
             if (selectedProp != null && selectedProp.CanRead)
             {

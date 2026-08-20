@@ -802,6 +802,67 @@ export async function launchDevExpressElementsGalleryExternally(): Promise<{ pro
     return { proc, hwnd };
 }
 
+export const WPF_DEVEXPRESS_LIGHTWEIGHT_APP_PATH = resolve(
+    TEST_APPS_DIR, 'wpf-devexpress-lightweight', 'bin', 'WpfDevExpressLightweight.exe'
+);
+export const WPF_DEVEXPRESS_LIGHTWEIGHT_WINDOW_TITLE = 'WPF DevExpress Lightweight Cell Fixture';
+
+/**
+ * Launches the wpf-devexpress-lightweight fixture externally — CoreCLR (.NET 8) WPF,
+ * DevExpress.Xpf.Grid GridControl with 5000 rows and explicit (non-auto-generated) columns, large
+ * enough that TableView renders unfocused/off-screen cells via
+ * DevExpress.Xpf.Grid.LightweightCellEditor instead of a full editor. Reproduces a real customer
+ * report: LightweightCellEditor exposed none of Reflector.TryAddDevExpressProps's existing
+ * Text/EditValue/DisplayText candidates, so cells came back Name="" Value="" in the page source.
+ * This build's DX1000 evaluation warning means an "About DevExpress" trial nag pops before the
+ * real window — same tolerance as launchDevExpressGridExternally, title-matched and ESC-dismissed
+ * rather than assumed away.
+ */
+export async function launchWpfDevExpressLightweightExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(WPF_DEVEXPRESS_LIGHTWEIGHT_APP_PATH, [], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn wpf-devexpress-lightweight app: ${WPF_DEVEXPRESS_LIGHTWEIGHT_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+
+    async function pollMainWindow(): Promise<{ hwnd: string; title: string }> {
+        const out = execSync(
+            `powershell -Command "$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; ` +
+            `if ($p -and $p.MainWindowHandle -ne 0) { Write-Output $p.MainWindowHandle; Write-Output $p.MainWindowTitle } else { Write-Output '0' }"`,
+            { stdio: ['ignore', 'pipe', 'ignore'] }
+        ).toString().trim().split(/\r?\n/);
+        return { hwnd: out[0] ?? '0', title: out[1] ?? '' };
+    }
+
+    let dismissed = false;
+    const deadline = Date.now() + 15_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        const { hwnd: currentHwnd, title } = await pollMainWindow();
+        if (currentHwnd !== '0' && title === WPF_DEVEXPRESS_LIGHTWEIGHT_WINDOW_TITLE) {
+            hwnd = currentHwnd;
+            break;
+        }
+        if (currentHwnd !== '0' && !dismissed) {
+            execSync(
+                'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'{ESC}\')"',
+                { stdio: 'ignore' }
+            );
+            dismissed = true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`wpf-devexpress-lightweight app window did not appear within 15s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
+}
+
 export async function createDotnetBridgeAttachSession(hwnd: string, extraCaps?: Record<string, unknown>): Promise<Browser> {
     const driver = await remote({
         ...APPIUM_SERVER,

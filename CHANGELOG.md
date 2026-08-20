@@ -1,3 +1,9 @@
+## [2.6.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.0...v2.6.1) (2026-08-20)
+
+### Bug Fixes
+
+* **dotnet-bridge:** read real values off DevExpress Xpf.Grid's LightweightCellEditor ([e01597a](https://github.com/verisoft-ai/appium-desktop-driver/commit/e01597a6d6b7dcbf850eba57483333eefaef5ff5))
+
 ## [2.6.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.5.0...v2.6.0) (2026-08-19)
 
 ### Features

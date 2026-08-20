@@ -939,6 +939,58 @@ public:
                 }
             }
 
+            // Xpf.Grid's LightweightCellEditor (unfocused/off-screen cells rendered via a cheap
+            // non-editing surrogate, DevExpress's own perf feature for virtualized rows/columns)
+            // has none of the three candidates above — confirmed live against a real
+            // DevExpress.Xpf.Grid 26.1 GridControl (appium-windows2-test-apps' wpf-devexpress-
+            // lightweight fixture), it exposes no Text/EditValue/DisplayText at all. But its
+            // RowData.Row is the actual bound data item and Column.FieldName names the bound
+            // property on that item — reading the value that way needs no DevExpress-internal
+            // API, just the row object's own property by name, so unlike the other DevExpress
+            // adapters in this file this doesn't depend on a specific DevExpress version's private
+            // method shapes: RowData and FieldName are long-standing, publicly documented Xpf.Grid
+            // concepts. Only runs when the probes above found nothing, since a real editor's own
+            // Text/EditValue is always more authoritative when present (e.g. an actively-focused
+            // cell that already swapped to a full editor). Mirrors dotnet-bridge-agent-core/
+            // Reflector.cs's TryAddDevExpressProps — the CoreCLR port is the one confirmed against
+            // a live customer report; this Framework/clr.dll copy is kept in parity but unverified
+            // live (Xpf.Grid runs on both hosts, so the same rendering path plausibly applies here
+            // too).
+            bool hasValue = info->ContainsKey("Value") &&
+                !String::IsNullOrEmpty(safe_cast<String^>(info["Value"]));
+            if (!hasValue)
+            {
+                try
+                {
+                    auto rowDataProp = target->GetType()->GetProperty("RowData",
+                        BindingFlags::Public | BindingFlags::NonPublic | BindingFlags::Instance);
+                    Object^ rowData = rowDataProp != nullptr ? rowDataProp->GetValue(target, nullptr) : nullptr;
+                    auto rowProp = rowData != nullptr ? rowData->GetType()->GetProperty("Row",
+                        BindingFlags::Public | BindingFlags::NonPublic | BindingFlags::Instance) : nullptr;
+                    Object^ boundRow = rowProp != nullptr ? rowProp->GetValue(rowData, nullptr) : nullptr;
+
+                    auto columnProp = target->GetType()->GetProperty("Column",
+                        BindingFlags::Public | BindingFlags::NonPublic | BindingFlags::Instance);
+                    Object^ column = columnProp != nullptr ? columnProp->GetValue(target, nullptr) : nullptr;
+                    auto fieldNameProp = column != nullptr ? column->GetType()->GetProperty("FieldName") : nullptr;
+                    String^ fieldName = fieldNameProp != nullptr ? dynamic_cast<String^>(fieldNameProp->GetValue(column, nullptr)) : nullptr;
+
+                    if (boundRow != nullptr && !String::IsNullOrEmpty(fieldName))
+                    {
+                        auto fieldProp = boundRow->GetType()->GetProperty(fieldName);
+                        Object^ fieldValue = fieldProp != nullptr ? fieldProp->GetValue(boundRow, nullptr) : nullptr;
+                        if (fieldValue != nullptr)
+                        {
+                            info["Value"] = fieldValue->ToString();
+                            bool hasName = info->ContainsKey("Name") &&
+                                !String::IsNullOrEmpty(safe_cast<String^>(info["Name"]));
+                            if (!hasName) info["Name"] = fieldValue->ToString();
+                        }
+                    }
+                }
+                catch (Exception^) { /* best-effort */ }
+            }
+
             auto selectedProp = target->GetType()->GetProperty("Selected");
             if (selectedProp != nullptr && selectedProp->CanRead)
             {

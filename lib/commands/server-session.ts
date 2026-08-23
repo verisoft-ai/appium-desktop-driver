@@ -1,8 +1,14 @@
-import { normalize } from 'node:path';
-import { AppiumDesktopDriver } from '../driver';
-import { DesktopDriverServerClient } from '../server/client';
-import { findFreePort } from '../util';
-import { getAllWindowHandles, getWindowAllHandlesForProcessIds, isIEWindowHwnd, trySetForegroundWindow } from '../winapi/user32';
+import {normalize} from 'node:path';
+
+import type {AppiumDesktopDriver} from '../driver';
+import {DesktopDriverServerClient} from '../server/client';
+import {findFreePort} from '../util';
+import {
+  getAllWindowHandles,
+  getWindowAllHandlesForProcessIds,
+  isIEWindowHwnd,
+  trySetForegroundWindow,
+} from '../winapi/user32';
 
 const MAX_INIT_RETRIES = 5;
 const INIT_RETRY_DELAY_MS = 500;
@@ -17,112 +23,117 @@ const WEBVIEW_DEVTOOLS_PORT_UPPER = 11000;
  * @returns Resolves once the server has started and the root element has been established.
  */
 export async function startServerSession(this: AppiumDesktopDriver): Promise<void> {
-    // Build a per-session env overlay rather than mutating process.env, which
-    // is global across all sessions in the Appium server process.
-    let serverEnv: NodeJS.ProcessEnv | undefined;
+  // Build a per-session env overlay rather than mutating process.env, which
+  // is global across all sessions in the Appium server process.
+  let serverEnv: NodeJS.ProcessEnv | undefined;
 
-    // When WebView2 support is enabled, set the env var the WebView2 runtime
-    // reads at startup so that the AUT exposes a Chrome DevTools Protocol
-    // endpoint we can attach Chromedriver to. The C# server inherits this env
-    // and any AUT it spawns inherits it in turn.
-    if (this.caps.webviewEnabled) {
-        this.webviewDevtoolsPort = this.caps.webviewDevtoolsPort
-            ? Number(this.caps.webviewDevtoolsPort)
-            : await findFreePort(WEBVIEW_DEVTOOLS_PORT_LOWER, WEBVIEW_DEVTOOLS_PORT_UPPER);
-        serverEnv = {
-            ...process.env,
-            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${this.webviewDevtoolsPort}`,
-        };
-        this.log.info(`WebView2 remote debugging enabled on port ${this.webviewDevtoolsPort}.`);
+  // When WebView2 support is enabled, set the env var the WebView2 runtime
+  // reads at startup so that the AUT exposes a Chrome DevTools Protocol
+  // endpoint we can attach Chromedriver to. The C# server inherits this env
+  // and any AUT it spawns inherits it in turn.
+  if (this.caps.webviewEnabled) {
+    this.webviewDevtoolsPort = this.caps.webviewDevtoolsPort
+      ? Number(this.caps.webviewDevtoolsPort)
+      : await findFreePort(WEBVIEW_DEVTOOLS_PORT_LOWER, WEBVIEW_DEVTOOLS_PORT_UPPER);
+    serverEnv = {
+      ...process.env,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${this.webviewDevtoolsPort}`,
+    };
+    this.log.info(`WebView2 remote debugging enabled on port ${this.webviewDevtoolsPort}.`);
+  }
+
+  // The C# server's `init` command triggers UIAutomation static type
+  // initializers (COM objects). These can fail intermittently, and once
+  // a .NET type initializer fails it stays broken for the process lifetime.
+  // The only recovery is to restart the server process and try again.
+  for (let attempt = 1; attempt <= MAX_INIT_RETRIES; attempt++) {
+    this.serverClient = new DesktopDriverServerClient(this.log);
+    await this.serverClient.start(undefined, serverEnv);
+
+    try {
+      await this.sendCommand('init', {});
+      break; // success
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < MAX_INIT_RETRIES && msg.includes('type initializer')) {
+        this.log.warn(`Server init failed (attempt ${attempt}/${MAX_INIT_RETRIES}): ${msg}. Restarting server...`);
+        await this.serverClient.dispose();
+        this.serverClient = undefined;
+        // Delay before retrying to let COM resources be released
+        await new Promise((resolve) => setTimeout(resolve, INIT_RETRY_DELAY_MS));
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  if (this.caps.appWorkingDir) {
+    const envVarsSet: Set<string> = new Set();
+    const matches = this.caps.appWorkingDir.matchAll(/%([^%]+)%/g);
+
+    for (const match of matches) {
+      envVarsSet.add(match[1]);
+    }
+    const envVars = Array.from(envVarsSet);
+    for (const envVar of envVars) {
+      this.caps.appWorkingDir = this.caps.appWorkingDir.replaceAll(
+        `%${envVar}%`,
+        process.env[envVar.toUpperCase()] ?? '',
+      );
+    }
+  }
+
+  if ((!this.caps.app && !this.caps.appTopLevelWindow) || !this.caps.app || this.caps.app.toLowerCase() === 'none') {
+    this.log.info(`No app or top-level window specified in capabilities. Setting root element to null.`);
+    await this.sendCommand('setRootElementNull', {});
+  }
+
+  if (this.caps.app && this.caps.app.toLowerCase() === 'root') {
+    this.log.info(`'root' specified as app in capabilities. Setting root element to desktop root.`);
+    await this.sendCommand('setRootElement', {});
+  }
+
+  if (this.caps.app && this.caps.app.toLowerCase() !== 'none' && this.caps.app.toLowerCase() !== 'root') {
+    this.log.info(`Application path specified in capabilities: ${this.caps.app}`);
+    const envVarsSet: Set<string> = new Set();
+    const matches = this.caps.app.matchAll(/%([^%]+)%/g);
+
+    for (const match of matches) {
+      envVarsSet.add(match[1]);
     }
 
-    // The C# server's `init` command triggers UIAutomation static type
-    // initializers (COM objects). These can fail intermittently, and once
-    // a .NET type initializer fails it stays broken for the process lifetime.
-    // The only recovery is to restart the server process and try again.
-    for (let attempt = 1; attempt <= MAX_INIT_RETRIES; attempt++) {
-        this.serverClient = new DesktopDriverServerClient(this.log);
-        await this.serverClient.start(undefined, serverEnv);
+    const envVars = Array.from(envVarsSet);
+    this.log.info(
+      `Detected the following environment variables in app path: ${envVars.map((envVar) => `%${envVar}%`).join(', ')}`,
+    );
 
-        try {
-            await this.sendCommand('init', {});
-            break; // success
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            if (attempt < MAX_INIT_RETRIES && msg.includes('type initializer')) {
-                this.log.warn(`Server init failed (attempt ${attempt}/${MAX_INIT_RETRIES}): ${msg}. Restarting server...`);
-                await this.serverClient.dispose();
-                this.serverClient = undefined;
-                // Delay before retrying to let COM resources be released
-                await new Promise((resolve) => setTimeout(resolve, INIT_RETRY_DELAY_MS));
-            } else {
-                throw err;
-            }
-        }
+    for (const envVar of envVars) {
+      this.caps.app = this.caps.app.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
     }
 
-    if (this.caps.appWorkingDir) {
-        const envVarsSet: Set<string> = new Set();
-        const matches = this.caps.appWorkingDir.matchAll(/%([^%]+)%/g);
-
-        for (const match of matches) {
-            envVarsSet.add(match[1]);
-        }
-        const envVars = Array.from(envVarsSet);
-        for (const envVar of envVars) {
-            this.caps.appWorkingDir = this.caps.appWorkingDir.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
-        }
+    // When noReset is true, try to attach to an already-running instance
+    // of the app before launching a new one.
+    if (this.opts.noReset) {
+      const attached = await this.tryAttachToRunningApp(this.caps.app);
+      if (attached) {
+        this.log.info('noReset: attached to an already-running instance of the app.');
+        return;
+      }
+      this.log.info('noReset: no running instance found, launching the app.');
     }
 
-    if ((!this.caps.app && !this.caps.appTopLevelWindow) || (!this.caps.app || this.caps.app.toLowerCase() === 'none')) {
-        this.log.info(`No app or top-level window specified in capabilities. Setting root element to null.`);
-        await this.sendCommand('setRootElementNull', {});
+    await this.changeRootElement(this.caps.app);
+  }
+
+  if (this.caps.appTopLevelWindow) {
+    const nativeWindowHandle = Number(this.caps.appTopLevelWindow);
+
+    if (isNaN(nativeWindowHandle)) {
+      throw new Error(`Invalid capabilities. Capability 'appTopLevelWindow' is not a valid native window handle.`);
     }
 
-    if (this.caps.app && this.caps.app.toLowerCase() === 'root') {
-        this.log.info(`'root' specified as app in capabilities. Setting root element to desktop root.`);
-        await this.sendCommand('setRootElement', {});
-    }
-
-    if (this.caps.app && this.caps.app.toLowerCase() !== 'none' && this.caps.app.toLowerCase() !== 'root') {
-        this.log.info(`Application path specified in capabilities: ${this.caps.app}`);
-        const envVarsSet: Set<string> = new Set();
-        const matches = this.caps.app.matchAll(/%([^%]+)%/g);
-
-        for (const match of matches) {
-            envVarsSet.add(match[1]);
-        }
-
-        const envVars = Array.from(envVarsSet);
-        this.log.info(`Detected the following environment variables in app path: ${envVars.map((envVar) => `%${envVar}%`).join(', ')}`);
-
-        for (const envVar of envVars) {
-            this.caps.app = this.caps.app.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
-        }
-
-        // When noReset is true, try to attach to an already-running instance
-        // of the app before launching a new one.
-        if (this.opts.noReset) {
-            const attached = await this.tryAttachToRunningApp(this.caps.app);
-            if (attached) {
-                this.log.info('noReset: attached to an already-running instance of the app.');
-                return;
-            }
-            this.log.info('noReset: no running instance found, launching the app.');
-        }
-
-        await this.changeRootElement(this.caps.app);
-    }
-
-    if (this.caps.appTopLevelWindow) {
-        const nativeWindowHandle = Number(this.caps.appTopLevelWindow);
-
-        if (isNaN(nativeWindowHandle)) {
-            throw new Error(`Invalid capabilities. Capability 'appTopLevelWindow' is not a valid native window handle.`);
-        }
-
-        await this.changeRootElement(nativeWindowHandle);
-    }
+    await this.changeRootElement(nativeWindowHandle);
+  }
 }
 
 /**
@@ -131,43 +142,57 @@ export async function startServerSession(this: AppiumDesktopDriver): Promise<voi
  * @returns True if successfully attached, false if no running process was found.
  */
 export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: string): Promise<boolean> {
-    const isUwp = appPath.includes('!') && appPath.includes('_') && !(appPath.includes('/') || appPath.includes('\\'));
+  const isUwp = appPath.includes('!') && appPath.includes('_') && !(appPath.includes('/') || appPath.includes('\\'));
 
-    try {
-        if (isUwp) {
-            // UWP: scan all visible windows and attach to one that has content.
-            // attachToWindowHandles uses the focusable-descendant probe to skip
-            // empty ApplicationFrameHost frames.
-            const handles = getAllWindowHandles();
-            return await this.attachToWindowHandles(handles);
-        }
-
-        const normalizedPath = normalize(appPath);
-        const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
-        const executable = breadcrumbs[breadcrumbs.length - 1];
-        const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
-        const processIds = await this.sendCommand('getProcessIds', { processName }) as number[];
-        if (processIds.length === 0) { return false; }
-
-        const handles = getWindowAllHandlesForProcessIds(processIds);
-        if (handles.length === 0) { return false; }
-
-        // Use the last handle (most recently shown window for this process).
-        const elementId = await this.sendCommand('elementFromHandle', { handle: handles[handles.length - 1] }) as string ?? '';
-        if (!elementId) { return false; }
-
-        await this.sendCommand('setRootElementFromElementId', { elementId });
-        const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
-        const nwh = Number(await this.sendCommand('getProperty', { elementId: rootId, property: 'NativeWindowHandle' }) as string);
-        await trySetForegroundWindow(nwh);
-        if (isIEWindowHwnd(nwh)) {
-            await this.enableIEMode(nwh);
-        }
-        return true;
-    } catch (err) {
-        this.log.debug(`[tryAttachToRunningApp] Attach attempt for '${appPath}' failed: ${err instanceof Error ? err.message : err}`);
-        return false;
+  try {
+    if (isUwp) {
+      // UWP: scan all visible windows and attach to one that has content.
+      // attachToWindowHandles uses the focusable-descendant probe to skip
+      // empty ApplicationFrameHost frames.
+      const handles = getAllWindowHandles();
+      return await this.attachToWindowHandles(handles);
     }
+
+    const normalizedPath = normalize(appPath);
+    const breadcrumbs = normalizedPath
+      .toLowerCase()
+      .split('\\')
+      .flatMap((x) => x.split('/'));
+    const executable = breadcrumbs[breadcrumbs.length - 1];
+    const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
+    const processIds = (await this.sendCommand('getProcessIds', {processName})) as number[];
+    if (processIds.length === 0) {
+      return false;
+    }
+
+    const handles = getWindowAllHandlesForProcessIds(processIds);
+    if (handles.length === 0) {
+      return false;
+    }
+
+    // Use the last handle (most recently shown window for this process).
+    const elementId =
+      ((await this.sendCommand('elementFromHandle', {handle: handles[handles.length - 1]})) as string) ?? '';
+    if (!elementId) {
+      return false;
+    }
+
+    await this.sendCommand('setRootElementFromElementId', {elementId});
+    const rootId = (await this.sendCommand('saveRootElementToTable', {})) as string;
+    const nwh = Number(
+      (await this.sendCommand('getProperty', {elementId: rootId, property: 'NativeWindowHandle'})) as string,
+    );
+    await trySetForegroundWindow(nwh);
+    if (isIEWindowHwnd(nwh)) {
+      await this.enableIEMode(nwh);
+    }
+    return true;
+  } catch (err) {
+    this.log.debug(
+      `[tryAttachToRunningApp] Attach attempt for '${appPath}' failed: ${err instanceof Error ? err.message : err}`,
+    );
+    return false;
+  }
 }
 
 /**
@@ -175,12 +200,12 @@ export async function tryAttachToRunningApp(this: AppiumDesktopDriver, appPath: 
  * @returns Resolves once the server process has been terminated.
  */
 export async function terminateServerSession(this: AppiumDesktopDriver): Promise<void> {
-    if (!this.serverClient) {
-        return;
-    }
+  if (!this.serverClient) {
+    return;
+  }
 
-    this.log.debug(`Terminating DesktopDriverServer session...`);
-    await this.serverClient.dispose();
-    this.serverClient = undefined;
-    this.log.debug(`DesktopDriverServer session terminated successfully.`);
+  this.log.debug(`Terminating DesktopDriverServer session...`);
+  await this.serverClient.dispose();
+  this.serverClient = undefined;
+  this.log.debug(`DesktopDriverServer session terminated successfully.`);
 }

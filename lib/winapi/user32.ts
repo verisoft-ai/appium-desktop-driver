@@ -1,188 +1,171 @@
-import { Orientation } from '@appium/types';
-import { logger } from '@appium/support';
+import {logger} from '@appium/support';
+import type {Orientation} from '@appium/types';
 
 const log = logger.getLogger('user32');
-import {
-    load,
-    struct,
-    union,
-    sizeof,
-    array,
-    proto,
-    opaque,
-    pointer,
-    alias,
-    types,
-    address,
-} from 'koffi';
-import {
-    InputType,
-    KeyEventFlags,
-    MouseEventFlags,
-    ScanCode,
-    VirtualKey,
-    XMouseButton,
-} from './types';
-import { SystemMetric } from './types/systemmetric';
-import { errors } from 'appium/driver';
-import bezier, { EasingFunction } from 'bezier-easing';
-import { sleep } from '../util';
-import { Key } from '../enums';
+import {errors} from 'appium/driver';
+import type {EasingFunction} from 'bezier-easing';
+import bezier from 'bezier-easing';
+import {load, struct, union, sizeof, array, proto, opaque, pointer, alias, types, address} from 'koffi';
+
+import {Key} from '../enums';
+import {sleep} from '../util';
+import {InputType, KeyEventFlags, MouseEventFlags, ScanCode, VirtualKey, XMouseButton} from './types';
+import {SystemMetric} from './types/systemmetric';
 
 interface Event {
-    type: InputType,
-    u: {
-        ki?: KeyboardInputStruct,
-        mi?: MouseInputStruct,
-        hi?: HardwareInputStruct,
-    }
+  type: InputType;
+  u: {
+    ki?: KeyboardInputStruct;
+    mi?: MouseInputStruct;
+    hi?: HardwareInputStruct;
+  };
 }
 
 interface KeyboardEvent extends Event {
-    type: typeof InputType.INPUT_KEYBOARD,
-    u: {
-        ki: {
-            wVk: VirtualKey | 0,
-            wScan: ScanCode | 0,
-            dwFlags: KeyEventFlags,
-            time: unknown,
-            dwExtraInfo: unknown,
-        } & KeyboardInputStruct,
-    },
+  type: typeof InputType.INPUT_KEYBOARD;
+  u: {
+    ki: {
+      wVk: VirtualKey | 0;
+      wScan: ScanCode | 0;
+      dwFlags: KeyEventFlags;
+      time: unknown;
+      dwExtraInfo: unknown;
+    } & KeyboardInputStruct;
+  };
 }
 
 interface MouseEvent extends Event {
-    type: typeof InputType.INPUT_MOUSE,
-    u: {
-        mi: {
-            dx: unknown,
-            dy: unknown,
-            mouseData: XMouseButton | number,
-            dwFlags: MouseEventFlags,
-            time: unknown,
-            dwExtraInfo: unknown,
-        } & MouseInputStruct,
-    },
+  type: typeof InputType.INPUT_MOUSE;
+  u: {
+    mi: {
+      dx: unknown;
+      dy: unknown;
+      mouseData: XMouseButton | number;
+      dwFlags: MouseEventFlags;
+      time: unknown;
+      dwExtraInfo: unknown;
+    } & MouseInputStruct;
+  };
 }
 
 interface Point {
-    x: number,
-    y: number,
+  x: number;
+  y: number;
 }
 
 interface DeviceModeAnsi {
-    dmDeviceName: string | null,
-    dmSpecVersion: number,
-    dmDriverVersion: number,
-    dmSize: number,
-    dmDriverExtra: number,
-    dmFields: number,
-    u1: {
-        s1: {
-            dmOrientation: number,
-            dmPaperSize: number,
-            dmPaperLength: number,
-            dmPaperWidth: number,
-            dmScale: number,
-            dmCopies: number,
-            dmDefaultSource: number,
-            dmPrintQuality: number,
-        },
-      dmPosition: Point,
-      s2: {
-            dmPosition: Point,
-            dmDisplayOrientation: number,
-            dmDisplayFixedOutput: number,
-        },
-    },
-    dmColor: number,
-    dmDuplex: number,
-    dmYResolution: number,
-    dmTTOption: number,
-    dmCollate: number,
-    dmFormName: string | null,
-    dmLogPixels: number,
-    dmBitsPerPel: number,
-    dmPelsWidth: number,
-    dmPelsHeight: number,
-    u2: {
-        dmDisplayFlags: number,
-        dmNup: number,
-    },
-    dmDisplayFrequency: number,
-    dmICMMethod: number,
-    dmICMIntent: number,
-    dmMediaType: number,
-    dmDitherType: number,
-    dmReserved1: number,
-    dmReserved2: number,
-    dmPanningWidth: number,
-    dmPanningHeight: number,
+  dmDeviceName: string | null;
+  dmSpecVersion: number;
+  dmDriverVersion: number;
+  dmSize: number;
+  dmDriverExtra: number;
+  dmFields: number;
+  u1: {
+    s1: {
+      dmOrientation: number;
+      dmPaperSize: number;
+      dmPaperLength: number;
+      dmPaperWidth: number;
+      dmScale: number;
+      dmCopies: number;
+      dmDefaultSource: number;
+      dmPrintQuality: number;
+    };
+    dmPosition: Point;
+    s2: {
+      dmPosition: Point;
+      dmDisplayOrientation: number;
+      dmDisplayFixedOutput: number;
+    };
+  };
+  dmColor: number;
+  dmDuplex: number;
+  dmYResolution: number;
+  dmTTOption: number;
+  dmCollate: number;
+  dmFormName: string | null;
+  dmLogPixels: number;
+  dmBitsPerPel: number;
+  dmPelsWidth: number;
+  dmPelsHeight: number;
+  u2: {
+    dmDisplayFlags: number;
+    dmNup: number;
+  };
+  dmDisplayFrequency: number;
+  dmICMMethod: number;
+  dmICMIntent: number;
+  dmMediaType: number;
+  dmDitherType: number;
+  dmReserved1: number;
+  dmReserved2: number;
+  dmPanningWidth: number;
+  dmPanningHeight: number;
 }
 
 // TODO: remove eslint-disable-next-line when used
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HardwareInputEvent extends Event {
-    type: typeof InputType.INPUT_HARDWARE,
-    u: {
-        hi: {
-            uMsg: unknown,
-            wParamL: unknown,
-            wParamH: unknown,
-        } & HardwareInputStruct,
-    },
+  type: typeof InputType.INPUT_HARDWARE;
+  u: {
+    hi: {
+      uMsg: unknown;
+      wParamL: unknown;
+      wParamH: unknown;
+    } & HardwareInputStruct;
+  };
 }
 
 type PointStruct = {
-    x: unknown,
-    y: unknown,
-}
+  x: unknown;
+  y: unknown;
+};
 
 type RectStruct = {
-    left: unknown,
-    top: unknown,
-    right: unknown,
-    bottom: unknown,
-}
+  left: unknown;
+  top: unknown;
+  right: unknown;
+  bottom: unknown;
+};
 
 type InputUnion = {
-    ki: unknown,
-    mi: unknown,
-    hi: unknown,
-}
+  ki: unknown;
+  mi: unknown;
+  hi: unknown;
+};
 
 type MouseInputStruct = {
-    dx: unknown,
-    dy: unknown,
-    mouseData: unknown,
-    dwFlags: unknown,
-    time: unknown,
-    dwExtraInfo: unknown,
-}
+  dx: unknown;
+  dy: unknown;
+  mouseData: unknown;
+  dwFlags: unknown;
+  time: unknown;
+  dwExtraInfo: unknown;
+};
 
 type KeyboardInputStruct = {
-    wVk: unknown,
-    wScan: unknown,
-    dwFlags: unknown,
-    time: unknown,
-    dwExtraInfo: unknown,
-}
+  wVk: unknown;
+  wScan: unknown;
+  dwFlags: unknown;
+  time: unknown;
+  dwExtraInfo: unknown;
+};
 
 type HardwareInputStruct = {
-    uMsg: unknown,
-    wParamL: unknown,
-    wParamH: unknown,
-}
+  uMsg: unknown;
+  wParamL: unknown;
+  wParamH: unknown;
+};
 
 const easingFunctions = Object.freeze({
-    'linear': (x: number) => x,
-    'ease': bezier(0.25, 1, 0.25, 1),
-    'ease-in': bezier(0.42, 0, 1, 1),
-    'ease-out': bezier(0, 0, 0.58, 1),
-    'ease-in-out': bezier(0.42, 0, 0.58, 1),
+  linear: (x: number) => x,
+  ease: bezier(0.25, 1, 0.25, 1),
+  'ease-in': bezier(0.42, 0, 1, 1),
+  'ease-out': bezier(0, 0, 0.58, 1),
+  'ease-in-out': bezier(0.42, 0, 0.58, 1),
 } as const);
 
-const UINT32_MAX = 0xFFFFFFFF;
+const UINT32_MAX = 0xffffffff;
 
 const user32 = load('user32.dll');
 const kernel32 = load('kernel32.dll');
@@ -194,106 +177,106 @@ const kernel32 = load('kernel32.dll');
 // so clicks land off-target at any scale != 100%. Must run before any cursor/window
 // call. E_ACCESSDENIED (already set, e.g. by a host process) is fine to ignore.
 try {
-    const shcore = load('shcore.dll');
-    const SetProcessDpiAwareness = shcore.func('int __stdcall SetProcessDpiAwareness(int)') as (value: number) => number;
-    const PROCESS_PER_MONITOR_DPI_AWARE = 2;
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+  const shcore = load('shcore.dll');
+  const SetProcessDpiAwareness = shcore.func('int __stdcall SetProcessDpiAwareness(int)') as (value: number) => number;
+  const PROCESS_PER_MONITOR_DPI_AWARE = 2;
+  SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 } catch (err) {
-    log.debug(`SetProcessDpiAwareness failed (may already be set): ${err}`);
+  log.debug(`SetProcessDpiAwareness failed (may already be set): ${err}`);
 }
 
 const POINT = struct('POINT', {
-    x: 'long',
-    y: 'long',
+  x: 'long',
+  y: 'long',
 } satisfies PointStruct);
 
 struct('RECT', {
-    left: 'long',
-    top: 'long',
-    right: 'long',
-    bottom: 'long',
+  left: 'long',
+  top: 'long',
+  right: 'long',
+  bottom: 'long',
 } satisfies RectStruct);
 
 const MOUSEINPUT = struct('MOUSEINPUT', {
-    dx: 'long',
-    dy: 'long',
-    mouseData: 'uint32',
-    dwFlags: 'uint32',
-    time: 'uint32',
-    dwExtraInfo: 'uintptr',
+  dx: 'long',
+  dy: 'long',
+  mouseData: 'uint32',
+  dwFlags: 'uint32',
+  time: 'uint32',
+  dwExtraInfo: 'uintptr',
 } satisfies MouseInputStruct);
 
 const KEYBDINPUT = struct('KEYBDINPUT', {
-    wVk: 'uint16',
-    wScan: 'uint16',
-    dwFlags: 'uint32',
-    time: 'uint32',
-    dwExtraInfo: 'uintptr',
+  wVk: 'uint16',
+  wScan: 'uint16',
+  dwFlags: 'uint32',
+  time: 'uint32',
+  dwExtraInfo: 'uintptr',
 } satisfies KeyboardInputStruct);
 
 const HARDWAREINPUT = struct('HARDWAREINPUT', {
-    uMsg: 'uint32',
-    wParamL: 'uint16',
-    wParamH: 'uint16',
+  uMsg: 'uint32',
+  wParamL: 'uint16',
+  wParamH: 'uint16',
 } satisfies HardwareInputStruct);
 
 const INPUT = struct('INPUT', {
-    type: 'uint32',
-    u: union({
-        mi: MOUSEINPUT,
-        ki: KEYBDINPUT,
-        hi: HARDWAREINPUT,
-    } satisfies InputUnion)
+  type: 'uint32',
+  u: union({
+    mi: MOUSEINPUT,
+    ki: KEYBDINPUT,
+    hi: HARDWAREINPUT,
+  } satisfies InputUnion),
 });
 
 const DEVMODEA = struct('DEVMODEA', {
-    dmDeviceName: array('char', 32, 'String'),
-    dmSpecVersion: 'uint16',
-    dmDriverVersion: 'uint16',
-    dmSize: 'uint16',
-    dmDriverExtra: 'uint16',
-    dmFields: 'uint32',
-    u1: union({
-      s1: struct({
-        dmOrientation: 'short',
-        dmPaperSize: 'short',
-        dmPaperLength: 'short',
-        dmPaperWidth: 'short',
-        dmScale: 'short',
-        dmCopies: 'short',
-        dmDefaultSource: 'short',
-        dmPrintQuality: 'short',
-      }),
+  dmDeviceName: array('char', 32, 'String'),
+  dmSpecVersion: 'uint16',
+  dmDriverVersion: 'uint16',
+  dmSize: 'uint16',
+  dmDriverExtra: 'uint16',
+  dmFields: 'uint32',
+  u1: union({
+    s1: struct({
+      dmOrientation: 'short',
+      dmPaperSize: 'short',
+      dmPaperLength: 'short',
+      dmPaperWidth: 'short',
+      dmScale: 'short',
+      dmCopies: 'short',
+      dmDefaultSource: 'short',
+      dmPrintQuality: 'short',
+    }),
+    dmPosition: POINT,
+    s2: struct({
       dmPosition: POINT,
-      s2: struct({
-        dmPosition: POINT,
-        dmDisplayOrientation: 'uint32',
-        dmDisplayFixedOutput: 'uint32',
-      }),
+      dmDisplayOrientation: 'uint32',
+      dmDisplayFixedOutput: 'uint32',
     }),
-    dmColor: 'short',
-    dmDuplex: 'short',
-    dmYResolution: 'short',
-    dmTTOption: 'short',
-    dmCollate: 'short',
-    dmFormName: array('char', 32, 'String'),
-    dmLogPixels: 'uint16',
-    dmBitsPerPel: 'uint32',
-    dmPelsWidth: 'uint32',
-    dmPelsHeight: 'uint32',
-    u2: union({
-      dmDisplayFlags: 'uint32',
-      dmNup: 'uint32',
-    }),
-    dmDisplayFrequency: 'uint32',
-    dmICMMethod: 'uint32',
-    dmICMIntent: 'uint32',
-    dmMediaType: 'uint32',
-    dmDitherType: 'uint32',
-    dmReserved1: 'uint32',
-    dmReserved2: 'uint32',
-    dmPanningWidth: 'uint32',
-    dmPanningHeight: 'uint32',
+  }),
+  dmColor: 'short',
+  dmDuplex: 'short',
+  dmYResolution: 'short',
+  dmTTOption: 'short',
+  dmCollate: 'short',
+  dmFormName: array('char', 32, 'String'),
+  dmLogPixels: 'uint16',
+  dmBitsPerPel: 'uint32',
+  dmPelsWidth: 'uint32',
+  dmPelsHeight: 'uint32',
+  u2: union({
+    dmDisplayFlags: 'uint32',
+    dmNup: 'uint32',
+  }),
+  dmDisplayFrequency: 'uint32',
+  dmICMMethod: 'uint32',
+  dmICMIntent: 'uint32',
+  dmMediaType: 'uint32',
+  dmDitherType: 'uint32',
+  dmReserved1: 'uint32',
+  dmReserved2: 'uint32',
+  dmPanningWidth: 'uint32',
+  dmPanningHeight: 'uint32',
 });
 
 const BOOL = alias('BOOL', types.bool);
@@ -321,25 +304,52 @@ type LPWSTR = Buffer;
 type EnumWindowsProc = (hWnd: HWND, lParam: LPARAM) => BOOL;
 
 // TODO: update all functions to have their parameters aliased properly
-const SendInput = user32.func(/* c */ `unsigned int __stdcall SendInput(unsigned int cInputs, INPUT *pInputs, int cbSize)`) as (cInputs: number, pInouts: Event[], cbSize: number) => number;
-const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int nIndex)`) as (nIndex: SystemMetric) => number;
+const SendInput = user32.func(
+  /* c */ `unsigned int __stdcall SendInput(unsigned int cInputs, INPUT *pInputs, int cbSize)`,
+) as (cInputs: number, pInouts: Event[], cbSize: number) => number;
+const GetSystemMetrics = user32.func(/* c */ `int __stdcall GetSystemMetrics(int nIndex)`) as (
+  nIndex: SystemMetric,
+) => number;
 const GetDpiForSystem = user32.func(/* c */ `unsigned int __stdcall GetDpiForSystem()`) as () => number;
-const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (lpPoint: Point) => boolean;
-const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (x: number, y: number) => boolean;
-const EnumDisplaySettingsA = user32.func(/* c */ `bool __stdcall EnumDisplaySettingsA(str lpszDeviceName, uint iModeNum, _Out_ DEVMODEA *lpDevMode)`) as (lpszDeviceName: string | null, iModeNum: number, lpDevMode: Buffer) => boolean;
+const GetCursorPos = user32.func(/* c */ `bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)`) as (
+  lpPoint: Point,
+) => boolean;
+const SetCursorPos = user32.func(/* c */ `bool __stdcall SetCursorPos(int X, int Y)`) as (
+  x: number,
+  y: number,
+) => boolean;
+const EnumDisplaySettingsA = user32.func(
+  /* c */ `bool __stdcall EnumDisplaySettingsA(str lpszDeviceName, uint iModeNum, _Out_ DEVMODEA *lpDevMode)`,
+) as (lpszDeviceName: string | null, iModeNum: number, lpDevMode: Buffer) => boolean;
 // end TODO
 
-const GetWindowThreadProcessId = user32.func(/* c */ `DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ LPDWORD lpdwProcessId)`) as (hWnd: HWND, lpdwProcessId: [LPDWORD | null]) => DWORD;
-const GetClassNameW = user32.func(/* c */ `int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)`) as (hWnd: HWND, lpClassName: LPWSTR, nMaxCount: number) => number;
+const GetWindowThreadProcessId = user32.func(
+  /* c */ `DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ LPDWORD lpdwProcessId)`,
+) as (hWnd: HWND, lpdwProcessId: [LPDWORD | null]) => DWORD;
+const GetClassNameW = user32.func(
+  /* c */ `int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)`,
+) as (hWnd: HWND, lpClassName: LPWSTR, nMaxCount: number) => number;
 // const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPSTR, nMaxCount: number) => number;
-const GetWindowTextW = user32.func(/* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
+const GetWindowTextW = user32.func(
+  /* c */ `int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)`,
+) as (hWnd: HWND, lpString: LPWSTR, nMaxCount: number) => number;
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
-const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
-const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (
+  enumProc: EnumWindowsProc,
+  lParam: LPARAM,
+) => BOOL;
+const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (
+  hWnd: HWND,
+) => BOOL;
 const GetForegroundWindow = user32.func(/* c */ `HWND __stdcall GetForegroundWindow()`) as () => HWND;
-const AttachThreadInput = user32.func(/* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
+const AttachThreadInput = user32.func(
+  /* c */ `BOOL __stdcall AttachThreadInput(DWORD idAttach, DWORD idAttachTo, BOOL fAttach)`,
+) as (idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) => BOOL;
 const GetCurrentThreadId = kernel32.func(/* c */ `DWORD __stdcall GetCurrentThreadId()`) as () => DWORD;
-const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int nCmdShow)`) as (hWnd: HWND, nCmdShow: number) => BOOL;
+const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int nCmdShow)`) as (
+  hWnd: HWND,
+  nCmdShow: number,
+) => BOOL;
 const IsIconic = user32.func(/* c */ `BOOL __stdcall IsIconic(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const BringWindowToTop = user32.func(/* c */ `BOOL __stdcall BringWindowToTop(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const SetFocus = user32.func(/* c */ `HWND __stdcall SetFocus(HWND hWnd)`) as (hWnd: HWND) => HWND;
@@ -354,153 +364,154 @@ const SW_RESTORE = 9;
 // so e.g. VK_DOWN silently becomes VK_NUMPAD2 while NumLock is on and the
 // receiving app's key filter (rightly) ignores it.
 const EXTENDED_KEYS: ReadonlySet<VirtualKey> = new Set([
-    VirtualKey.VK_UP,
-    VirtualKey.VK_DOWN,
-    VirtualKey.VK_LEFT,
-    VirtualKey.VK_RIGHT,
-    VirtualKey.VK_HOME,
-    VirtualKey.VK_END,
-    VirtualKey.VK_PRIOR,
-    VirtualKey.VK_NEXT,
-    VirtualKey.VK_INSERT,
-    VirtualKey.VK_DELETE,
-    VirtualKey.VK_DIVIDE,
-    VirtualKey.VK_NUMLOCK,
-    VirtualKey.VK_SNAPSHOT,
-    VirtualKey.VK_RCONTROL,
-    VirtualKey.VK_RMENU,
-    VirtualKey.VK_LWIN,
-    VirtualKey.VK_RWIN,
-    VirtualKey.VK_APPS,
+  VirtualKey.VK_UP,
+  VirtualKey.VK_DOWN,
+  VirtualKey.VK_LEFT,
+  VirtualKey.VK_RIGHT,
+  VirtualKey.VK_HOME,
+  VirtualKey.VK_END,
+  VirtualKey.VK_PRIOR,
+  VirtualKey.VK_NEXT,
+  VirtualKey.VK_INSERT,
+  VirtualKey.VK_DELETE,
+  VirtualKey.VK_DIVIDE,
+  VirtualKey.VK_NUMLOCK,
+  VirtualKey.VK_SNAPSHOT,
+  VirtualKey.VK_RCONTROL,
+  VirtualKey.VK_RMENU,
+  VirtualKey.VK_LWIN,
+  VirtualKey.VK_RWIN,
+  VirtualKey.VK_APPS,
 ]);
 
 // Pure so it's unit-testable without mocking the koffi FFI layer (SendInput,
 // struct/union defs, etc.) that the rest of this module touches at load time.
 export function isExtendedKeyVk(vk: VirtualKey | undefined): boolean {
-    return vk !== undefined && EXTENDED_KEYS.has(vk);
+  return vk !== undefined && EXTENDED_KEYS.has(vk);
 }
 
 function makeKeyboardEvent(args: {
-        /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
-        vk?: VirtualKey,
-        /** A hardware scan code for the key. If dwFlags specifies KEYEVENTF_UNICODE, wScan specifies a Unicode character which is to be sent to the foreground application. */
-        scan?: ScanCode | string,
-        /** Set to true if the key should be pressed, and false if key is should be released. */
-        down: boolean,
-    }
-): KeyboardEvent {
-    let flags: KeyEventFlags = 0;
+  /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
+  vk?: VirtualKey;
+  /** A hardware scan code for the key. If dwFlags specifies KEYEVENTF_UNICODE, wScan specifies a Unicode character which is to be sent to the foreground application. */
+  scan?: ScanCode | string;
+  /** Set to true if the key should be pressed, and false if key is should be released. */
+  down: boolean;
+}): KeyboardEvent {
+  let flags: KeyEventFlags = 0;
 
-    if ((args.scan === undefined && args.vk === undefined) || (args.scan !== undefined && args.vk !== undefined)) {
-        throw new errors.InvalidArgumentError('You should provide either vk or scan, but not both.');
-    }
+  if ((args.scan === undefined && args.vk === undefined) || (args.scan !== undefined && args.vk !== undefined)) {
+    throw new errors.InvalidArgumentError('You should provide either vk or scan, but not both.');
+  }
 
-    switch (typeof args.scan) {
-        case 'string':
-            if (args.scan.length !== 1) {
-                throw new errors.InvalidArgumentError(`scan parameter expects a single character, but received ${args.scan.length}.`);
-            }
+  switch (typeof args.scan) {
+    case 'string':
+      if (args.scan.length !== 1) {
+        throw new errors.InvalidArgumentError(
+          `scan parameter expects a single character, but received ${args.scan.length}.`,
+        );
+      }
 
-            flags |= KeyEventFlags.KEYEVENTF_UNICODE;
-            args.scan = args.scan.charCodeAt(0) as ScanCode;
-            break;
-        case 'number':
-            flags |= KeyEventFlags.KEYEVENTF_SCANCODE;
-            break;
-    }
+      flags |= KeyEventFlags.KEYEVENTF_UNICODE;
+      args.scan = args.scan.charCodeAt(0) as ScanCode;
+      break;
+    case 'number':
+      flags |= KeyEventFlags.KEYEVENTF_SCANCODE;
+      break;
+  }
 
-    if (!args.down) {
-        flags |= KeyEventFlags.KEYEVENTF_KEYUP;
-    }
+  if (!args.down) {
+    flags |= KeyEventFlags.KEYEVENTF_KEYUP;
+  }
 
-    if (isExtendedKeyVk(args.vk)) {
-        flags |= KeyEventFlags.KEYEVENTF_EXTENDEDKEY;
-    }
+  if (isExtendedKeyVk(args.vk)) {
+    flags |= KeyEventFlags.KEYEVENTF_EXTENDEDKEY;
+  }
 
-    return {
-        type: InputType.INPUT_KEYBOARD,
-        u: {
-            ki: {
-                wVk: args.vk ?? 0,
-                wScan: args.scan as ScanCode ?? 0,
-                dwFlags: flags as KeyEventFlags ?? 0,
-                time: 0,
-                dwExtraInfo: 0,
-            }
-        }
-    };
+  return {
+    type: InputType.INPUT_KEYBOARD,
+    u: {
+      ki: {
+        wVk: args.vk ?? 0,
+        wScan: (args.scan as ScanCode) ?? 0,
+        dwFlags: (flags as KeyEventFlags) ?? 0,
+        time: 0,
+        dwExtraInfo: 0,
+      },
+    },
+  };
 }
 
 function makeEmptyMouseEvent(): MouseEvent {
-    return {
-        type: InputType.INPUT_MOUSE,
-        u: {
-            mi: {
-                dx: 0,
-                dy: 0,
-                mouseData: 0,
-                dwFlags: 0,
-                time: 0,
-                dwExtraInfo: 0,
-            }
-        }
-    };
+  return {
+    type: InputType.INPUT_MOUSE,
+    u: {
+      mi: {
+        dx: 0,
+        dy: 0,
+        mouseData: 0,
+        dwFlags: 0,
+        time: 0,
+        dwExtraInfo: 0,
+      },
+    },
+  };
 }
 
 function makeMouseDownEvents(button: number): MouseEvent[] {
-    const mouseEvent: MouseEvent = makeEmptyMouseEvent();
+  const mouseEvent: MouseEvent = makeEmptyMouseEvent();
 
-    switch (button) {
-        case 0:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_LEFTDOWN;
-            break;
-        case 1:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MIDDLEDOWN;
-            break;
-        case 2:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_RIGHTDOWN;
-            break;
-        case 3:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XDOWN;
-            mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON1;
-            break;
-        case 4:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XDOWN;
-            mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON2;
-            break;
-        default:
-            throw new errors.InvalidArgumentError('button parameter should be a positive integer between 0 and 4.');
-    }
+  switch (button) {
+    case 0:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_LEFTDOWN;
+      break;
+    case 1:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MIDDLEDOWN;
+      break;
+    case 2:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_RIGHTDOWN;
+      break;
+    case 3:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XDOWN;
+      mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON1;
+      break;
+    case 4:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XDOWN;
+      mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON2;
+      break;
+    default:
+      throw new errors.InvalidArgumentError('button parameter should be a positive integer between 0 and 4.');
+  }
 
-    return [mouseEvent];
+  return [mouseEvent];
 }
 
 function makeMouseUpEvents(button: number): MouseEvent[] {
-    const mouseEvent: MouseEvent = makeEmptyMouseEvent();
+  const mouseEvent: MouseEvent = makeEmptyMouseEvent();
 
-    switch (button) {
-        case 0:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_LEFTUP;
-            break;
-        case 1:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MIDDLEUP;
-            break;
-        case 2:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_RIGHTUP;
-            break;
-        case 3:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XUP;
-            mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON1;
-            break;
-        case 4:
-            mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XUP;
-            mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON2;
-            break;
-        default:
-            throw new errors.InvalidArgumentError('button parameter should be a positive integer between 0 and 4.');
-    }
+  switch (button) {
+    case 0:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_LEFTUP;
+      break;
+    case 1:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_MIDDLEUP;
+      break;
+    case 2:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_RIGHTUP;
+      break;
+    case 3:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XUP;
+      mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON1;
+      break;
+    case 4:
+      mouseEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_XUP;
+      mouseEvent.u.mi.mouseData = XMouseButton.XBUTTON2;
+      break;
+    default:
+      throw new errors.InvalidArgumentError('button parameter should be a positive integer between 0 and 4.');
+  }
 
-    return [mouseEvent];
+  return [mouseEvent];
 }
 
 // Builds the SendInput payload for a wheel scroll. Cursor movement no longer
@@ -508,368 +519,378 @@ function makeMouseUpEvents(button: number): MouseEvent[] {
 // positioning; an earlier MOUSEEVENTF_ABSOLUTE|VIRTUALDESK path was removed
 // because SetCursorPos is simpler and DPI-agnostic.
 function makeMouseWheelEvents(x: number, y: number): MouseEvent[] {
-    const mouseEvents: MouseEvent[] = [];
+  const mouseEvents: MouseEvent[] = [];
 
-    if (x !== 0) {
-        const horizontalScrollEvent = makeEmptyMouseEvent();
-        horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
-        horizontalScrollEvent.u.mi.mouseData = x;
-        mouseEvents.push(horizontalScrollEvent);
-    }
+  if (x !== 0) {
+    const horizontalScrollEvent = makeEmptyMouseEvent();
+    horizontalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_HWHEEL;
+    horizontalScrollEvent.u.mi.mouseData = x;
+    mouseEvents.push(horizontalScrollEvent);
+  }
 
-    if (y !== 0) {
-        const verticalScrollEvent = makeEmptyMouseEvent();
-        verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
-        // Win32 WHEEL_DELTA sign is opposite the W3C wheel-action deltaY convention
-        // (DOM WheelEvent): positive Win32 mouseData scrolls content up, but W3C
-        // positive deltaY means scroll down.
-        verticalScrollEvent.u.mi.mouseData = -y;
-        mouseEvents.push(verticalScrollEvent);
-    }
+  if (y !== 0) {
+    const verticalScrollEvent = makeEmptyMouseEvent();
+    verticalScrollEvent.u.mi.dwFlags = MouseEventFlags.MOUSEEVENTF_WHEEL;
+    // Win32 WHEEL_DELTA sign is opposite the W3C wheel-action deltaY convention
+    // (DOM WheelEvent): positive Win32 mouseData scrolls content up, but W3C
+    // positive deltaY means scroll down.
+    verticalScrollEvent.u.mi.mouseData = -y;
+    mouseEvents.push(verticalScrollEvent);
+  }
 
-    return mouseEvents;
+  return mouseEvents;
 }
 
 function charToKeyboardEvents(char: string, down: boolean, forceUnicode: boolean = false): KeyboardEvent[] {
-    const charCode = char.charCodeAt(0);
-    if ((charCode & 0xF000) === 0xE000) {
-        switch (char) {
-            case Key.CANCEL:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_CANCEL, down })];
-            case Key.HELP:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_HELP, down })];
-            case Key.BACKSPACE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_BACK, down })];
-            case Key.TAB:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_TAB, down })];
-            case Key.CLEAR:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_CLEAR, down })];
-            case Key.RETURN:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RETURN, down })];
-            case Key.ENTER:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RETURN, down })];
-            case Key.SHIFT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_SHIFT, down })];
-            case Key.CONTROL:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_CONTROL, down })];
-            case Key.ALT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_MENU, down })];
-            case Key.PAUSE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_PAUSE, down })];
-            case Key.ESCAPE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_ESCAPE, down })];
-            case Key.SPACE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_SPACE, down })];
-            case Key.PAGE_UP:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_PRIOR, down })];
-            case Key.PAGE_DOWN:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NEXT, down })];
-            case Key.END:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_END, down })];
-            case Key.HOME:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_HOME, down })];
-            case Key.LEFT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_LEFT, down })];
-            case Key.UP:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_UP, down })];
-            case Key.RIGHT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RIGHT, down })];
-            case Key.DOWN:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_DOWN, down })];
-            case Key.INSERT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_INSERT, down })];
-            case Key.DELETE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_DELETE, down })];
-            case Key.SEMICOLON:
-                return [makeKeyboardEvent({ scan: ScanCode.SEMICOLON, down })];
-            case Key.EQUALS:
-                return [makeKeyboardEvent({ scan: ScanCode.EQUAL, down })];
-            case Key.NUMPAD0:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD0, down })];
-            case Key.NUMPAD1:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD1, down })];
-            case Key.NUMPAD2:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD2, down })];
-            case Key.NUMPAD3:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD3, down })];
-            case Key.NUMPAD4:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD4, down })];
-            case Key.NUMPAD5:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD5, down })];
-            case Key.NUMPAD6:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD6, down })];
-            case Key.NUMPAD7:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD7, down })];
-            case Key.NUMPAD8:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD8, down })];
-            case Key.NUMPAD9:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD9, down })];
-            case Key.MULTIPLY:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_MULTIPLY, down })];
-            case Key.ADD:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_ADD, down })];
-            case Key.SEPARATOR:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_SEPARATOR, down })];
-            case Key.SUBTRACT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_SUBTRACT, down })];
-            case Key.DECIMAL:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_DECIMAL, down })];
-            case Key.DIVIDE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_DIVIDE, down })];
-            case Key.F1:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F1, down })];
-            case Key.F2:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F2, down })];
-            case Key.F3:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F3, down })];
-            case Key.F4:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F4, down })];
-            case Key.F5:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F5, down })];
-            case Key.F6:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F6, down })];
-            case Key.F7:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F7, down })];
-            case Key.F8:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F8, down })];
-            case Key.F9:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F9, down })];
-            case Key.F10:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F10, down })];
-            case Key.F11:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F11, down })];
-            case Key.F12:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_F12, down })];
-            case Key.META:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_LWIN, down })];
-            case Key.ZENKAKUHANKAKU:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_OEM_AUTO, down })];
-            case Key.R_SHIFT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RSHIFT, down })];
-            case Key.R_CONTROL:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RCONTROL, down })];
-            case Key.R_ALT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RMENU, down })];
-            case Key.R_META:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_RWIN, down })];
-            case Key.R_PAGEUP:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD9, down })];
-            case Key.R_PAGEDOWN:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD3, down })];
-            case Key.R_END:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD1, down })];
-            case Key.R_HOME:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD7, down })];
-            case Key.R_ARROWLEFT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD4, down })];
-            case Key.R_ARROWUP:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD8, down })];
-            case Key.R_ARROWRIGHT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD6, down })];
-            case Key.R_ARROWDOWN:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD2, down })];
-            case Key.R_INSERT:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_NUMPAD0, down })];
-            case Key.R_DELETE:
-                return [makeKeyboardEvent({ vk: VirtualKey.VK_DECIMAL, down })];
-            default:
-                throw new errors.InvalidArgumentError(`Invalid character \\u${charCode.toString(16)}.`);
-        }
+  const charCode = char.charCodeAt(0);
+  if ((charCode & 0xf000) === 0xe000) {
+    switch (char) {
+      case Key.CANCEL:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_CANCEL, down})];
+      case Key.HELP:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_HELP, down})];
+      case Key.BACKSPACE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_BACK, down})];
+      case Key.TAB:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_TAB, down})];
+      case Key.CLEAR:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_CLEAR, down})];
+      case Key.RETURN:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RETURN, down})];
+      case Key.ENTER:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RETURN, down})];
+      case Key.SHIFT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_SHIFT, down})];
+      case Key.CONTROL:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_CONTROL, down})];
+      case Key.ALT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_MENU, down})];
+      case Key.PAUSE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_PAUSE, down})];
+      case Key.ESCAPE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_ESCAPE, down})];
+      case Key.SPACE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_SPACE, down})];
+      case Key.PAGE_UP:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_PRIOR, down})];
+      case Key.PAGE_DOWN:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NEXT, down})];
+      case Key.END:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_END, down})];
+      case Key.HOME:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_HOME, down})];
+      case Key.LEFT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_LEFT, down})];
+      case Key.UP:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_UP, down})];
+      case Key.RIGHT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RIGHT, down})];
+      case Key.DOWN:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_DOWN, down})];
+      case Key.INSERT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_INSERT, down})];
+      case Key.DELETE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_DELETE, down})];
+      case Key.SEMICOLON:
+        return [makeKeyboardEvent({scan: ScanCode.SEMICOLON, down})];
+      case Key.EQUALS:
+        return [makeKeyboardEvent({scan: ScanCode.EQUAL, down})];
+      case Key.NUMPAD0:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD0, down})];
+      case Key.NUMPAD1:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD1, down})];
+      case Key.NUMPAD2:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD2, down})];
+      case Key.NUMPAD3:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD3, down})];
+      case Key.NUMPAD4:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD4, down})];
+      case Key.NUMPAD5:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD5, down})];
+      case Key.NUMPAD6:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD6, down})];
+      case Key.NUMPAD7:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD7, down})];
+      case Key.NUMPAD8:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD8, down})];
+      case Key.NUMPAD9:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD9, down})];
+      case Key.MULTIPLY:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_MULTIPLY, down})];
+      case Key.ADD:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_ADD, down})];
+      case Key.SEPARATOR:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_SEPARATOR, down})];
+      case Key.SUBTRACT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_SUBTRACT, down})];
+      case Key.DECIMAL:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_DECIMAL, down})];
+      case Key.DIVIDE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_DIVIDE, down})];
+      case Key.F1:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F1, down})];
+      case Key.F2:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F2, down})];
+      case Key.F3:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F3, down})];
+      case Key.F4:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F4, down})];
+      case Key.F5:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F5, down})];
+      case Key.F6:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F6, down})];
+      case Key.F7:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F7, down})];
+      case Key.F8:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F8, down})];
+      case Key.F9:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F9, down})];
+      case Key.F10:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F10, down})];
+      case Key.F11:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F11, down})];
+      case Key.F12:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_F12, down})];
+      case Key.META:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_LWIN, down})];
+      case Key.ZENKAKUHANKAKU:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_OEM_AUTO, down})];
+      case Key.R_SHIFT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RSHIFT, down})];
+      case Key.R_CONTROL:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RCONTROL, down})];
+      case Key.R_ALT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RMENU, down})];
+      case Key.R_META:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_RWIN, down})];
+      case Key.R_PAGEUP:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD9, down})];
+      case Key.R_PAGEDOWN:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD3, down})];
+      case Key.R_END:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD1, down})];
+      case Key.R_HOME:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD7, down})];
+      case Key.R_ARROWLEFT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD4, down})];
+      case Key.R_ARROWUP:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD8, down})];
+      case Key.R_ARROWRIGHT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD6, down})];
+      case Key.R_ARROWDOWN:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD2, down})];
+      case Key.R_INSERT:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_NUMPAD0, down})];
+      case Key.R_DELETE:
+        return [makeKeyboardEvent({vk: VirtualKey.VK_DECIMAL, down})];
+      default:
+        throw new errors.InvalidArgumentError(`Invalid character \\u${charCode.toString(16)}.`);
     }
+  }
 
-    // Currently only [a-z0-9] are sent as scan code through performAction (in order for them to work in hotkeys).
-    if (!forceUnicode) {
-        if (/[a-z]/.test(char)) {
-            return [makeKeyboardEvent({ scan: ScanCode[char.toUpperCase() as keyof typeof ScanCode], down })];
-        }
-        if (/[0-9]/.test(char)) {
-            return [makeKeyboardEvent({ scan: ScanCode[`N${char}` as keyof typeof ScanCode], down })];
-        }
+  // Currently only [a-z0-9] are sent as scan code through performAction (in order for them to work in hotkeys).
+  if (!forceUnicode) {
+    if (/[a-z]/.test(char)) {
+      return [makeKeyboardEvent({scan: ScanCode[char.toUpperCase() as keyof typeof ScanCode], down})];
     }
+    if (/[0-9]/.test(char)) {
+      return [makeKeyboardEvent({scan: ScanCode[`N${char}` as keyof typeof ScanCode], down})];
+    }
+  }
 
-    return [makeKeyboardEvent({ scan: char, down })];
+  return [makeKeyboardEvent({scan: char, down})];
 }
 
 function sendKeyInput(char: string, down: boolean, forceUnicode: boolean = false): void {
-    const events = charToKeyboardEvents(char, down, forceUnicode);
-    const returnCode = SendInput(events.length, events, sizeof(INPUT));
+  const events = charToKeyboardEvents(char, down, forceUnicode);
+  const returnCode = SendInput(events.length, events, sizeof(INPUT));
 
-    assertSuccessSendInputReturnCode(returnCode);
+  assertSuccessSendInputReturnCode(returnCode);
 }
 
 function sendMouseButtonInput(button: number, down: boolean) {
-    const events = down ? makeMouseDownEvents(button) : makeMouseUpEvents(button);
-    const returnCode = SendInput(events.length, events, sizeof(INPUT));
+  const events = down ? makeMouseDownEvents(button) : makeMouseUpEvents(button);
+  const returnCode = SendInput(events.length, events, sizeof(INPUT));
 
-    assertSuccessSendInputReturnCode(returnCode);
+  assertSuccessSendInputReturnCode(returnCode);
 }
 
 function setCursorAbsolute(x: number, y: number): void {
-    const ix = Math.trunc(x);
-    const iy = Math.trunc(y);
+  const ix = Math.trunc(x);
+  const iy = Math.trunc(y);
+  SetCursorPos(ix, iy);
+  // Known Windows quirk — on a multi-monitor setup where the monitors have
+  // different sizes (or DPI scale factors), the first SetCursorPos call
+  // after the cursor crosses from one monitor to another can land at x=0
+  // on the target monitor instead of the requested coord. Verify via
+  // GetCursorPos and retry once. Credit: FlaUI.Core/Input/Mouse.cs Position
+  // setter — see https://stackoverflow.com/questions/58753372
+  const verify: Point = {x: 0, y: 0};
+  if (GetCursorPos(verify) && (verify.x !== ix || verify.y !== iy)) {
     SetCursorPos(ix, iy);
-    // Known Windows quirk — on a multi-monitor setup where the monitors have
-    // different sizes (or DPI scale factors), the first SetCursorPos call
-    // after the cursor crosses from one monitor to another can land at x=0
-    // on the target monitor instead of the requested coord. Verify via
-    // GetCursorPos and retry once. Credit: FlaUI.Core/Input/Mouse.cs Position
-    // setter — see https://stackoverflow.com/questions/58753372
-    const verify: Point = { x: 0, y: 0 };
-    if (GetCursorPos(verify) && (verify.x !== ix || verify.y !== iy)) {
-        SetCursorPos(ix, iy);
-    }
+  }
 }
 
-async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string }): Promise<void> {
-    const { duration, relative } = args;
-    let { x, y, easingFunction } = args;
-    const refreshRate = getRefreshRate();
-    const updateInterval = 1000 / refreshRate;
-    const iterations = Math.max(Math.floor(duration / updateInterval), 1);
+async function sendMouseMoveInput(args: {
+  x: number;
+  y: number;
+  relative: boolean;
+  duration: number;
+  easingFunction?: string;
+}): Promise<void> {
+  const {duration, relative} = args;
+  let {x, y, easingFunction} = args;
+  const refreshRate = getRefreshRate();
+  const updateInterval = 1000 / refreshRate;
+  const iterations = Math.max(Math.floor(duration / updateInterval), 1);
 
-    const cursorPosition = {
-        x: 0,
-        y: 0,
-    } satisfies Point;
+  const cursorPosition = {
+    x: 0,
+    y: 0,
+  } satisfies Point;
 
-    // Cursor movement goes through SetCursorPos rather than
-    // SendInput(MOUSEEVENTF_MOVE|MOUSEEVENTF_ABSOLUTE). SendInput in absolute
-    // mode normalizes coords into [0, 65535] and — without
-    // MOUSEEVENTF_VIRTUALDESK — clips to the primary monitor. Even with
-    // VIRTUALDESK, legacy-DPI-aware processes hit edge cases when monitors
-    // have different scale factors. SetCursorPos takes raw physical pixel
-    // coordinates across the entire virtual screen and Just Works on
-    // multi-monitor setups, which is what FlaUI uses (Mouse.cs:118-139).
-    // Kept SendInput only for button events (mouseDown / mouseUp).
-    const hasCurrentCursorPos = GetCursorPos(cursorPosition);
-    if (relative) {
-        if (hasCurrentCursorPos) {
-            x += cursorPosition.x;
-            y += cursorPosition.y;
-        } else {
-            // Without a current cursor position we can't turn a relative move
-            // into an absolute SetCursorPos. Fall back to single teleport.
-            easingFunction = undefined;
-        }
-    }
-
-    if (!hasCurrentCursorPos || iterations <= 1) {
-        easingFunction = undefined;
-    }
-
-    if (easingFunction) {
-        let calculatePoint: EasingFunction;
-
-        // the lines below assume that the validation has been made on createSession
-        if (easingFunction.startsWith('cubic-bezier')) {
-            const bezierArgs = /\((.*?)\)/.exec(easingFunction)?.groups?.[0]
-                .split(',').map((n) => parseFloat(n.trim())) ?? [0, 0, 1, 1];
-
-            calculatePoint = bezier.apply(bezierArgs);
-        } else {
-            calculatePoint = easingFunctions[easingFunction];
-        }
-
-        for (let i = 1; i < iterations; i++) {
-            setTimeout(() => {
-                const normalizedProgress = (i + 1) / iterations;
-                const easedProgress = i !== iterations - 1 ? calculatePoint(normalizedProgress) : 1;
-                const interpolatedX = cursorPosition.x + (x - cursorPosition.x) * easedProgress;
-                const interpolatedY = cursorPosition.y + (y - cursorPosition.y) * easedProgress;
-
-                setCursorAbsolute(interpolatedX, interpolatedY);
-            }, i * updateInterval);
-        }
+  // Cursor movement goes through SetCursorPos rather than
+  // SendInput(MOUSEEVENTF_MOVE|MOUSEEVENTF_ABSOLUTE). SendInput in absolute
+  // mode normalizes coords into [0, 65535] and — without
+  // MOUSEEVENTF_VIRTUALDESK — clips to the primary monitor. Even with
+  // VIRTUALDESK, legacy-DPI-aware processes hit edge cases when monitors
+  // have different scale factors. SetCursorPos takes raw physical pixel
+  // coordinates across the entire virtual screen and Just Works on
+  // multi-monitor setups, which is what FlaUI uses (Mouse.cs:118-139).
+  // Kept SendInput only for button events (mouseDown / mouseUp).
+  const hasCurrentCursorPos = GetCursorPos(cursorPosition);
+  if (relative) {
+    if (hasCurrentCursorPos) {
+      x += cursorPosition.x;
+      y += cursorPosition.y;
     } else {
-        setCursorAbsolute(x, y);
+      // Without a current cursor position we can't turn a relative move
+      // into an absolute SetCursorPos. Fall back to single teleport.
+      easingFunction = undefined;
+    }
+  }
+
+  if (!hasCurrentCursorPos || iterations <= 1) {
+    easingFunction = undefined;
+  }
+
+  if (easingFunction) {
+    let calculatePoint: EasingFunction;
+
+    // the lines below assume that the validation has been made on createSession
+    if (easingFunction.startsWith('cubic-bezier')) {
+      const bezierArgs = /\((.*?)\)/
+        .exec(easingFunction)
+        ?.groups?.[0].split(',')
+        .map((n) => parseFloat(n.trim())) ?? [0, 0, 1, 1];
+
+      calculatePoint = bezier.apply(bezierArgs);
+    } else {
+      calculatePoint = easingFunctions[easingFunction];
     }
 
-    await sleep(duration);
+    for (let i = 1; i < iterations; i++) {
+      setTimeout(() => {
+        const normalizedProgress = (i + 1) / iterations;
+        const easedProgress = i !== iterations - 1 ? calculatePoint(normalizedProgress) : 1;
+        const interpolatedX = cursorPosition.x + (x - cursorPosition.x) * easedProgress;
+        const interpolatedY = cursorPosition.y + (y - cursorPosition.y) * easedProgress;
+
+        setCursorAbsolute(interpolatedX, interpolatedY);
+      }, i * updateInterval);
+    }
+  } else {
+    setCursorAbsolute(x, y);
+  }
+
+  await sleep(duration);
 }
 
 function sendMouseScrollInput(x: number, y: number) {
-    const events = makeMouseWheelEvents(x, y);
-    const returnCode = SendInput(events.length, events, sizeof(INPUT));
+  const events = makeMouseWheelEvents(x, y);
+  const returnCode = SendInput(events.length, events, sizeof(INPUT));
 
-    assertSuccessSendInputReturnCode(returnCode);
+  assertSuccessSendInputReturnCode(returnCode);
 }
 
 function assertSuccessSendInputReturnCode(returnCode: number) {
-    if (returnCode === UINT32_MAX) {
-        throw new errors.UnknownError('An error occurred while executing SendInput.');
-    }
+  if (returnCode === UINT32_MAX) {
+    throw new errors.UnknownError('An error occurred while executing SendInput.');
+  }
 }
 
-export function getResolutionScalingFactor(): number {
-    const dpi = GetDpiForSystem();
-    const scalingFactor = dpi / 96;
+export let getResolutionScalingFactor = (): number => {
+  const dpi = GetDpiForSystem();
+  const scalingFactor = dpi / 96;
 
-    // @ts-expect-error temporary quick and dirty version of memoization
-    getResolutionScalingFactor = () => scalingFactor;
+  // temporary quick and dirty version of memoization
+  getResolutionScalingFactor = () => scalingFactor;
 
-    return scalingFactor;
-}
+  return scalingFactor;
+};
 
 function getScreenResolution(): [number, number] {
-    return [
-        GetSystemMetrics(SystemMetric.SM_CXSCREEN),
-        GetSystemMetrics(SystemMetric.SM_CYSCREEN),
-    ];
+  return [GetSystemMetrics(SystemMetric.SM_CXSCREEN), GetSystemMetrics(SystemMetric.SM_CYSCREEN)];
 }
 
-function getRefreshRate(): number {
-    const buffer = Buffer.alloc(sizeof(DEVMODEA));
-    EnumDisplaySettingsA(null, -1, buffer);
-    const refreshRate = (buffer.readUInt32LE(120) as DeviceModeAnsi['dmDisplayFrequency']);
+let getRefreshRate = (): number => {
+  const buffer = Buffer.alloc(sizeof(DEVMODEA));
+  EnumDisplaySettingsA(null, -1, buffer);
+  const refreshRate = buffer.readUInt32LE(120) as DeviceModeAnsi['dmDisplayFrequency'];
 
-    const nonMemoizedMethod = getRefreshRate;
-    const currentTime = new Date().getTime();
+  const nonMemoizedMethod = getRefreshRate;
+  const currentTime = new Date().getTime();
 
-    // @ts-expect-error memoizing the function to prevent repeated calls that might crash Node.js
-    getRefreshRate = () => {
-        if (new Date().getTime() - currentTime > 1000) {
-            // @ts-expect-error reset memoization after 1 second
-            getRefreshRate = nonMemoizedMethod;
-        }
-        return refreshRate;
-    };
-
+  // memoizing the function to prevent repeated calls that might crash Node.js
+  getRefreshRate = () => {
+    if (new Date().getTime() - currentTime > 1000) {
+      // reset memoization after 1 second
+      getRefreshRate = nonMemoizedMethod;
+    }
     return refreshRate;
-}
+  };
+
+  return refreshRate;
+};
 
 export function keyDown(char: string, forceUnicode: boolean = false): void {
-    sendKeyInput(char, true, forceUnicode);
+  sendKeyInput(char, true, forceUnicode);
 }
 
 export function keyUp(char: string, forceUnicode: boolean = false): void {
-    sendKeyInput(char, false, forceUnicode);
+  sendKeyInput(char, false, forceUnicode);
 }
 
 // NumLock is a toggle key — GetKeyState's low-order bit reflects its current
 // on/off state (as opposed to GetAsyncKeyState's high-order "is physically
 // held" bit, which doesn't apply to a toggle).
 export function isNumLockOn(): boolean {
-    return (GetKeyState(VirtualKey.VK_NUMLOCK) & 1) === 1;
+  return (GetKeyState(VirtualKey.VK_NUMLOCK) & 1) === 1;
 }
 
 // Toggling NumLock is itself a real keypress (down+up of VK_NUMLOCK), so it
 // goes through the same extended-key-flagged SendInput path as any other key.
 export function setNumLockState(on: boolean): void {
-    if (isNumLockOn() === on) {
-        return;
-    }
-    const downEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: true });
-    const upEvent = makeKeyboardEvent({ vk: VirtualKey.VK_NUMLOCK, down: false });
-    assertSuccessSendInputReturnCode(SendInput(1, [downEvent], sizeof(INPUT)));
-    assertSuccessSendInputReturnCode(SendInput(1, [upEvent], sizeof(INPUT)));
+  if (isNumLockOn() === on) {
+    return;
+  }
+  const downEvent = makeKeyboardEvent({vk: VirtualKey.VK_NUMLOCK, down: true});
+  const upEvent = makeKeyboardEvent({vk: VirtualKey.VK_NUMLOCK, down: false});
+  assertSuccessSendInputReturnCode(SendInput(1, [downEvent], sizeof(INPUT)));
+  assertSuccessSendInputReturnCode(SendInput(1, [upEvent], sizeof(INPUT)));
 }
 
-export async function mouseMoveRelative(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {
-    await sendMouseMoveInput({x, y, relative: true, duration, easingFunction});
+export async function mouseMoveRelative(
+  x: number,
+  y: number,
+  duration: number = 0,
+  easingFunction?: string,
+): Promise<void> {
+  await sendMouseMoveInput({x, y, relative: true, duration, easingFunction});
 }
 
 export function mouseScroll(x: number, y: number): void {
-    sendMouseScrollInput(x, y);
+  sendMouseScrollInput(x, y);
 }
 
 // `duration = 0` → single SetCursorPos teleport (fastest; the default path).
@@ -878,267 +899,291 @@ export function mouseScroll(x: number, y: number): void {
 // duration; the path is then walked in per-frame SetCursorPos steps.
 // `easingFunction` defaults to `'linear'` so callers get a straight
 // interpolated path without also needing to pass an easing curve.
-export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction: string = 'linear'): Promise<void> {
-    await sendMouseMoveInput({x, y, relative: false, duration, easingFunction});
+export async function mouseMoveAbsolute(
+  x: number,
+  y: number,
+  duration: number = 0,
+  easingFunction: string = 'linear',
+): Promise<void> {
+  await sendMouseMoveInput({x, y, relative: false, duration, easingFunction});
 }
 
-export function getCursorPos(): { x: number; y: number } | null {
-    const point: Point = { x: 0, y: 0 };
-    if (GetCursorPos(point)) {
-        return { x: point.x, y: point.y };
-    }
-    return null;
+export function getCursorPos(): {x: number; y: number} | null {
+  const point: Point = {x: 0, y: 0};
+  if (GetCursorPos(point)) {
+    return {x: point.x, y: point.y};
+  }
+  return null;
 }
 
 export function mouseDown(button: number = 0): void {
-    sendMouseButtonInput(button, true);
+  sendMouseButtonInput(button, true);
 }
 
 export function mouseUp(button: number = 0): void {
-    sendMouseButtonInput(button, false);
+  sendMouseButtonInput(button, false);
 }
 
 export function getDisplayOrientation(): Orientation {
-    const [width, height] = getScreenResolution();
-    return width > height ? 'LANDSCAPE' : 'PORTRAIT';
+  const [width, height] = getScreenResolution();
+  return width > height ? 'LANDSCAPE' : 'PORTRAIT';
 }
 
 export function getWindowThreadProcessId(hwnd: number, pidOut: [number | null]): number {
-    const ptr: [LPDWORD | null] = [null];
-    const threadId = GetWindowThreadProcessId(hwnd, ptr);
-    pidOut[0] = ptr[0] ?? null;
-    return threadId;
+  const ptr: [LPDWORD | null] = [null];
+  const threadId = GetWindowThreadProcessId(hwnd, ptr);
+  pidOut[0] = ptr[0] ?? null;
+  return threadId;
 }
 
 export function getWindowTitle(hwnd: number): string {
-    try {
-        const buffer = Buffer.alloc(512);
-        const len = GetWindowTextW(hwnd, buffer, 256);
-        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
-    } catch {
-        return '';
-    }
+  try {
+    const buffer = Buffer.alloc(512);
+    const len = GetWindowTextW(hwnd, buffer, 256);
+    return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+  } catch {
+    return '';
+  }
 }
 
 export function getWindowClassName(hwnd: number): string {
-    try {
-        const buffer = Buffer.alloc(512);
-        const len = GetClassNameW(hwnd, buffer, 256);
-        return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
-    } catch {
-        return '';
-    }
+  try {
+    const buffer = Buffer.alloc(512);
+    const len = GetClassNameW(hwnd, buffer, 256);
+    return len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+  } catch {
+    return '';
+  }
 }
 
 export function isIEWindowHwnd(hwnd: number): boolean {
-    return getWindowClassName(hwnd) === 'IEFrame';
+  return getWindowClassName(hwnd) === 'IEFrame';
 }
 
 export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {
-    const handles: number[] = [];
-    log.debug(`getWindowAllHandlesForProcessIds called with processIds: ${processIds.join(', ')}`);
-    try {
-        EnumWindows((hWnd) => {
-            try {
-                const ptr: [LPDWORD | null] = [null];
-                GetWindowThreadProcessId(hWnd, ptr);
-                const pid = ptr[0];
-                if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(512);
-                    const len = GetWindowTextW(hWnd, buffer, 256);
-                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
-                    if (windowTitle) {
-                        handles.push(Number(address(hWnd)));
-                    }
-                }
-            } catch (err) {
-                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-            }
+  const handles: number[] = [];
+  log.debug(`getWindowAllHandlesForProcessIds called with processIds: ${processIds.join(', ')}`);
+  try {
+    EnumWindows((hWnd) => {
+      try {
+        const ptr: [LPDWORD | null] = [null];
+        GetWindowThreadProcessId(hWnd, ptr);
+        const pid = ptr[0];
+        if (pid && processIds.includes(pid) && IsWindowVisible(hWnd)) {
+          const buffer = Buffer.alloc(512);
+          const len = GetWindowTextW(hWnd, buffer, 256);
+          const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+          if (windowTitle) {
+            handles.push(Number(address(hWnd)));
+          }
+        }
+      } catch (err) {
+        log.error(
+          `Exception in EnumWindows callback: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+      }
 
-            return true;
-        }, 0);
-    } catch (err) {
-        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-    }
-    log.debug(`getWindowAllHandlesForProcessIds returning ${handles.length} handles`);
-    return handles;
+      return true;
+    }, 0);
+  } catch (err) {
+    log.error(`EnumWindows call failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  }
+  log.debug(`getWindowAllHandlesForProcessIds returning ${handles.length} handles`);
+  return handles;
 }
 
 export function getAllWindowHandles(): number[] {
-    const handles: number[] = [];
-    try {
-        EnumWindows((hWnd) => {
-            try {
-                if (IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(512);
-                    const len = GetWindowTextW(hWnd, buffer, 256);
-                    const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
-                    if (windowTitle) {
-                        handles.push(Number(address(hWnd)));
-                    }
-                }
-            } catch (err) {
-                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-            }
-            return true;
-        }, 0);
-    } catch (err) {
-        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-    }
-    return handles;
+  const handles: number[] = [];
+  try {
+    EnumWindows((hWnd) => {
+      try {
+        if (IsWindowVisible(hWnd)) {
+          const buffer = Buffer.alloc(512);
+          const len = GetWindowTextW(hWnd, buffer, 256);
+          const windowTitle = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+          if (windowTitle) {
+            handles.push(Number(address(hWnd)));
+          }
+        }
+      } catch (err) {
+        log.error(
+          `Exception in EnumWindows callback: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+      }
+      return true;
+    }, 0);
+  } catch (err) {
+    log.error(`EnumWindows call failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  }
+  return handles;
 }
 
-export function getVisibleWindowsWithTitles(): Array<{ handle: number; title: string }> {
-    const windows: Array<{ handle: number; title: string }> = [];
-    try {
-        EnumWindows((hWnd) => {
-            try {
-                if (IsWindowVisible(hWnd)) {
-                    const buffer = Buffer.alloc(512);
-                    const len = GetWindowTextW(hWnd, buffer, 256);
-                    const title = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
-                    if (title) {
-                        windows.push({ handle: Number(address(hWnd)), title });
-                    }
-                }
-            } catch (err) {
-                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-            }
-            return true;
-        }, 0);
-    } catch (err) {
-        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-    }
-    return windows;
+export function getVisibleWindowsWithTitles(): Array<{handle: number; title: string}> {
+  const windows: Array<{handle: number; title: string}> = [];
+  try {
+    EnumWindows((hWnd) => {
+      try {
+        if (IsWindowVisible(hWnd)) {
+          const buffer = Buffer.alloc(512);
+          const len = GetWindowTextW(hWnd, buffer, 256);
+          const title = len > 0 ? buffer.slice(0, len * 2).toString('utf16le') : '';
+          if (title) {
+            windows.push({handle: Number(address(hWnd)), title});
+          }
+        }
+      } catch (err) {
+        log.error(
+          `Exception in EnumWindows callback: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+      }
+      return true;
+    }, 0);
+  } catch (err) {
+    log.error(`EnumWindows call failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  }
+  return windows;
 }
 
-export function getAllWindowsWithDetails(): Array<{ handle: string; title: string; className: string }> {
-    const windows: Array<{ handle: string; title: string; className: string }> = [];
-    try {
-        EnumWindows((hWnd) => {
-            try {
-                if (IsWindowVisible(hWnd)) {
-                    const titleBuf = Buffer.alloc(512);
-                    const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
-                    const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
+export function getAllWindowsWithDetails(): Array<{handle: string; title: string; className: string}> {
+  const windows: Array<{handle: string; title: string; className: string}> = [];
+  try {
+    EnumWindows((hWnd) => {
+      try {
+        if (IsWindowVisible(hWnd)) {
+          const titleBuf = Buffer.alloc(512);
+          const titleLen = GetWindowTextW(hWnd, titleBuf, 256);
+          const title = titleLen > 0 ? titleBuf.slice(0, titleLen * 2).toString('utf16le') : '';
 
-                    const classBuf = Buffer.alloc(512);
-                    const classLen = GetClassNameW(hWnd, classBuf, 256);
-                    const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
+          const classBuf = Buffer.alloc(512);
+          const classLen = GetClassNameW(hWnd, classBuf, 256);
+          const className = classLen > 0 ? classBuf.slice(0, classLen * 2).toString('utf16le') : '';
 
-                    const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
-                    windows.push({ handle, title, className });
-                }
-            } catch (err) {
-                log.error(`Exception in EnumWindows callback: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-            }
-            return true;
-        }, 0);
-    } catch (err) {
-        log.error(`EnumWindows call failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
-    }
-    return windows;
+          const handle = `0x${Number(address(hWnd)).toString(16).padStart(8, '0')}`;
+          windows.push({handle, title, className});
+        }
+      } catch (err) {
+        log.error(
+          `Exception in EnumWindows callback: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+        );
+      }
+      return true;
+    }, 0);
+  } catch (err) {
+    log.error(`EnumWindows call failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  }
+  return windows;
 }
 
 function isForeground(targetHWnd: HWND): boolean {
-    try {
-        const fg = GetForegroundWindow();
-        return fg !== null && Number(address(fg)) === Number(address(targetHWnd));
-    } catch {
-        return false;
-    }
+  try {
+    const fg = GetForegroundWindow();
+    return fg !== null && Number(address(fg)) === Number(address(targetHWnd));
+  } catch {
+    return false;
+  }
 }
 
 export async function trySetForegroundWindow(windowHandle: number): Promise<boolean> {
-    let targetHWnd: HWND | null = null;
+  let targetHWnd: HWND | null = null;
 
-    try {
-        EnumWindows((hWnd) => {
-            if (windowHandle === Number(address(hWnd))) {
-                targetHWnd = hWnd;
-                return false;
-            }
-            return true;
-        }, 0);
-    } catch (err) {
-        log.warn(`trySetForegroundWindow: EnumWindows failed: ${err instanceof Error ? err.message : String(err)}`);
+  try {
+    EnumWindows((hWnd) => {
+      if (windowHandle === Number(address(hWnd))) {
+        targetHWnd = hWnd;
         return false;
-    }
-
-    if (!targetHWnd) {
-        return false;
-    }
-
-    // Strategy 0: restore minimized window — SetForegroundWindow silently fails when target is iconic.
-    try {
-        if (IsIconic(targetHWnd)) {
-            ShowWindow(targetHWnd, SW_RESTORE);
-            await sleep(50);
-        }
-    } catch (err) {
-        log.warn(`trySetForegroundWindow: restore-minimized failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    // Strategy 1: SendInput trick + SetForegroundWindow.
-    // Any SendInput event grants our thread foreground-set permission.
-    // Use Control (not Alt) to avoid activating menu-bar accelerator hints.
-    try {
-        sendKeyInput(Key.CONTROL, true);
-        sendKeyInput(Key.CONTROL, false);
-        SetForegroundWindow(targetHWnd);
-        await sleep(50);
-        if (isForeground(targetHWnd)) {
-            return true;
-        };
-    } catch (err) {
-        log.warn(`trySetForegroundWindow: strategy 1 (SendInput+SFW) failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    // Strategy 2: AttachThreadInput + SetForegroundWindow + SetFocus.
-    try {
-        const hForeground = GetForegroundWindow();
-        if (hForeground) {
-            const ourThreadId = GetCurrentThreadId();
-            const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
-            const attached = ourThreadId !== foregroundThreadId &&
-                AttachThreadInput(ourThreadId, foregroundThreadId, true);
-            try {
-                SetForegroundWindow(targetHWnd);
-                if (attached) {
-                    SetFocus(targetHWnd);
-                }
-            } finally {
-                if (attached) {
-                    AttachThreadInput(ourThreadId, foregroundThreadId, false);
-                }
-            }
-            await sleep(50);
-            if (isForeground(targetHWnd)) {
-                return true;
-            };
-        }
-    } catch (err) {
-        log.warn(`trySetForegroundWindow: strategy 2 (AttachThreadInput) failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    // Strategy 3: BringWindowToTop — different internal z-order path than SetForegroundWindow.
-    try {
-        BringWindowToTop(targetHWnd);
-        await sleep(50);
-        if (isForeground(targetHWnd)) {
-            return true;
-        };
-    } catch (err) {
-        log.warn(`trySetForegroundWindow: strategy 3 (BringWindowToTop) failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    log.warn(`trySetForegroundWindow: all strategies exhausted for handle 0x${windowHandle.toString(16).padStart(8, '0')}`);
+      }
+      return true;
+    }, 0);
+  } catch (err) {
+    log.warn(`trySetForegroundWindow: EnumWindows failed: ${err instanceof Error ? err.message : String(err)}`);
     return false;
+  }
+
+  if (!targetHWnd) {
+    return false;
+  }
+
+  // Strategy 0: restore minimized window — SetForegroundWindow silently fails when target is iconic.
+  try {
+    if (IsIconic(targetHWnd)) {
+      ShowWindow(targetHWnd, SW_RESTORE);
+      await sleep(50);
+    }
+  } catch (err) {
+    log.warn(`trySetForegroundWindow: restore-minimized failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Strategy 1: SendInput trick + SetForegroundWindow.
+  // Any SendInput event grants our thread foreground-set permission.
+  // Use Control (not Alt) to avoid activating menu-bar accelerator hints.
+  try {
+    sendKeyInput(Key.CONTROL, true);
+    sendKeyInput(Key.CONTROL, false);
+    SetForegroundWindow(targetHWnd);
+    await sleep(50);
+    if (isForeground(targetHWnd)) {
+      return true;
+    }
+  } catch (err) {
+    log.warn(
+      `trySetForegroundWindow: strategy 1 (SendInput+SFW) failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Strategy 2: AttachThreadInput + SetForegroundWindow + SetFocus.
+  try {
+    const hForeground = GetForegroundWindow();
+    if (hForeground) {
+      const ourThreadId = GetCurrentThreadId();
+      const foregroundThreadId = GetWindowThreadProcessId(hForeground, [null]);
+      const attached = ourThreadId !== foregroundThreadId && AttachThreadInput(ourThreadId, foregroundThreadId, true);
+      try {
+        SetForegroundWindow(targetHWnd);
+        if (attached) {
+          SetFocus(targetHWnd);
+        }
+      } finally {
+        if (attached) {
+          AttachThreadInput(ourThreadId, foregroundThreadId, false);
+        }
+      }
+      await sleep(50);
+      if (isForeground(targetHWnd)) {
+        return true;
+      }
+    }
+  } catch (err) {
+    log.warn(
+      `trySetForegroundWindow: strategy 2 (AttachThreadInput) failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Strategy 3: BringWindowToTop — different internal z-order path than SetForegroundWindow.
+  try {
+    BringWindowToTop(targetHWnd);
+    await sleep(50);
+    if (isForeground(targetHWnd)) {
+      return true;
+    }
+  } catch (err) {
+    log.warn(
+      `trySetForegroundWindow: strategy 3 (BringWindowToTop) failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  log.warn(
+    `trySetForegroundWindow: all strategies exhausted for handle 0x${windowHandle.toString(16).padStart(8, '0')}`,
+  );
+  return false;
 }
 
-export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number {
-    return SendInput(inputs.length, inputs.map((ki) => ({
-        type: InputType.INPUT_KEYBOARD,
-        u: { ki },
-    })), sizeof(INPUT));
+export function sendKeyboardEvents(inputs: KeyboardEvent['u']['ki'][]): number {
+  return SendInput(
+    inputs.length,
+    inputs.map((ki) => ({
+      type: InputType.INPUT_KEYBOARD,
+      u: {ki},
+    })),
+    sizeof(INPUT),
+  );
 }

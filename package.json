@@ -72,10 +72,11 @@
   "devDependencies": {
     "@appium/oxc-config": "^1.1.0",
     "@appium/semantic-release-config": "^1.1.0",
-    "@appium/tsconfig": "^1.1.0",
+    "@appium/tsconfig": "^1.2.0",
     "@appium/types": "^1.1.0",
     "@types/node": "^24.8.1",
-    "typescript": "^5.9.3",
+    "oxfmt": "0.59.0",
+    "oxlint": "1.74.0",
     "vitest": "^4.1.11",
     "webdriverio": "^9.30.1"
   },

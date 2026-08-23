@@ -1,230 +1,195 @@
-import { describe, it, beforeAll, afterAll, beforeEach, expect } from 'vitest';
-import type { Browser } from 'webdriverio';
+import {describe, it, beforeAll, afterAll, beforeEach, expect} from 'vitest';
+import type {Browser} from 'webdriverio';
+
+import {Key} from '../../lib/enums.js';
 import {
-    createCalculatorSession,
-    createNotepadSession,
-    getNotepadTextArea,
-    quitSession,
-    resetCalculator,
-    clearNotepad,
+  createCalculatorSession,
+  createNotepadSession,
+  getNotepadTextArea,
+  quitSession,
+  resetCalculator,
+  clearNotepad,
 } from './helpers/session.js';
-import { Key } from '../../lib/enums.js';
 
 describe('W3C Actions API', () => {
-    let calc: Browser;
+  let calc: Browser;
+  let notepad: Browser;
+
+  beforeAll(async () => {
+    calc = await createCalculatorSession();
+  });
+
+  afterAll(async () => {
+    await quitSession(calc);
+  });
+
+  beforeEach(async () => {
+    await resetCalculator(calc);
+  });
+
+  describe('key actions (keyDown / keyUp / pause)', () => {
+    it('types a digit into Calculator via keyDown/keyUp sequence', async () => {
+      await calc.action('key').down('6').up('6').perform();
+      const display = await calc.$('~CalculatorResults');
+      expect(await display.getText()).toContain('6');
+    });
+
+    it('holds Shift then types a letter in Notepad to produce uppercase', async () => {
+      notepad = await createNotepadSession();
+      await clearNotepad(notepad);
+      const textArea = await getNotepadTextArea(notepad);
+      await textArea.click();
+      await notepad.action('key').down(Key.SHIFT).down('b').up('b').up(Key.SHIFT).perform();
+      const text = await textArea.getText();
+      expect(text).toContain('B');
+      await notepad.keys([Key.BACKSPACE]); // delete 'B' so Notepad closes without a save prompt
+      await quitSession(notepad);
+    });
+
+    it('pause action in key sequence still types the digit', async () => {
+      await calc.action('key').down('1').pause(100).up('1').perform();
+
+      const display = await calc.$('~CalculatorResults');
+      await calc.waitUntil(async () => (await display.getText()).includes('1'), {
+        timeoutMsg: 'CalculatorResults did not show 1 after key sequence with pause',
+      });
+    });
+  });
+
+  describe('pointer actions (mouse)', () => {
+    it('moves to a button center and clicks via pointer sequence', async () => {
+      const btn = await calc.$('~num4Button');
+      const loc = await btn.getLocation();
+      const size = await btn.getSize();
+      const cx = Math.round(loc.x + size.width / 2);
+      const cy = Math.round(loc.y + size.height / 2);
+
+      await calc.action('pointer').move({x: cx, y: cy}).down().up().perform();
+
+      const display = await calc.$('~CalculatorResults');
+      expect(await display.getText()).toContain('4');
+    });
+
+    it('performs a double-click via two down/up cycles', async () => {
+      const btn = await calc.$('~num5Button');
+      await calc.action('pointer').move({origin: btn}).down().up().down().up().perform();
+
+      const display = await calc.$('~CalculatorResults');
+      expect(await display.getText()).toContain('55');
+    });
+
+    it('right-click using button: 2 in pointer down', async () => {
+      const btn = await calc.$('~num1Button');
+      await expect(
+        calc.action('pointer').move({origin: btn}).down({button: 2}).up({button: 2}).perform(),
+      ).resolves.not.toThrow();
+    });
+
+    it('drags from one button to another via pointerDown, pointerMove, pointerUp', async () => {
+      const startBtn = await calc.$('~num1Button');
+      const endBtn = await calc.$('~num2Button');
+      await expect(
+        calc.action('pointer').move({origin: startBtn}).down().move({origin: endBtn, duration: 300}).up().perform(),
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('tick-based ordering across multiple input sources', () => {
     let notepad: Browser;
 
     beforeAll(async () => {
-        calc = await createCalculatorSession();
+      notepad = await createNotepadSession();
     });
 
     afterAll(async () => {
-        await quitSession(calc);
+      await quitSession(notepad);
     });
 
     beforeEach(async () => {
-        await resetCalculator(calc);
+      await clearNotepad(notepad);
+      const textArea = await getNotepadTextArea(notepad);
+      await textArea.click();
     });
 
-    describe('key actions (keyDown / keyUp / pause)', () => {
-        it('types a digit into Calculator via keyDown/keyUp sequence', async () => {
-            await calc.action('key')
-                .down('6')
-                .up('6')
-                .perform();
-            const display = await calc.$('~CalculatorResults');
-            expect(await display.getText()).toContain('6');
-        });
+    it('Shift+Click selects text: Shift (key) is held across the pointer click tick', async () => {
+      const textArea = await getNotepadTextArea(notepad);
+      await textArea.setValue('hello');
+      await notepad.keys([Key.HOME]);
 
-        it('holds Shift then types a letter in Notepad to produce uppercase', async () => {
-            notepad = await createNotepadSession();
-            await clearNotepad(notepad);
-            const textArea = await getNotepadTextArea(notepad);
-            await textArea.click();
-            await notepad.action('key')
-                .down(Key.SHIFT)
-                .down('b')
-                .up('b')
-                .up(Key.SHIFT)
-                .perform();
-            const text = await textArea.getText();
-            expect(text).toContain('B');
-            await notepad.keys([Key.BACKSPACE]); // delete 'B' so Notepad closes without a save prompt
-            await quitSession(notepad);
-        });
+      // key:     [down(Shift), pause,  up(Shift)]
+      // pointer: [move,        down,   up       ]
+      //                        ^-- tick 1: Shift still held when mouse goes down
+      await notepad.actions([
+        notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
+        notepad.action('pointer').move({origin: textArea, x: 200, y: 0}).down().up(),
+      ]);
 
-        it('pause action in key sequence still types the digit', async () => {
-            await calc.action('key')
-                .down('1')
-                .pause(100)
-                .up('1')
-                .perform();
-
-            const display = await calc.$('~CalculatorResults');
-            await calc.waitUntil(
-                async () => (await display.getText()).includes('1'),
-                { timeoutMsg: 'CalculatorResults did not show 1 after key sequence with pause' }
-            );
-        });
-
+      // Shift held during click selects "hello"; typing X replaces it
+      await notepad.keys(['X']);
+      expect((await textArea.getText()).trim()).toBe('X');
     });
 
-    describe('pointer actions (mouse)', () => {
-        it('moves to a button center and clicks via pointer sequence', async () => {
-            const btn = await calc.$('~num4Button');
-            const loc = await btn.getLocation();
-            const size = await btn.getSize();
-            const cx = Math.round(loc.x + size.width / 2);
-            const cy = Math.round(loc.y + size.height / 2);
+    it('key + pointer: respect tick order', async () => {
+      const textArea = await getNotepadTextArea(notepad);
+      await textArea.setValue('hello');
+      await notepad.keys([Key.HOME]);
 
-            await calc.action('pointer')
-                .move({ x: cx, y: cy })
-                .down()
-                .up()
-                .perform();
+      // key:     [down(Shift), pause,  up(Shift)]
+      // pointer: [move,        down,   up       ]
+      //                        ^-- tick 1: Shift still held when mouse goes down
+      await notepad.actions([
+        notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
+        notepad.action('pointer').move({origin: textArea, x: 200, y: 0}).down().up(),
+      ]);
 
-            const display = await calc.$('~CalculatorResults');
-            expect(await display.getText()).toContain('4');
-        });
-
-        it('performs a double-click via two down/up cycles', async () => {
-            const btn = await calc.$('~num5Button');
-            await calc.action('pointer')
-                .move({ origin: btn })
-                .down()
-                .up()
-                .down()
-                .up()
-                .perform();
-
-            const display = await calc.$('~CalculatorResults');
-            expect(await display.getText()).toContain('55');
-
-        });
-
-        it('right-click using button: 2 in pointer down', async () => {
-            const btn = await calc.$('~num1Button');
-            await expect(
-                calc.action('pointer')
-                    .move({ origin: btn })
-                    .down({ button: 2 })
-                    .up({ button: 2 })
-                    .perform()
-            ).resolves.not.toThrow();
-        });
-
-        it('drags from one button to another via pointerDown, pointerMove, pointerUp', async () => {
-            const startBtn = await calc.$('~num1Button');
-            const endBtn = await calc.$('~num2Button');
-            await expect(
-                calc.action('pointer')
-                    .move({ origin: startBtn })
-                    .down()
-                    .move({ origin: endBtn, duration: 300 })
-                    .up()
-                    .perform()
-            ).resolves.not.toThrow();
-        });
+      await notepad.keys(['X']);
+      expect((await textArea.getText()).trim()).toBe('X');
     });
 
-    describe('tick-based ordering across multiple input sources', () => {
-        let notepad: Browser;
+    it('wheel scroll moves the viewport: top and bottom are reachable by scrolling', async () => {
+      const textArea = await getNotepadTextArea(notepad);
+      const text = Array.from({length: 40}, (_, i) => `Line_${String(i + 1).padStart(2, '0')}`).join('\n');
+      await textArea.setValue(text);
 
-        beforeAll(async () => {
-            notepad = await createNotepadSession();
-        });
+      const loc = await textArea.getLocation();
+      const size = await textArea.getSize();
+      const cx = Math.round(loc.x + size.width / 2);
+      const cy = Math.round(loc.y + size.height / 2);
 
-        afterAll(async () => {
-            await quitSession(notepad);
-        });
+      // Step 2: scroll to the top; duration gives the viewport time to settle
+      await notepad.actions([notepad.action('wheel').scroll({x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000})]);
 
-        beforeEach(async () => {
-            await clearNotepad(notepad);
-            const textArea = await getNotepadTextArea(notepad);
-            await textArea.click();
-        });
+      // Step 3: click the first visible line and mark it
+      await notepad
+        .action('pointer')
+        .move({x: cx, y: loc.y + 10})
+        .down()
+        .up()
+        .perform();
+      await notepad.keys([Key.HOME]); // go to start of line
+      await notepad.keys(['T', 'O', 'P']);
 
-        it('Shift+Click selects text: Shift (key) is held across the pointer click tick', async () => {
-            const textArea = await getNotepadTextArea(notepad);
-            await textArea.setValue('hello');
-            await notepad.keys([Key.HOME]);
+      // Step 4: scroll to the bottom
+      await notepad.actions([notepad.action('wheel').scroll({x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000})]);
 
-            // key:     [down(Shift), pause,  up(Shift)]
-            // pointer: [move,        down,   up       ]
-            //                        ^-- tick 1: Shift still held when mouse goes down
-            await notepad.actions([
-                notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
-                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
-            ]);
+      // Step 5: click the last visible line and mark it
+      await notepad
+        .action('pointer')
+        .move({x: cx, y: loc.y + size.height - 10})
+        .down()
+        .up()
+        .perform();
+      await notepad.keys([Key.HOME]);
+      await notepad.keys(['B', 'O', 'T']);
 
-            // Shift held during click selects "hello"; typing X replaces it
-            await notepad.keys(['X']);
-            expect((await textArea.getText()).trim()).toBe('X');
-        });
+      const result = await textArea.getText();
+      const topPos = result.indexOf('TOP');
+      const bottomPos = result.indexOf('BOT');
 
-        it('key + pointer: respect tick order', async () => {
-            const textArea = await getNotepadTextArea(notepad);
-            await textArea.setValue('hello');
-            await notepad.keys([Key.HOME]);
-
-            // key:     [down(Shift), pause,  up(Shift)]
-            // pointer: [move,        down,   up       ]
-            //                        ^-- tick 1: Shift still held when mouse goes down
-            await notepad.actions([
-                notepad.action('key').down(Key.SHIFT).pause(0).up(Key.SHIFT),
-                notepad.action('pointer').move({ origin: textArea, x: 200, y: 0 }).down().up(),
-            ]);
-
-            await notepad.keys(['X']);
-            expect((await textArea.getText()).trim()).toBe('X');
-        });
-
-        it('wheel scroll moves the viewport: top and bottom are reachable by scrolling', async () => {
-            const textArea = await getNotepadTextArea(notepad);
-            const text = Array.from({ length: 40 }, (_, i) =>
-                `Line_${String(i + 1).padStart(2, '0')}`
-            ).join('\n');
-            await textArea.setValue(text);
-
-            const loc = await textArea.getLocation();
-            const size = await textArea.getSize();
-            const cx = Math.round(loc.x + size.width / 2);
-            const cy = Math.round(loc.y + size.height / 2);
-
-            // Step 2: scroll to the top; duration gives the viewport time to settle
-            await notepad.actions([
-                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: -1000, duration: 1000 }),
-            ]);
-
-            // Step 3: click the first visible line and mark it
-            await notepad.action('pointer')
-                .move({ x: cx, y: loc.y + 10 })
-                .down().up()
-                .perform();
-            await notepad.keys([Key.HOME]); // go to start of line
-            await notepad.keys(['T', 'O', 'P']);
-
-            // Step 4: scroll to the bottom
-            await notepad.actions([
-                notepad.action('wheel').scroll({ x: cx, y: cy, deltaX: 0, deltaY: 1000, duration: 1000 }),
-            ]);
-
-            // Step 5: click the last visible line and mark it
-            await notepad.action('pointer')
-                .move({ x: cx, y: loc.y + size.height - 10 })
-                .down().up()
-                .perform();
-            await notepad.keys([Key.HOME]);
-            await notepad.keys(['B', 'O', 'T']);
-
-            const result = await textArea.getText();
-            const topPos = result.indexOf('TOP');
-            const bottomPos = result.indexOf('BOT');
-
-            // TOP marker must be near the start of the document
-            expect(topPos).toBeLessThan(result.indexOf('Line_05'));
-            // BOTTOM marker must be near the end of the document
-            expect(bottomPos).toBeGreaterThan(result.indexOf('Line_35'));
-        });
+      // TOP marker must be near the start of the document
+      expect(topPos).toBeLessThan(result.indexOf('Line_05'));
+      // BOTTOM marker must be near the end of the document
+      expect(bottomPos).toBeGreaterThan(result.indexOf('Line_35'));
     });
+  });
 });

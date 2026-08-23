@@ -1,10 +1,12 @@
-import type { ChildProcess } from 'node:child_process';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser } from 'webdriverio';
+import type {ChildProcess} from 'node:child_process';
+
+import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import type {Browser} from 'webdriverio';
+
 import {
-    launchWpfDevExpressLightweightExternally,
-    createDotnetBridgeAttachSession,
-    quitSession,
+  launchWpfDevExpressLightweightExternally,
+  createDotnetBridgeAttachSession,
+  quitSession,
 } from './helpers/session.js';
 
 // Fixture: appium-windows2-test-apps' wpf-devexpress-lightweight/ — DevExpress.Xpf.Grid
@@ -21,41 +23,44 @@ import {
 // LightweightCellEditor.Column.FieldName names the bound property on it — reading the value that
 // way needs no DevExpress-internal API, just the row object's own property by name via reflection.
 describe('.NET Bridge — DevExpress Xpf.Grid LightweightCellEditor real values (wpf-devexpress-lightweight fixture)', () => {
-    let driver: Browser;
-    let appProc: ChildProcess;
+  let driver: Browser;
+  let appProc: ChildProcess;
 
-    beforeAll(async () => {
-        const launched = await launchWpfDevExpressLightweightExternally();
-        appProc = launched.proc;
-        driver = await createDotnetBridgeAttachSession(launched.hwnd);
-    }, 30_000);
+  beforeAll(async () => {
+    const launched = await launchWpfDevExpressLightweightExternally();
+    appProc = launched.proc;
+    driver = await createDotnetBridgeAttachSession(launched.hwnd);
+  }, 30_000);
 
-    afterAll(async () => {
-        await quitSession(driver);
-        try { appProc?.kill(); } catch { /* already exited */ }
-    });
+  afterAll(async () => {
+    await quitSession(driver);
+    try {
+      appProc?.kill();
+    } catch {
+      /* already exited */
+    }
+  });
 
-    it('windows: getPageSourceViaDotnetBridge exposes real per-cell values on LightweightCellEditor nodes, not blanks', async () => {
-        const source = await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string;
+  it('windows: getPageSourceViaDotnetBridge exposes real per-cell values on LightweightCellEditor nodes, not blanks', async () => {
+    const source = (await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}])) as string;
 
-        expect(source).toContain('LightweightCellEditor');
+    expect(source).toContain('LightweightCellEditor');
 
-        const cells = [...source.matchAll(/<LightweightCellEditor[^>]*\bValue="([^"]*)"/g)]
-            .map((m) => m[1]);
-        expect(cells.length).toBeGreaterThan(0);
+    const cells = [...source.matchAll(/<LightweightCellEditor[^>]*\bValue="([^"]*)"/g)].map((m) => m[1]);
+    expect(cells.length).toBeGreaterThan(0);
 
-        // Every LightweightCellEditor cell in this fixture is bound to a non-empty field
-        // (Id/Name/Status/Notes) — none should come back blank now that the fix reads the real
-        // bound value via RowData.Row + Column.FieldName.
-        for (const value of cells) {
-            expect(value).not.toBe('');
-        }
+    // Every LightweightCellEditor cell in this fixture is bound to a non-empty field
+    // (Id/Name/Status/Notes) — none should come back blank now that the fix reads the real
+    // bound value via RowData.Row + Column.FieldName.
+    for (const value of cells) {
+      expect(value).not.toBe('');
+    }
 
-        // Specific known values from the fixture's first row (see
-        // appium-windows2-test-apps' wpf-devexpress-lightweight/Program.cs)
-        expect(cells).toContain('1');
-        expect(cells).toContain('Row 1');
-        expect(cells.some((v) => ['Healthy', 'Degraded', 'Offline'].includes(v))).toBe(true);
-        expect(cells).toContain('Notes for row 1');
-    });
+    // Specific known values from the fixture's first row (see
+    // appium-windows2-test-apps' wpf-devexpress-lightweight/Program.cs)
+    expect(cells).toContain('1');
+    expect(cells).toContain('Row 1');
+    expect(cells.some((v) => ['Healthy', 'Degraded', 'Offline'].includes(v))).toBe(true);
+    expect(cells).toContain('Notes for row 1');
+  });
 });

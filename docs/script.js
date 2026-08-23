@@ -41,7 +41,10 @@ function makeCopyBtn() {
 function flashCopied(btn) {
   btn.innerHTML = ICON_CHECK;
   btn.classList.add('copied');
-  setTimeout(() => { btn.innerHTML = ICON_COPY; btn.classList.remove('copied'); }, 1800);
+  setTimeout(() => {
+    btn.innerHTML = ICON_COPY;
+    btn.classList.remove('copied');
+  }, 1800);
 }
 
 function addCopyButton(wrap) {

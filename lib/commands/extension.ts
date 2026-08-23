@@ -1,48 +1,53 @@
+import {readFile, writeFile, mkdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {dirname, extname, join} from 'node:path';
+
+import type {Element} from '@appium/types';
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { PROTOCOLS, W3C_ELEMENT_KEY, errors } from 'appium/driver';
-import { Element } from '@appium/types';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, extname, join } from 'node:path';
-import { MODIFY_FS_FEATURE } from '../constants';
-import { AppiumDesktopDriver } from '../driver';
-import { ClickType, Enum, Key } from '../enums';
-import { propertyCondition } from '../server/conditions';
-import { conditionToDto } from '../server/converter-bridge';
-import { convertStringToCondition } from '../powershell/converter';
-import type { RectResult } from '../server/protocol';
-import { locateElements, wrapForDotnetBridge, type LocateStrategy } from './find-via';
-import { sleep } from '../util';
-import { click } from './element';
-import { DEFAULT_EXT, ScreenRecorder, UploadOptions, uploadRecordedMedia } from './screen-recorder';
-import { KeyEventFlags, VirtualKey } from '../winapi/types';
+import {PROTOCOLS, W3C_ELEMENT_KEY, errors} from 'appium/driver';
+
+import {MODIFY_FS_FEATURE} from '../constants';
+import type {AppiumDesktopDriver} from '../driver';
+import type {Enum} from '../enums';
+import {ClickType, Key} from '../enums';
+import {convertStringToCondition} from '../powershell/converter';
+import {propertyCondition} from '../server/conditions';
+import {conditionToDto} from '../server/converter-bridge';
+import type {RectResult} from '../server/protocol';
+import {sleep} from '../util';
+import type {VirtualKey} from '../winapi/types';
+import {KeyEventFlags} from '../winapi/types';
 import {
-    getAllWindowsWithDetails,
-    getResolutionScalingFactor,
-    keyDown,
-    keyUp,
-    mouseDown,
-    mouseMoveAbsolute,
-    mouseScroll,
-    mouseUp,
-    sendKeyboardEvents
+  getAllWindowsWithDetails,
+  getResolutionScalingFactor,
+  keyDown,
+  keyUp,
+  mouseDown,
+  mouseMoveAbsolute,
+  mouseScroll,
+  mouseUp,
+  sendKeyboardEvents,
 } from '../winapi/user32';
+import {click} from './element';
+import {locateElements, wrapForDotnetBridge, type LocateStrategy} from './find-via';
+import type {UploadOptions} from './screen-recorder';
+import {DEFAULT_EXT, ScreenRecorder, uploadRecordedMedia} from './screen-recorder';
 
 const PLATFORM_COMMAND_PREFIX = 'windows:';
 
 const ContentType = Object.freeze({
-    PLAINTEXT: 'plaintext',
-    IMAGE: 'image',
+  PLAINTEXT: 'plaintext',
+  IMAGE: 'image',
 } as const);
 
 type ContentType = Enum<typeof ContentType>;
 
 type KeyAction = {
-    pause?: number,
-    text?: string,
-    virtualKeyCode?: number,
-    down?: boolean,
-}
+  pause?: number;
+  text?: string;
+  virtualKeyCode?: number;
+  down?: boolean;
+};
 
 /**
  * Callers commonly pass a raw W3C element (e.g. a WebdriverIO element handle, which
@@ -56,31 +61,31 @@ type KeyAction = {
  * understands.
  */
 function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
-    // `patternSetValue(element, value)` is the only handler taking two separate
-    // positional args instead of one options object.
-    if (script === 'windows: setValue' && args.length === 2) {
-        const [element, value] = args;
-        if (element && typeof element === 'object' && W3C_ELEMENT_KEY in element) {
-            return [{ elementId: element[W3C_ELEMENT_KEY], value }];
-        }
-        return null;
+  // `patternSetValue(element, value)` is the only handler taking two separate
+  // positional args instead of one options object.
+  if (script === 'windows: setValue' && args.length === 2) {
+    const [element, value] = args;
+    if (element && typeof element === 'object' && W3C_ELEMENT_KEY in element) {
+      return [{elementId: element[W3C_ELEMENT_KEY], value}];
     }
+    return null;
+  }
 
-    if (args.length > 1) {
-        return null;
-    }
+  if (args.length > 1) {
+    return null;
+  }
 
-    if (args.length === 0) {
-        return args;
-    }
-
-    const [opts] = args;
-    if (opts && typeof opts === 'object' && W3C_ELEMENT_KEY in opts) {
-        const { [W3C_ELEMENT_KEY]: elementId, ...rest } = opts;
-        return [{ ...rest, elementId }];
-    }
-
+  if (args.length === 0) {
     return args;
+  }
+
+  const [opts] = args;
+  if (opts && typeof opts === 'object' && W3C_ELEMENT_KEY in opts) {
+    const {[W3C_ELEMENT_KEY]: elementId, ...rest} = opts;
+    return [{...rest, elementId}];
+  }
+
+  return args;
 }
 
 /**
@@ -93,61 +98,64 @@ function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
  * @returns The result of the dispatched command.
  */
 export async function execute(this: AppiumDesktopDriver, script: string, args: any[]) {
-    if (script.startsWith(PLATFORM_COMMAND_PREFIX)) {
-        const ExecuteMethodMapCtor = this.constructor as typeof AppiumDesktopDriver;
-        if (!Object.hasOwn(ExecuteMethodMapCtor.executeMethodMap ?? {}, script)) {
-            throw new errors.UnknownCommandError(`Unknown command '${script}'.`);
-        }
-
-        const executeMethodArgs = coerceExecuteMethodArgs(script, args);
-        if (executeMethodArgs === null) {
-            throw new errors.InvalidArgumentError(
-                `Did not get correct format of arguments for '${script}'. Expected zero or one arguments object.`
-            );
-        }
-
-        return await this.executeMethod(script, executeMethodArgs);
+  if (script.startsWith(PLATFORM_COMMAND_PREFIX)) {
+    const ExecuteMethodMapCtor = this.constructor as typeof AppiumDesktopDriver;
+    if (!Object.hasOwn(ExecuteMethodMapCtor.executeMethodMap ?? {}, script)) {
+      throw new errors.UnknownCommandError(`Unknown command '${script}'.`);
     }
 
-    if (script.replace(/\s/g, '') === 'mobile:getContexts') {
-        if (!this.caps.webviewEnabled) {
-            throw new errors.InvalidArgumentError('WebView support is not enabled. To use this command, enable WebView support by setting the "webviewEnabled" capability to true.');
-        }
-        const { waitForWebviewMs }: { waitForWebviewMs?: number } = args[0] || {};
-        const webViewDetails = await this.getWebViewDetails(waitForWebviewMs);
-        return [{
-            id: 'NATIVE_APP',
-        }, ...(webViewDetails.pages ?? []).map((page) => ({ ...page, id: `WEBVIEW_${page.id}` }))];
+    const executeMethodArgs = coerceExecuteMethodArgs(script, args);
+    if (executeMethodArgs === null) {
+      throw new errors.InvalidArgumentError(
+        `Did not get correct format of arguments for '${script}'. Expected zero or one arguments object.`,
+      );
     }
 
-    if (script === 'powerShell') {
-        return await this.executePowerShellScript(args[0]);
-    }
+    return await this.executeMethod(script, executeMethodArgs);
+  }
 
-    if (this.isIEContext()) {
-        return await this.ieSession!.execute(script, args);
+  if (script.replace(/\s/g, '') === 'mobile:getContexts') {
+    if (!this.caps.webviewEnabled) {
+      throw new errors.InvalidArgumentError(
+        'WebView support is not enabled. To use this command, enable WebView support by setting the "webviewEnabled" capability to true.',
+      );
     }
+    const {waitForWebviewMs}: {waitForWebviewMs?: number} = args[0] || {};
+    const webViewDetails = await this.getWebViewDetails(waitForWebviewMs);
+    return [
+      {
+        id: 'NATIVE_APP',
+      },
+      ...(webViewDetails.pages ?? []).map((page) => ({...page, id: `WEBVIEW_${page.id}`})),
+    ];
+  }
 
-    if (this.chromedriver && this.proxyActive()) {
-        const endpoint = this.chromedriver.jwproxy.downstreamProtocol === PROTOCOLS.MJSONWP
-                ? '/execute'
-                : '/execute/sync';
-        return await this.chromedriver.jwproxy.command(endpoint, 'POST', { script, args });
-    }
+  if (script === 'powerShell') {
+    return await this.executePowerShellScript(args[0]);
+  }
 
-    if (script === 'return window.name') {
-        const rootId = await this.sendCommand('saveRootElementToTable', {}) as string;
-        return await this.sendCommand('getProperty', { elementId: rootId, property: 'Name' }) as string;
-    }
+  if (this.isIEContext()) {
+    return await this.ieSession!.execute(script, args);
+  }
 
-    throw new errors.NotImplementedError();
-};
+  if (this.chromedriver && this.proxyActive()) {
+    const endpoint = this.chromedriver.jwproxy.downstreamProtocol === PROTOCOLS.MJSONWP ? '/execute' : '/execute/sync';
+    return await this.chromedriver.jwproxy.command(endpoint, 'POST', {script, args});
+  }
+
+  if (script === 'return window.name') {
+    const rootId = (await this.sendCommand('saveRootElementToTable', {})) as string;
+    return (await this.sendCommand('getProperty', {elementId: rootId, property: 'Name'})) as string;
+  }
+
+  throw new errors.NotImplementedError();
+}
 
 type CacheRequest = {
-    treeScope?: string,
-    treeFilter?: string,
-    automationElementMode?: string,
-}
+  treeScope?: string;
+  treeFilter?: string;
+  automationElementMode?: string;
+};
 
 /**
  * Configures the C# server's UIA cache request (tree scope, tree filter, and automation
@@ -156,22 +164,22 @@ type CacheRequest = {
  * @returns Resolves once the cache request has been applied.
  */
 export async function pushCacheRequest(this: AppiumDesktopDriver, cacheRequest: CacheRequest): Promise<void> {
-    if (Object.keys(cacheRequest).every((key) => cacheRequest[key] === undefined)) {
-        throw new errors.InvalidArgumentError('At least one property of the cache request must be set.');
-    }
+  if (Object.keys(cacheRequest).every((key) => cacheRequest[key] === undefined)) {
+    throw new errors.InvalidArgumentError('At least one property of the cache request must be set.');
+  }
 
-    if (cacheRequest.treeFilter) {
-        const condition = convertStringToCondition(cacheRequest.treeFilter);
-        await this.sendCommand('setCacheRequestTreeFilter', { condition: conditionToDto(condition) });
-    }
+  if (cacheRequest.treeFilter) {
+    const condition = convertStringToCondition(cacheRequest.treeFilter);
+    await this.sendCommand('setCacheRequestTreeFilter', {condition: conditionToDto(condition)});
+  }
 
-    if (cacheRequest.treeScope) {
-        await this.sendCommand('setCacheRequestTreeScope', { scope: cacheRequest.treeScope });
-    }
+  if (cacheRequest.treeScope) {
+    await this.sendCommand('setCacheRequestTreeScope', {scope: cacheRequest.treeScope});
+  }
 
-    if (cacheRequest.automationElementMode) {
-        await this.sendCommand('setCacheRequestAutomationElementMode', { mode: cacheRequest.automationElementMode });
-    }
+  if (cacheRequest.automationElementMode) {
+    await this.sendCommand('setCacheRequestAutomationElementMode', {mode: cacheRequest.automationElementMode});
+  }
 }
 
 /**
@@ -180,43 +188,45 @@ export async function pushCacheRequest(this: AppiumDesktopDriver, cacheRequest: 
  * @returns Resolves once the pattern has been invoked.
  */
 export async function patternInvoke(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('invokeElement', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('invokeElement', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 async function hasKeyboardFocus(this: AppiumDesktopDriver, elementId: string): Promise<boolean> {
-    try {
-        const result = await this.sendCommand('getProperty', { elementId, property: 'HasKeyboardFocus' });
-        return result === true || String(result).toLowerCase() === 'true';
-    } catch (err) {
-        this.log.debug(`[hasKeyboardFocus] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
-        return false;
-    }
+  try {
+    const result = await this.sendCommand('getProperty', {elementId, property: 'HasKeyboardFocus'});
+    return result === true || String(result).toLowerCase() === 'true';
+  } catch (err) {
+    this.log.debug(
+      `[hasKeyboardFocus] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`,
+    );
+    return false;
+  }
 }
 
 async function expandViaAltDown(this: AppiumDesktopDriver, elementId: string): Promise<void> {
-    await this.sendCommand('setFocus', { elementId });
+  await this.sendCommand('setFocus', {elementId});
+  await sleep(50);
+
+  // SetFocus() on a legacy composite control (e.g. WinForms ComboBox's inner Edit)
+  // doesn't always route real OS keyboard focus correctly on every UIA build — verify
+  // and fall back to a real mouse click, which reliably lands OS focus the same way a
+  // user's click would.
+  if (!(await hasKeyboardFocus.call(this, elementId))) {
+    await click.call(this, elementId);
     await sleep(50);
+  }
 
-    // SetFocus() on a legacy composite control (e.g. WinForms ComboBox's inner Edit)
-    // doesn't always route real OS keyboard focus correctly on every UIA build — verify
-    // and fall back to a real mouse click, which reliably lands OS focus the same way a
-    // user's click would.
-    if (!(await hasKeyboardFocus.call(this, elementId))) {
-        await click.call(this, elementId);
-        await sleep(50);
-    }
-
-    // Route through the actions pipeline (not raw winapi keyDown/keyUp) so ALT is
-    // tracked in this.keyboardState — if anything throws mid-sequence, releaseActions
-    // (session cleanup / actions/release) can still force ALT back up instead of leaving
-    // it stuck down.
-    try {
-        await this.handleKeyAction({ type: 'keyDown', value: Key.ALT });
-        await this.handleKeyAction({ type: 'keyDown', value: Key.DOWN });
-    } finally {
-        await this.handleKeyAction({ type: 'keyUp', value: Key.DOWN });
-        await this.handleKeyAction({ type: 'keyUp', value: Key.ALT });
-    }
+  // Route through the actions pipeline (not raw winapi keyDown/keyUp) so ALT is
+  // tracked in this.keyboardState — if anything throws mid-sequence, releaseActions
+  // (session cleanup / actions/release) can still force ALT back up instead of leaving
+  // it stuck down.
+  try {
+    await this.handleKeyAction({type: 'keyDown', value: Key.ALT});
+    await this.handleKeyAction({type: 'keyDown', value: Key.DOWN});
+  } finally {
+    await this.handleKeyAction({type: 'keyUp', value: Key.DOWN});
+    await this.handleKeyAction({type: 'keyUp', value: Key.ALT});
+  }
 }
 
 // Reads the live ExpandCollapseState (added alongside this fix — see ElementCommands.cs
@@ -224,35 +234,35 @@ async function expandViaAltDown(this: AppiumDesktopDriver, elementId: string): P
 // be read at all (e.g. Java elements, or a control with no real ExpandCollapsePattern) —
 // callers must treat that as "can't verify" rather than "failed".
 async function isExpanded(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
-    try {
-        const state = await this.sendCommand('getProperty', { elementId, property: 'ExpandCollapseState' }) as string;
-        return state === 'Expanded' || state === 'PartiallyExpanded';
-    } catch (err) {
-        this.log.debug(`[isExpanded] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
-        return undefined;
-    }
+  try {
+    const state = (await this.sendCommand('getProperty', {elementId, property: 'ExpandCollapseState'})) as string;
+    return state === 'Expanded' || state === 'PartiallyExpanded';
+  } catch (err) {
+    this.log.debug(`[isExpanded] getProperty failed for '${elementId}': ${err instanceof Error ? err.message : err}`);
+    return undefined;
+  }
 }
 
 async function waitForExpanded(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-        const expanded = await isExpanded.call(this, elementId);
-        if (expanded !== false) {
-            return expanded;
-        }
-        await sleep(100);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const expanded = await isExpanded.call(this, elementId);
+    if (expanded !== false) {
+      return expanded;
     }
-    return false;
+    await sleep(100);
+  }
+  return false;
 }
 
 async function waitForCollapsed(this: AppiumDesktopDriver, elementId: string): Promise<boolean | undefined> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-        const expanded = await isExpanded.call(this, elementId);
-        if (expanded !== true) {
-            return expanded;
-        }
-        await sleep(100);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const expanded = await isExpanded.call(this, elementId);
+    if (expanded !== true) {
+      return expanded;
     }
-    return true;
+    await sleep(100);
+  }
+  return true;
 }
 
 /**
@@ -263,27 +273,29 @@ async function waitForCollapsed(this: AppiumDesktopDriver, elementId: string): P
  * @returns Resolves once the element has been expanded (or the fallback has been attempted).
  */
 export async function patternExpand(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    const elementId = element[W3C_ELEMENT_KEY];
+  const elementId = element[W3C_ELEMENT_KEY];
 
-    try {
-        await this.sendCommand('expandElement', { elementId });
-        // `undefined` means the state couldn't be read at all (e.g. Java elements, or a
-        // control with no real ExpandCollapsePattern) — trust the reported success since
-        // there's no stronger signal available. Only a confirmed `false` means the C#
-        // server's LegacyIAccessible fallback (PatternCommands.cs Expand) fired without
-        // actually opening the control.
-        if (await waitForExpanded.call(this, elementId) !== false) {
-            return;
-        }
-        this.log.info('[patternExpand] expandElement reported success but ExpandCollapseState never became Expanded, falling back to ALT+Down.');
-    } catch (err: any) {
-        const msg = String(err?.message ?? err);
-        this.log.info(`[patternExpand] expandElement failed (${msg}), falling back to ALT+Down.`);
+  try {
+    await this.sendCommand('expandElement', {elementId});
+    // `undefined` means the state couldn't be read at all (e.g. Java elements, or a
+    // control with no real ExpandCollapsePattern) — trust the reported success since
+    // there's no stronger signal available. Only a confirmed `false` means the C#
+    // server's LegacyIAccessible fallback (PatternCommands.cs Expand) fired without
+    // actually opening the control.
+    if ((await waitForExpanded.call(this, elementId)) !== false) {
+      return;
     }
+    this.log.info(
+      '[patternExpand] expandElement reported success but ExpandCollapseState never became Expanded, falling back to ALT+Down.',
+    );
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    this.log.info(`[patternExpand] expandElement failed (${msg}), falling back to ALT+Down.`);
+  }
 
-    // Last-resort fallback — ExpandCollapseState isn't trustworthy here (unreadable for
-    // JAB, unreliable for legacy controls), so just trust the keyboard action.
-    await expandViaAltDown.call(this, elementId);
+  // Last-resort fallback — ExpandCollapseState isn't trustworthy here (unreadable for
+  // JAB, unreliable for legacy controls), so just trust the keyboard action.
+  await expandViaAltDown.call(this, elementId);
 }
 
 /**
@@ -294,22 +306,24 @@ export async function patternExpand(this: AppiumDesktopDriver, element: Element)
  * @returns Resolves once the element has been collapsed (or the fallback has been attempted).
  */
 export async function patternCollapse(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    const elementId = element[W3C_ELEMENT_KEY];
+  const elementId = element[W3C_ELEMENT_KEY];
 
-    try {
-        await this.sendCommand('collapseElement', { elementId });
-        if (await waitForCollapsed.call(this, elementId) !== true) {
-            return;
-        }
-        this.log.info('[patternCollapse] collapseElement reported success but ExpandCollapseState never left Expanded, falling back to ALT+Down.');
-    } catch (err: any) {
-        const msg = String(err?.message ?? err);
-        this.log.info(`[patternCollapse] collapseElement failed (${msg}), falling back to ALT+Down.`);
+  try {
+    await this.sendCommand('collapseElement', {elementId});
+    if ((await waitForCollapsed.call(this, elementId)) !== true) {
+      return;
     }
+    this.log.info(
+      '[patternCollapse] collapseElement reported success but ExpandCollapseState never left Expanded, falling back to ALT+Down.',
+    );
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    this.log.info(`[patternCollapse] collapseElement failed (${msg}), falling back to ALT+Down.`);
+  }
 
-    // ALT+Down is just the toggle trigger for the dropdown, not a directional key —
-    // same key closes it as opened it, so reuse expandViaAltDown here.
-    await expandViaAltDown.call(this, elementId);
+  // ALT+Down is just the toggle trigger for the dropdown, not a directional key —
+  // same key closes it as opened it, so reuse expandViaAltDown here.
+  await expandViaAltDown.call(this, elementId);
 }
 
 /**
@@ -318,7 +332,7 @@ export async function patternCollapse(this: AppiumDesktopDriver, element: Elemen
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternScrollIntoView(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('scrollElementIntoView', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('scrollElementIntoView', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -327,8 +341,8 @@ export async function patternScrollIntoView(this: AppiumDesktopDriver, element: 
  * @returns True if multiple selection is allowed.
  */
 export async function patternIsMultiple(this: AppiumDesktopDriver, element: Element): Promise<boolean> {
-    const result = await this.sendCommand('isMultipleSelect', { elementId: element[W3C_ELEMENT_KEY] });
-    return result === true || String(result).toLowerCase() === 'true';
+  const result = await this.sendCommand('isMultipleSelect', {elementId: element[W3C_ELEMENT_KEY]});
+  return result === true || String(result).toLowerCase() === 'true';
 }
 
 /**
@@ -337,14 +351,14 @@ export async function patternIsMultiple(this: AppiumDesktopDriver, element: Elem
  * @returns The selected element.
  */
 export async function patternGetSelectedItem(this: AppiumDesktopDriver, element: Element): Promise<Element> {
-    const result = await this.sendCommand('getSelectedElements', { elementId: element[W3C_ELEMENT_KEY] }) as string[];
-    const elId = result?.[0];
+  const result = (await this.sendCommand('getSelectedElements', {elementId: element[W3C_ELEMENT_KEY]})) as string[];
+  const elId = result?.[0];
 
-    if (!elId) {
-        throw new errors.NoSuchElementError();
-    }
+  if (!elId) {
+    throw new errors.NoSuchElementError();
+  }
 
-    return { [W3C_ELEMENT_KEY]: elId };
+  return {[W3C_ELEMENT_KEY]: elId};
 }
 
 /**
@@ -353,8 +367,8 @@ export async function patternGetSelectedItem(this: AppiumDesktopDriver, element:
  * @returns All selected elements.
  */
 export async function patternGetAllSelectedItems(this: AppiumDesktopDriver, element: Element): Promise<Element[]> {
-    const result = await this.sendCommand('getSelectedElements', { elementId: element[W3C_ELEMENT_KEY] }) as string[];
-    return (result ?? []).map((elId) => ({ [W3C_ELEMENT_KEY]: elId }));
+  const result = (await this.sendCommand('getSelectedElements', {elementId: element[W3C_ELEMENT_KEY]})) as string[];
+  return (result ?? []).map((elId) => ({[W3C_ELEMENT_KEY]: elId}));
 }
 
 /**
@@ -363,7 +377,7 @@ export async function patternGetAllSelectedItems(this: AppiumDesktopDriver, elem
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternAddToSelection(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('addToSelection', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('addToSelection', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -372,7 +386,7 @@ export async function patternAddToSelection(this: AppiumDesktopDriver, element: 
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternRemoveFromSelection(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('removeFromSelection', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('removeFromSelection', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -381,7 +395,7 @@ export async function patternRemoveFromSelection(this: AppiumDesktopDriver, elem
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternSelect(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('selectElement', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('selectElement', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -390,7 +404,7 @@ export async function patternSelect(this: AppiumDesktopDriver, element: Element)
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternToggle(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('toggleElement', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('toggleElement', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -401,16 +415,18 @@ export async function patternToggle(this: AppiumDesktopDriver, element: Element)
  * @returns Resolves once the value has been set.
  */
 export async function patternSetValue(this: AppiumDesktopDriver, element: Element, value: string): Promise<void> {
-    try {
-        await this.sendCommand('setElementValue', { elementId: element[W3C_ELEMENT_KEY], value });
-    } catch (err) {
-        this.log.debug(`[patternSetValue] Value pattern failed (${err instanceof Error ? err.message : err}), falling back to RangeValue pattern.`);
-        const numValue = Number(value);
-        if (isNaN(numValue)) {
-            throw new errors.InvalidArgumentError(`Value '${value}' is not a valid number for the RangeValue pattern.`);
-        }
-        await this.sendCommand('setElementRangeValue', { elementId: element[W3C_ELEMENT_KEY], value: numValue });
+  try {
+    await this.sendCommand('setElementValue', {elementId: element[W3C_ELEMENT_KEY], value});
+  } catch (err) {
+    this.log.debug(
+      `[patternSetValue] Value pattern failed (${err instanceof Error ? err.message : err}), falling back to RangeValue pattern.`,
+    );
+    const numValue = Number(value);
+    if (isNaN(numValue)) {
+      throw new errors.InvalidArgumentError(`Value '${value}' is not a valid number for the RangeValue pattern.`);
     }
+    await this.sendCommand('setElementRangeValue', {elementId: element[W3C_ELEMENT_KEY], value: numValue});
+  }
 }
 
 /**
@@ -419,7 +435,7 @@ export async function patternSetValue(this: AppiumDesktopDriver, element: Elemen
  * @returns The element's value.
  */
 export async function patternGetValue(this: AppiumDesktopDriver, element: Element): Promise<string> {
-    return await this.sendCommand('getElementValue', { elementId: element[W3C_ELEMENT_KEY] }) as string;
+  return (await this.sendCommand('getElementValue', {elementId: element[W3C_ELEMENT_KEY]})) as string;
 }
 
 /**
@@ -428,7 +444,7 @@ export async function patternGetValue(this: AppiumDesktopDriver, element: Elemen
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternMaximize(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('maximizeWindow', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('maximizeWindow', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -437,7 +453,7 @@ export async function patternMaximize(this: AppiumDesktopDriver, element: Elemen
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternMinimize(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('minimizeWindow', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('minimizeWindow', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -446,7 +462,7 @@ export async function patternMinimize(this: AppiumDesktopDriver, element: Elemen
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternRestore(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('restoreWindow', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('restoreWindow', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -455,7 +471,7 @@ export async function patternRestore(this: AppiumDesktopDriver, element: Element
  * @returns Resolves once the pattern has been triggered.
  */
 export async function patternClose(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('closeWindow', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('closeWindow', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -463,7 +479,7 @@ export async function patternClose(this: AppiumDesktopDriver, element: Element):
  * @returns Resolves once the app window has been closed.
  */
 export async function windowsCloseApp(this: AppiumDesktopDriver): Promise<void> {
-    return await this.closeApp();
+  return await this.closeApp();
 }
 
 /**
@@ -474,21 +490,21 @@ export async function windowsCloseApp(this: AppiumDesktopDriver): Promise<void> 
  * @returns Resolves once the root element has been switched.
  */
 export async function windowsSwitchToWindowByTitle(
-    this: AppiumDesktopDriver,
-    args?: { title?: string; exact?: boolean },
+  this: AppiumDesktopDriver,
+  args?: {title?: string; exact?: boolean},
 ): Promise<void> {
-    if (!args?.title) {
-        throw new errors.InvalidArgumentError('switchToWindowByTitle requires a "title" argument.');
-    }
-    return await this.switchToWindowByTitle({ title: args.title, exact: args.exact });
+  if (!args?.title) {
+    throw new errors.InvalidArgumentError('switchToWindowByTitle requires a "title" argument.');
+  }
+  return await this.switchToWindowByTitle({title: args.title, exact: args.exact});
 }
 
 /**
  * `windows: getWindows` execute-method handler; lists all visible top-level windows.
  * @returns Each window's native handle, title, and class name.
  */
-export async function windowsGetWindows(): Promise<Array<{ handle: string; title: string; className: string }>> {
-    return getAllWindowsWithDetails();
+export async function windowsGetWindows(): Promise<Array<{handle: string; title: string; className: string}>> {
+  return getAllWindowsWithDetails();
 }
 
 /**
@@ -496,7 +512,7 @@ export async function windowsGetWindows(): Promise<Array<{ handle: string; title
  * @returns Resolves once the app's window has become the session root.
  */
 export async function windowsLaunchApp(this: AppiumDesktopDriver): Promise<void> {
-    return await this.launchApp();
+  return await this.launchApp();
 }
 
 /**
@@ -505,7 +521,7 @@ export async function windowsLaunchApp(this: AppiumDesktopDriver): Promise<void>
  * @returns Resolves once focus has been set.
  */
 export async function focusElement(this: AppiumDesktopDriver, element: Element): Promise<void> {
-    await this.sendCommand('setFocus', { elementId: element[W3C_ELEMENT_KEY] });
+  await this.sendCommand('setFocus', {elementId: element[W3C_ELEMENT_KEY]});
 }
 
 /**
@@ -514,19 +530,22 @@ export async function focusElement(this: AppiumDesktopDriver, element: Element):
  * bare value or wrapped in an options object; defaults to `plaintext`.
  * @returns The base64-encoded clipboard content.
  */
-export async function getClipboardBase64(this: AppiumDesktopDriver, contentType?: ContentType | { contentType?: ContentType }): Promise<string> {
-    if (!contentType || (contentType && typeof contentType === 'object')) {
-        contentType = contentType?.contentType ?? ContentType.PLAINTEXT;
-    }
+export async function getClipboardBase64(
+  this: AppiumDesktopDriver,
+  contentType?: ContentType | {contentType?: ContentType},
+): Promise<string> {
+  if (!contentType || (contentType && typeof contentType === 'object')) {
+    contentType = contentType?.contentType ?? ContentType.PLAINTEXT;
+  }
 
-    switch (contentType.toLowerCase()) {
-        case ContentType.PLAINTEXT:
-            return await this.sendCommand('getClipboardText', {}) as string;
-        case ContentType.IMAGE:
-            return await this.sendCommand('getClipboardImage', {}) as string;
-        default:
-            throw new errors.InvalidArgumentError(`Unsupported content type '${contentType}'.`);
-    }
+  switch (contentType.toLowerCase()) {
+    case ContentType.PLAINTEXT:
+      return (await this.sendCommand('getClipboardText', {})) as string;
+    case ContentType.IMAGE:
+      return (await this.sendCommand('getClipboardImage', {})) as string;
+    default:
+      throw new errors.InvalidArgumentError(`Unsupported content type '${contentType}'.`);
+  }
 }
 
 /**
@@ -536,23 +555,26 @@ export async function getClipboardBase64(this: AppiumDesktopDriver, contentType?
  * @param args.b64Content - Base64-encoded content to write to the clipboard.
  * @returns An empty string on success.
  */
-export async function setClipboardFromBase64(this: AppiumDesktopDriver, args: { contentType?: ContentType, b64Content: string }): Promise<string> {
-    if (!args || typeof args !== 'object' || !args.b64Content) {
-        throw new errors.InvalidArgumentError(`'b64Content' must be provided.`);
-    }
+export async function setClipboardFromBase64(
+  this: AppiumDesktopDriver,
+  args: {contentType?: ContentType; b64Content: string},
+): Promise<string> {
+  if (!args || typeof args !== 'object' || !args.b64Content) {
+    throw new errors.InvalidArgumentError(`'b64Content' must be provided.`);
+  }
 
-    const contentType = args.contentType ?? ContentType.PLAINTEXT;
+  const contentType = args.contentType ?? ContentType.PLAINTEXT;
 
-    switch (contentType.toLowerCase()) {
-        case ContentType.PLAINTEXT:
-            await this.sendCommand('setClipboardText', { b64Content: args.b64Content });
-            return '';
-        case ContentType.IMAGE:
-            await this.sendCommand('setClipboardImage', { b64Content: args.b64Content });
-            return '';
-        default:
-            throw new errors.InvalidArgumentError(`Unsupported content type '${contentType}'.`);
-    }
+  switch (contentType.toLowerCase()) {
+    case ContentType.PLAINTEXT:
+      await this.sendCommand('setClipboardText', {b64Content: args.b64Content});
+      return '';
+    case ContentType.IMAGE:
+      await this.sendCommand('setClipboardImage', {b64Content: args.b64Content});
+      return '';
+    default:
+      throw new errors.InvalidArgumentError(`Unsupported content type '${contentType}'.`);
+  }
 }
 
 /**
@@ -560,22 +582,25 @@ export async function setClipboardFromBase64(this: AppiumDesktopDriver, args: { 
  * @param script - The script to run, as a raw string or wrapped in `{ script }`/`{ command }`.
  * @returns The script's output.
  */
-export async function executePowerShellScript(this: AppiumDesktopDriver, script: string | { script: string, command: undefined } | { script: undefined, command: string }): Promise<string> {
-    if (script && typeof script === 'object') {
-        if (script.script) {
-            script = script.script;
-        } else if (script.command) {
-            script = script.command;
-        } else {
-            throw new errors.InvalidArgumentError('Either script or command must be provided.');
-        }
+export async function executePowerShellScript(
+  this: AppiumDesktopDriver,
+  script: string | {script: string; command: undefined} | {script: undefined; command: string},
+): Promise<string> {
+  if (script && typeof script === 'object') {
+    if (script.script) {
+      script = script.script;
+    } else if (script.command) {
+      script = script.command;
+    } else {
+      throw new errors.InvalidArgumentError('Either script or command must be provided.');
     }
+  }
 
-    return await this.sendCommand('executePowerShellScript', {
-        script,
-        workingDir: this.caps.appWorkingDir ?? null,
-        isolated: this.caps.isolatedScriptExecution ?? false,
-    }) as string;
+  return (await this.sendCommand('executePowerShellScript', {
+    script,
+    workingDir: this.caps.appWorkingDir ?? null,
+    isolated: this.caps.isolatedScriptExecution ?? false,
+  })) as string;
 }
 
 /**
@@ -585,85 +610,95 @@ export async function executePowerShellScript(this: AppiumDesktopDriver, script:
  * @param keyActions.forceUnicode - Whether to force Unicode key input for text actions.
  * @returns Resolves once all key actions have been sent.
  */
-export async function executeKeys(this: AppiumDesktopDriver, keyActions: { actions: KeyAction | KeyAction[], forceUnicode: boolean }) {
-    if (!Array.isArray(keyActions.actions)) {
-        keyActions.actions = [keyActions.actions];
+export async function executeKeys(
+  this: AppiumDesktopDriver,
+  keyActions: {actions: KeyAction | KeyAction[]; forceUnicode: boolean},
+) {
+  if (!Array.isArray(keyActions.actions)) {
+    keyActions.actions = [keyActions.actions];
+  }
+
+  keyActions.forceUnicode ??= false;
+
+  for (const action of keyActions.actions) {
+    if (Number(!!action.pause) + Number(!!action.text) + Number(!!action.virtualKeyCode) !== 1) {
+      throw new errors.InvalidArgumentError('Either pause, text or virtualKeyCode should be set.');
     }
 
-    keyActions.forceUnicode ??= false;
-
-    for (const action of keyActions.actions) {
-        if (Number(!!action.pause) + Number(!!action.text) + Number(!!action.virtualKeyCode) !== 1) {
-            throw new errors.InvalidArgumentError('Either pause, text or virtualKeyCode should be set.');
-        }
-
-        if (action.pause) {
-            await sleep(action.pause);
-            continue;
-        }
-
-        if (action.virtualKeyCode) {
-            if (action.down === undefined) {
-                sendKeyboardEvents([{
-                    wVk: action.virtualKeyCode as VirtualKey,
-                    wScan: 0,
-                    dwFlags: 0,
-                    time: 0,
-                    dwExtraInfo: 0,
-                }, {
-                    wVk: action.virtualKeyCode as VirtualKey,
-                    wScan: 0,
-                    dwFlags: KeyEventFlags.KEYEVENTF_KEYUP,
-                    time: 0,
-                    dwExtraInfo: 0,
-                }]);
-            } else {
-                sendKeyboardEvents([{
-                    wVk: action.virtualKeyCode as VirtualKey,
-                    wScan: 0,
-                    dwFlags: action.down ? 0 : KeyEventFlags.KEYEVENTF_KEYUP,
-                    time: 0,
-                    dwExtraInfo: 0,
-                }]);
-            }
-            continue;
-        }
-
-        for (const key of action.text ?? []) {
-            if (action.down !== undefined) {
-                if (action.down) {
-                    keyDown(key, keyActions.forceUnicode);
-                } else {
-                    keyUp(key, keyActions.forceUnicode);
-                }
-            } else {
-                keyDown(key, keyActions.forceUnicode);
-                keyUp(key, keyActions.forceUnicode);
-            }
-        }
+    if (action.pause) {
+      await sleep(action.pause);
+      continue;
     }
+
+    if (action.virtualKeyCode) {
+      if (action.down === undefined) {
+        sendKeyboardEvents([
+          {
+            wVk: action.virtualKeyCode as VirtualKey,
+            wScan: 0,
+            dwFlags: 0,
+            time: 0,
+            dwExtraInfo: 0,
+          },
+          {
+            wVk: action.virtualKeyCode as VirtualKey,
+            wScan: 0,
+            dwFlags: KeyEventFlags.KEYEVENTF_KEYUP,
+            time: 0,
+            dwExtraInfo: 0,
+          },
+        ]);
+      } else {
+        sendKeyboardEvents([
+          {
+            wVk: action.virtualKeyCode as VirtualKey,
+            wScan: 0,
+            dwFlags: action.down ? 0 : KeyEventFlags.KEYEVENTF_KEYUP,
+            time: 0,
+            dwExtraInfo: 0,
+          },
+        ]);
+      }
+      continue;
+    }
+
+    for (const key of action.text ?? []) {
+      if (action.down !== undefined) {
+        if (action.down) {
+          keyDown(key, keyActions.forceUnicode);
+        } else {
+          keyUp(key, keyActions.forceUnicode);
+        }
+      } else {
+        keyDown(key, keyActions.forceUnicode);
+        keyUp(key, keyActions.forceUnicode);
+      }
+    }
+  }
 }
 
-async function getElementPos(driver: AppiumDesktopDriver, elementId: string, offsetX?: number, offsetY?: number): Promise<[number, number]> {
-    const exists = await driver.sendCommand('lookupElement', { elementId }) as boolean;
-    if (!exists) {
-        const elId = await driver.sendCommand('findElement', {
-            scope: 'subtree',
-            condition: propertyCondition('RuntimeId', elementId.split('.').map(Number)),
-            contextElementId: null,
-        }) as string | null;
+async function getElementPos(
+  driver: AppiumDesktopDriver,
+  elementId: string,
+  offsetX?: number,
+  offsetY?: number,
+): Promise<[number, number]> {
+  const exists = (await driver.sendCommand('lookupElement', {elementId})) as boolean;
+  if (!exists) {
+    const elId = (await driver.sendCommand('findElement', {
+      scope: 'subtree',
+      condition: propertyCondition('RuntimeId', elementId.split('.').map(Number)),
+      contextElementId: null,
+    })) as string | null;
 
-        if (!elId || elId.trim() === '') {
-            throw new errors.NoSuchElementError();
-        }
-        elementId = elId;
+    if (!elId || elId.trim() === '') {
+      throw new errors.NoSuchElementError();
     }
+    elementId = elId;
+  }
 
-    const rect = await driver.sendCommand('getRect', { elementId }) as RectResult;
-    return [
-        rect.x + (offsetX ?? Math.trunc(rect.width / 2)),
-        rect.y + (offsetY ?? Math.trunc(rect.height / 2)),
-    ];
+  const rect = (await driver.sendCommand('getRect', {elementId})) as RectResult;
+  return [rect.x + (offsetX ?? Math.trunc(rect.width / 2)), rect.y + (offsetY ?? Math.trunc(rect.height / 2))];
 }
 
 /**
@@ -679,73 +714,93 @@ async function getElementPos(driver: AppiumDesktopDriver, elementId: string, off
  * @param clickArgs.interClickDelayMs - Delay between repeated clicks.
  * @returns Resolves once the click(s) have been performed.
  */
-export async function executeClick(this: AppiumDesktopDriver, clickArgs: {
-    elementId?: string,
-    x?: number,
-    y?: number,
-    button?: ClickType,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
-    durationMs?: number,
-    times?: number,
-    interClickDelayMs?: number
-}) {
-    const {
-        elementId,
-        x, y,
-        button = ClickType.LEFT,
-        modifierKeys = [],
-        durationMs = 0,
-        times = 1,
-        interClickDelayMs = 100,
-    } = clickArgs;
+export async function executeClick(
+  this: AppiumDesktopDriver,
+  clickArgs: {
+    elementId?: string;
+    x?: number;
+    y?: number;
+    button?: ClickType;
+    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[];
+    durationMs?: number;
+    times?: number;
+    interClickDelayMs?: number;
+  },
+) {
+  const {
+    elementId,
+    x,
+    y,
+    button = ClickType.LEFT,
+    modifierKeys = [],
+    durationMs = 0,
+    times = 1,
+    interClickDelayMs = 100,
+  } = clickArgs;
 
-    if ((x != null) !== (y != null)) {
-        throw new errors.InvalidArgumentError('Both x and y must be provided if either is set.');
+  if ((x != null) !== (y != null)) {
+    throw new errors.InvalidArgumentError('Both x and y must be provided if either is set.');
+  }
+
+  let pos: [number, number];
+  if (elementId) {
+    pos = await getElementPos(this, elementId, x, y);
+  } else {
+    pos = [x!, y!];
+  }
+
+  const clickTypeToButtonMapping: {[key in ClickType]: number} = {
+    [ClickType.LEFT]: 0,
+    [ClickType.MIDDLE]: 1,
+    [ClickType.RIGHT]: 2,
+    [ClickType.BACK]: 3,
+    [ClickType.FORWARD]: 4,
+  };
+  const mouseButton: number = clickTypeToButtonMapping[button];
+
+  const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
+  await mouseMoveAbsolute(pos[0], pos[1], 0);
+  for (let i = 0; i < times; i++) {
+    if (i !== 0) {
+      await sleep(interClickDelayMs);
     }
 
-    let pos: [number, number];
-    if (elementId) {
-        pos = await getElementPos(this, elementId, x, y);
-    } else {
-        pos = [x!, y!];
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+      keyDown(Key.CONTROL);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+      keyDown(Key.ALT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+      keyDown(Key.SHIFT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+      keyDown(Key.META);
     }
 
-    const clickTypeToButtonMapping: { [key in ClickType]: number } = {
-        [ClickType.LEFT]: 0,
-        [ClickType.MIDDLE]: 1,
-        [ClickType.RIGHT]: 2,
-        [ClickType.BACK]: 3,
-        [ClickType.FORWARD]: 4
-    };
-    const mouseButton: number = clickTypeToButtonMapping[button];
-
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
-    await mouseMoveAbsolute(pos[0], pos[1], 0);
-    for (let i = 0; i < times; i++) {
-        if (i !== 0) {
-            await sleep(interClickDelayMs);
-        }
-
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyDown(Key.CONTROL);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyDown(Key.ALT);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyDown(Key.SHIFT);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyDown(Key.META);}
-
-        mouseDown(mouseButton);
-        if (durationMs > 0) {
-            await sleep(durationMs);
-        }
-        mouseUp(mouseButton);
-
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyUp(Key.CONTROL);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyUp(Key.ALT);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyUp(Key.SHIFT);}
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyUp(Key.META);}
+    mouseDown(mouseButton);
+    if (durationMs > 0) {
+      await sleep(durationMs);
     }
+    mouseUp(mouseButton);
 
-    if (this.caps.delayAfterClick) {
-        await sleep(this.caps.delayAfterClick ?? 0);
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+      keyUp(Key.CONTROL);
     }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+      keyUp(Key.ALT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+      keyUp(Key.SHIFT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+      keyUp(Key.META);
+    }
+  }
+
+  if (this.caps.delayAfterClick) {
+    await sleep(this.caps.delayAfterClick ?? 0);
+  }
 }
 
 /**
@@ -761,61 +816,73 @@ export async function executeClick(this: AppiumDesktopDriver, clickArgs: {
  * @param hoverArgs.durationMs - Duration of the cursor move to the end position.
  * @returns Resolves once the hover move has completed.
  */
-export async function executeHover(this: AppiumDesktopDriver, hoverArgs: {
-    startElementId?: string,
-    startX?: number,
-    startY?: number,
-    endElementId?: string,
-    endX?: number,
-    endY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
-    durationMs?: number,
-}) {
-    const {
-        startElementId,
-        startX, startY,
-        endElementId,
-        endX, endY,
-        modifierKeys = [],
-        durationMs = 500,
-    } = hoverArgs;
+export async function executeHover(
+  this: AppiumDesktopDriver,
+  hoverArgs: {
+    startElementId?: string;
+    startX?: number;
+    startY?: number;
+    endElementId?: string;
+    endX?: number;
+    endY?: number;
+    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[];
+    durationMs?: number;
+  },
+) {
+  const {startElementId, startX, startY, endElementId, endX, endY, modifierKeys = [], durationMs = 500} = hoverArgs;
 
-    if ((startX != null) !== (startY != null)) {
-        throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
-    }
+  if ((startX != null) !== (startY != null)) {
+    throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
+  }
 
-    if ((endX != null) !== (endY != null)) {
-        throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
-    }
+  if ((endX != null) !== (endY != null)) {
+    throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
+  }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
-    let startPos: [number, number];
-    if (startElementId) {
-        startPos = await getElementPos(this, startElementId, startX, startY);
-    } else {
-        startPos = [startX!, startY!];
-    }
+  const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
+  let startPos: [number, number];
+  if (startElementId) {
+    startPos = await getElementPos(this, startElementId, startX, startY);
+  } else {
+    startPos = [startX!, startY!];
+  }
 
-    let endPos: [number, number];
-    if (endElementId) {
-        endPos = await getElementPos(this, endElementId, endX, endY);
-    } else {
-        endPos = [endX!, endY!];
-    }
+  let endPos: [number, number];
+  if (endElementId) {
+    endPos = await getElementPos(this, endElementId, endX, endY);
+  } else {
+    endPos = [endX!, endY!];
+  }
 
-    await mouseMoveAbsolute(startPos[0], startPos[1], 0);
+  await mouseMoveAbsolute(startPos[0], startPos[1], 0);
 
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyDown(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyDown(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyDown(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyDown(Key.META);}
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyDown(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyDown(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyDown(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyDown(Key.META);
+  }
 
-    await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
+  await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
 
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyUp(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyUp(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyUp(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyUp(Key.META);}
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyUp(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyUp(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyUp(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyUp(Key.META);
+  }
 }
 
 /**
@@ -829,50 +896,64 @@ export async function executeHover(this: AppiumDesktopDriver, hoverArgs: {
  * @param scrollArgs.modifierKeys - Modifier key(s) held during the scroll.
  * @returns Resolves once the scroll has been performed.
  */
-export async function executeScroll(this: AppiumDesktopDriver, scrollArgs: {
-    elementId?: string,
-    x?: number,
-    y?: number,
-    deltaX?: number,
-    deltaY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
-}) {
-    const {
-        elementId,
-        x, y,
-        deltaX, deltaY,
-        modifierKeys = [],
-    } = scrollArgs;
+export async function executeScroll(
+  this: AppiumDesktopDriver,
+  scrollArgs: {
+    elementId?: string;
+    x?: number;
+    y?: number;
+    deltaX?: number;
+    deltaY?: number;
+    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[];
+  },
+) {
+  const {elementId, x, y, deltaX, deltaY, modifierKeys = []} = scrollArgs;
 
-    if (!!elementId && ((x !== null && x !== undefined) || (y !== null && y !== undefined))) {
-        throw new errors.InvalidArgumentError('Either elementId or x and y must be provided.');
-    }
+  if (!!elementId && ((x !== null && x !== undefined) || (y !== null && y !== undefined))) {
+    throw new errors.InvalidArgumentError('Either elementId or x and y must be provided.');
+  }
 
-    if ((x !== null && x !== undefined) !== (y !== null && y !== undefined)) {
-        throw new errors.InvalidArgumentError('Both x and y must be provided.');
-    }
+  if ((x !== null && x !== undefined) !== (y !== null && y !== undefined)) {
+    throw new errors.InvalidArgumentError('Both x and y must be provided.');
+  }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
-    let pos: [number, number];
-    if (elementId) {
-        pos = await getElementPos(this, elementId);
-    } else {
-        pos = [x!, y!];
-    }
+  const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
+  let pos: [number, number];
+  if (elementId) {
+    pos = await getElementPos(this, elementId);
+  } else {
+    pos = [x!, y!];
+  }
 
-    await mouseMoveAbsolute(pos[0], pos[1], 0);
+  await mouseMoveAbsolute(pos[0], pos[1], 0);
 
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyDown(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyDown(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyDown(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyDown(Key.META);}
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyDown(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyDown(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyDown(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyDown(Key.META);
+  }
 
-    mouseScroll(deltaX ?? 0, deltaY ?? 0);
+  mouseScroll(deltaX ?? 0, deltaY ?? 0);
 
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyUp(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyUp(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyUp(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyUp(Key.META);}
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyUp(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyUp(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyUp(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyUp(Key.META);
+  }
 }
 
 /**
@@ -890,67 +971,70 @@ export async function executeScroll(this: AppiumDesktopDriver, scrollArgs: {
  * @param args.forceRestart - Whether to stop and discard an in-progress recording before starting.
  * @returns Resolves once recording has started.
  */
-export async function startRecordingScreen(this: AppiumDesktopDriver, args?: {
-    outputPath?: string,
-    timeLimit?: number,
-    videoFps?: number,
-    videoFilter?: string,
-    preset?: string,
-    captureCursor?: boolean,
-    captureClicks?: boolean,
-    audioInput?: string,
-    forceRestart?: boolean,
-}): Promise<void> {
-    const {
-        outputPath,
-        timeLimit,
-        videoFps: fps,
-        videoFilter,
-        preset,
-        captureCursor,
-        captureClicks,
-        audioInput,
-        forceRestart = true,
-    } = args ?? {};
+export async function startRecordingScreen(
+  this: AppiumDesktopDriver,
+  args?: {
+    outputPath?: string;
+    timeLimit?: number;
+    videoFps?: number;
+    videoFilter?: string;
+    preset?: string;
+    captureCursor?: boolean;
+    captureClicks?: boolean;
+    audioInput?: string;
+    forceRestart?: boolean;
+  },
+): Promise<void> {
+  const {
+    outputPath,
+    timeLimit,
+    videoFps: fps,
+    videoFilter,
+    preset,
+    captureCursor,
+    captureClicks,
+    audioInput,
+    forceRestart = true,
+  } = args ?? {};
 
-    if (this._screenRecorder?.isRunning()) {
-        this.log.debug('The screen recording is already running');
-        if (!forceRestart) {
-            this.log.debug('Doing nothing');
-            return;
-        }
-        this.log.debug('Forcing the active screen recording to stop');
-        await this._screenRecorder.stop(true);
-    } else if (this._screenRecorder) {
-        this.log.debug('Clearing the recent screen recording');
-        await this._screenRecorder.stop(true);
+  if (this._screenRecorder?.isRunning()) {
+    this.log.debug('The screen recording is already running');
+    if (!forceRestart) {
+      this.log.debug('Doing nothing');
+      return;
     }
+    this.log.debug('Forcing the active screen recording to stop');
+    await this._screenRecorder.stop(true);
+  } else if (this._screenRecorder) {
+    this.log.debug('Clearing the recent screen recording');
+    await this._screenRecorder.stop(true);
+  }
+  this._screenRecorder = null;
+
+  if (outputPath) {
+    const ext = extname(outputPath).toLowerCase();
+    if (ext !== `.${DEFAULT_EXT}`) {
+      throw new errors.InvalidArgumentError(
+        `outputPath must be a path to a .${DEFAULT_EXT} file, got: '${outputPath}'`,
+      );
+    }
+  }
+  const videoPath = outputPath ?? join(tmpdir(), `appiumdesktop-recording-${Date.now()}.${DEFAULT_EXT}`);
+  this._screenRecorder = new ScreenRecorder(videoPath, this, {
+    fps: fps !== undefined ? parseInt(String(fps), 10) : undefined,
+    timeLimit: timeLimit !== undefined ? parseInt(String(timeLimit), 10) : undefined,
+    preset,
+    captureCursor,
+    captureClicks,
+    videoFilter,
+    audioInput,
+  });
+  try {
+    await this._screenRecorder.start();
+  } catch (e) {
     this._screenRecorder = null;
-
-    if (outputPath) {
-        const ext = extname(outputPath).toLowerCase();
-        if (ext !== `.${DEFAULT_EXT}`) {
-            throw new errors.InvalidArgumentError(
-                `outputPath must be a path to a .${DEFAULT_EXT} file, got: '${outputPath}'`,
-            );
-        }
-    }
-    const videoPath = outputPath ?? join(tmpdir(), `appiumdesktop-recording-${Date.now()}.${DEFAULT_EXT}`);
-    this._screenRecorder = new ScreenRecorder(videoPath, this, {
-        fps: fps !== undefined ? parseInt(String(fps), 10) : undefined,
-        timeLimit: timeLimit !== undefined ? parseInt(String(timeLimit), 10) : undefined,
-        preset,
-        captureCursor,
-        captureClicks,
-        videoFilter,
-        audioInput,
-    });
-    try {
-        await this._screenRecorder.start();
-    } catch (e) {
-        this._screenRecorder = null;
-        throw e;
-    }
+    throw e;
+  }
 }
 
 /**
@@ -962,20 +1046,20 @@ export async function startRecordingScreen(this: AppiumDesktopDriver, args?: {
  * recording was in progress.
  */
 export async function stopRecordingScreen(this: AppiumDesktopDriver, args?: UploadOptions): Promise<string> {
-    if (!this._screenRecorder) {
-        this.log.debug('No screen recording has been started. Doing nothing');
-        return '';
-    }
+  if (!this._screenRecorder) {
+    this.log.debug('No screen recording has been started. Doing nothing');
+    return '';
+  }
 
-    this.log.debug('Retrieving the resulting video data');
-    const videoPath = await this._screenRecorder.stop();
-    if (!videoPath) {
-        this.log.debug('No video data is found. Returning an empty string');
-        return '';
-    }
+  this.log.debug('Retrieving the resulting video data');
+  const videoPath = await this._screenRecorder.stop();
+  if (!videoPath) {
+    this.log.debug('No video data is found. Returning an empty string');
+    return '';
+  }
 
-    const { remotePath, ...uploadOpts } = args ?? {};
-    return await uploadRecordedMedia(videoPath, remotePath, uploadOpts);
+  const {remotePath, ...uploadOpts} = args ?? {};
+  return await uploadRecordedMedia(videoPath, remotePath, uploadOpts);
 }
 
 /**
@@ -984,12 +1068,12 @@ export async function stopRecordingScreen(this: AppiumDesktopDriver, args?: Uplo
  * @param args.path - Path of the file to delete.
  * @returns Resolves once the file has been deleted.
  */
-export async function deleteFile(this: AppiumDesktopDriver, args: { path: string }): Promise<void> {
-    this.assertFeatureEnabled(MODIFY_FS_FEATURE);
-    if (!args || typeof args !== 'object' || !args.path) {
-        throw new errors.InvalidArgumentError("'path' must be provided.");
-    }
-    await this.sendCommand('deleteFile', { path: args.path });
+export async function deleteFile(this: AppiumDesktopDriver, args: {path: string}): Promise<void> {
+  this.assertFeatureEnabled(MODIFY_FS_FEATURE);
+  if (!args || typeof args !== 'object' || !args.path) {
+    throw new errors.InvalidArgumentError("'path' must be provided.");
+  }
+  await this.sendCommand('deleteFile', {path: args.path});
 }
 
 /**
@@ -999,12 +1083,15 @@ export async function deleteFile(this: AppiumDesktopDriver, args: { path: string
  * @param args.recursive - Whether to delete non-empty folders recursively (default true).
  * @returns Resolves once the folder has been deleted.
  */
-export async function deleteFolder(this: AppiumDesktopDriver, args: { path: string, recursive?: boolean }): Promise<void> {
-    this.assertFeatureEnabled(MODIFY_FS_FEATURE);
-    if (!args || typeof args !== 'object' || !args.path) {
-        throw new errors.InvalidArgumentError("'path' must be provided.");
-    }
-    await this.sendCommand('deleteFolder', { path: args.path, recursive: args.recursive ?? true });
+export async function deleteFolder(
+  this: AppiumDesktopDriver,
+  args: {path: string; recursive?: boolean},
+): Promise<void> {
+  this.assertFeatureEnabled(MODIFY_FS_FEATURE);
+  if (!args || typeof args !== 'object' || !args.path) {
+    throw new errors.InvalidArgumentError("'path' must be provided.");
+  }
+  await this.sendCommand('deleteFolder', {path: args.path, recursive: args.recursive ?? true});
 }
 
 /**
@@ -1021,80 +1108,101 @@ export async function deleteFolder(this: AppiumDesktopDriver, args: { path: stri
  * @param dragArgs.button - Which mouse button to hold down during the drag.
  * @returns Resolves once the click-and-drag has completed.
  */
-export async function executeClickAndDrag(this: AppiumDesktopDriver, dragArgs: {
-    startElementId?: string,
-    startX?: number,
-    startY?: number,
-    endElementId?: string,
-    endX?: number,
-    endY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
-    durationMs?: number,
-    button?: ClickType,
-}) {
-    const {
-        startElementId,
-        startX, startY,
-        endElementId,
-        endX, endY,
-        modifierKeys = [],
-        durationMs = 500,
-        button = ClickType.LEFT,
-    } = dragArgs ?? {};
+export async function executeClickAndDrag(
+  this: AppiumDesktopDriver,
+  dragArgs: {
+    startElementId?: string;
+    startX?: number;
+    startY?: number;
+    endElementId?: string;
+    endX?: number;
+    endY?: number;
+    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[];
+    durationMs?: number;
+    button?: ClickType;
+  },
+) {
+  const {
+    startElementId,
+    startX,
+    startY,
+    endElementId,
+    endX,
+    endY,
+    modifierKeys = [],
+    durationMs = 500,
+    button = ClickType.LEFT,
+  } = dragArgs ?? {};
 
-    if ((startX != null) !== (startY != null)) {
-        throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
+  if ((startX != null) !== (startY != null)) {
+    throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
+  }
+
+  if ((endX != null) !== (endY != null)) {
+    throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
+  }
+
+  const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
+  const clickTypeToButtonMapping: {[key in ClickType]: number} = {
+    [ClickType.LEFT]: 0,
+    [ClickType.MIDDLE]: 1,
+    [ClickType.RIGHT]: 2,
+    [ClickType.BACK]: 3,
+    [ClickType.FORWARD]: 4,
+  };
+  const mouseButton = clickTypeToButtonMapping[button];
+
+  let startPos: [number, number];
+  if (startElementId) {
+    startPos = await getElementPos(this, startElementId, startX, startY);
+  } else {
+    if (startX == null || startY == null) {
+      throw new errors.InvalidArgumentError('Either startElementId or startX and startY must be provided.');
     }
+    startPos = [startX, startY];
+  }
 
-    if ((endX != null) !== (endY != null)) {
-        throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
+  let endPos: [number, number];
+  if (endElementId) {
+    endPos = await getElementPos(this, endElementId, endX, endY);
+  } else {
+    if (endX == null || endY == null) {
+      throw new errors.InvalidArgumentError('Either endElementId or endX and endY must be provided.');
     }
+    endPos = [endX, endY];
+  }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
-    const clickTypeToButtonMapping: { [key in ClickType]: number } = {
-        [ClickType.LEFT]: 0,
-        [ClickType.MIDDLE]: 1,
-        [ClickType.RIGHT]: 2,
-        [ClickType.BACK]: 3,
-        [ClickType.FORWARD]: 4,
-    };
-    const mouseButton = clickTypeToButtonMapping[button];
+  await mouseMoveAbsolute(startPos[0], startPos[1], 0);
 
-    let startPos: [number, number];
-    if (startElementId) {
-        startPos = await getElementPos(this, startElementId, startX, startY);
-    } else {
-        if (startX == null || startY == null) {
-            throw new errors.InvalidArgumentError('Either startElementId or startX and startY must be provided.');
-        }
-        startPos = [startX, startY];
-    }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyDown(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyDown(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyDown(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyDown(Key.META);
+  }
 
-    let endPos: [number, number];
-    if (endElementId) {
-        endPos = await getElementPos(this, endElementId, endX, endY);
-    } else {
-        if (endX == null || endY == null) {
-            throw new errors.InvalidArgumentError('Either endElementId or endX and endY must be provided.');
-        }
-        endPos = [endX, endY];
-    }
+  mouseDown(mouseButton);
+  await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
+  mouseUp(mouseButton);
 
-    await mouseMoveAbsolute(startPos[0], startPos[1], 0);
-
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyDown(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyDown(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyDown(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyDown(Key.META);}
-
-    mouseDown(mouseButton);
-    await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
-    mouseUp(mouseButton);
-
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {keyUp(Key.CONTROL);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {keyUp(Key.ALT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {keyUp(Key.SHIFT);}
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {keyUp(Key.META);}
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+    keyUp(Key.CONTROL);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+    keyUp(Key.ALT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+    keyUp(Key.SHIFT);
+  }
+  if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+    keyUp(Key.META);
+  }
 }
 
 /**
@@ -1102,8 +1210,8 @@ export async function executeClickAndDrag(this: AppiumDesktopDriver, dragArgs: {
  * @param args.format - A .NET custom date/time format string; defaults to ISO 8601.
  * @returns The formatted date/time string.
  */
-export async function windowsGetDeviceTime(this: AppiumDesktopDriver, args?: { format?: string }): Promise<string> {
-    return this.getDeviceTime(undefined, args?.format);
+export async function windowsGetDeviceTime(this: AppiumDesktopDriver, args?: {format?: string}): Promise<string> {
+  return this.getDeviceTime(undefined, args?.format);
 }
 
 /**
@@ -1112,11 +1220,11 @@ export async function windowsGetDeviceTime(this: AppiumDesktopDriver, args?: { f
  * @returns The root window as an element reference.
  */
 export async function getWindowElement(this: AppiumDesktopDriver): Promise<Element> {
-    const elementId = await this.sendCommand('saveRootElementToTable', {}) as string;
-    if (!elementId) {
-        throw new errors.NoSuchWindowError('No active app window is found for this session.');
-    }
-    return { [W3C_ELEMENT_KEY]: elementId };
+  const elementId = (await this.sendCommand('saveRootElementToTable', {})) as string;
+  if (!elementId) {
+    throw new errors.NoSuchWindowError('No active app window is found for this session.');
+  }
+  return {[W3C_ELEMENT_KEY]: elementId};
 }
 
 /**
@@ -1127,16 +1235,16 @@ export async function getWindowElement(this: AppiumDesktopDriver): Promise<Eleme
  * @returns Resolves once the file has been written.
  */
 export async function pushFile(this: AppiumDesktopDriver, remotePath: string, base64Data: string): Promise<void> {
-    this.assertFeatureEnabled(MODIFY_FS_FEATURE);
-    if (!remotePath) {
-        throw new errors.InvalidArgumentError("'remotePath' must be provided.");
-    }
-    if (!base64Data) {
-        throw new errors.InvalidArgumentError("'base64Data' must be provided.");
-    }
-    const data = Buffer.from(base64Data, 'base64');
-    await mkdir(dirname(remotePath), { recursive: true });
-    await writeFile(remotePath, data);
+  this.assertFeatureEnabled(MODIFY_FS_FEATURE);
+  if (!remotePath) {
+    throw new errors.InvalidArgumentError("'remotePath' must be provided.");
+  }
+  if (!base64Data) {
+    throw new errors.InvalidArgumentError("'base64Data' must be provided.");
+  }
+  const data = Buffer.from(base64Data, 'base64');
+  await mkdir(dirname(remotePath), {recursive: true});
+  await writeFile(remotePath, data);
 }
 
 /**
@@ -1146,12 +1254,12 @@ export async function pushFile(this: AppiumDesktopDriver, remotePath: string, ba
  * @returns The file content, base64-encoded.
  */
 export async function pullFile(this: AppiumDesktopDriver, remotePath: string): Promise<string> {
-    this.assertFeatureEnabled(MODIFY_FS_FEATURE);
-    if (!remotePath) {
-        throw new errors.InvalidArgumentError("'remotePath' must be provided.");
-    }
-    const data = await readFile(remotePath);
-    return data.toString('base64');
+  this.assertFeatureEnabled(MODIFY_FS_FEATURE);
+  if (!remotePath) {
+    throw new errors.InvalidArgumentError("'remotePath' must be provided.");
+  }
+  const data = await readFile(remotePath);
+  return data.toString('base64');
 }
 
 /**
@@ -1160,7 +1268,7 @@ export async function pullFile(this: AppiumDesktopDriver, remotePath: string): P
  * @returns The list of monitors and their properties, as reported by the C# server.
  */
 export async function windowsGetMonitors(this: AppiumDesktopDriver): Promise<object[]> {
-    return await this.sendCommand('getMonitors', {}) as object[];
+  return (await this.sendCommand('getMonitors', {})) as object[];
 }
 
 /**
@@ -1168,7 +1276,7 @@ export async function windowsGetMonitors(this: AppiumDesktopDriver): Promise<obj
  * @returns The scaling factor (e.g. `1.5` for 150% scaling).
  */
 export function executeGetDpiScale(): number {
-    return getResolutionScalingFactor();
+  return getResolutionScalingFactor();
 }
 
 /**
@@ -1179,11 +1287,11 @@ export function executeGetDpiScale(): number {
  * capability.
  * @returns Resolves once the Java agent has been injected and connected.
  */
-export async function executeAttachJavaSwing(this: AppiumDesktopDriver, opts: { jdkPath?: string } = {}): Promise<void> {
-    // Injects the Java agent into the JVM owning the current root window,
-    // then connects. The C# side resolves the PID from the root element's HWND.
-    const jdkPath = opts.jdkPath ?? this.caps.jdkPath;
-    await this.sendCommand('injectJavaAgent', { jdkPath });
+export async function executeAttachJavaSwing(this: AppiumDesktopDriver, opts: {jdkPath?: string} = {}): Promise<void> {
+  // Injects the Java agent into the JVM owning the current root window,
+  // then connects. The C# side resolves the PID from the root element's HWND.
+  const jdkPath = opts.jdkPath ?? this.caps.jdkPath;
+  await this.sendCommand('injectJavaAgent', {jdkPath});
 }
 
 /**
@@ -1193,9 +1301,9 @@ export async function executeAttachJavaSwing(this: AppiumDesktopDriver, opts: { 
  * @returns Resolves once the .NET bridge has been injected and connected.
  */
 export async function executeAttachDotnetBridge(this: AppiumDesktopDriver): Promise<void> {
-    // Injects the bridge DLL into the process owning the current root window,
-    // then connects. The C# side resolves the PID from the root element's HWND.
-    await this.sendCommand('injectDotnetBridge', {});
+  // Injects the bridge DLL into the process owning the current root window,
+  // then connects. The C# side resolves the PID from the root element's HWND.
+  await this.sendCommand('injectDotnetBridge', {});
 }
 
 /**
@@ -1217,19 +1325,23 @@ export async function executeAttachDotnetBridge(this: AppiumDesktopDriver): Prom
  * @returns The matching element, or `null` if none was found.
  */
 export async function findElementViaDotnetBridge(
-    this: AppiumDesktopDriver,
-    args: { using: LocateStrategy, value: string, contextElementId?: string }
+  this: AppiumDesktopDriver,
+  args: {using: LocateStrategy; value: string; contextElementId?: string},
 ): Promise<Element | null> {
-    try {
-        return await locateElements(
-            args.using, args.value, false, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
-        );
-    } catch (e) {
-        if (e instanceof errors.NoSuchElementError) {
-            return null;
-        }
-        throw e;
+  try {
+    return await locateElements(
+      args.using,
+      args.value,
+      false,
+      args.contextElementId,
+      wrapForDotnetBridge(this.sendCommand.bind(this)),
+    );
+  } catch (e) {
+    if (e instanceof errors.NoSuchElementError) {
+      return null;
     }
+    throw e;
+  }
 }
 
 /**
@@ -1241,12 +1353,16 @@ export async function findElementViaDotnetBridge(
  * @returns All matching elements (empty array if none).
  */
 export async function findElementsViaDotnetBridge(
-    this: AppiumDesktopDriver,
-    args: { using: LocateStrategy, value: string, contextElementId?: string }
+  this: AppiumDesktopDriver,
+  args: {using: LocateStrategy; value: string; contextElementId?: string},
 ): Promise<Element[]> {
-    return await locateElements(
-        args.using, args.value, true, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
-    );
+  return await locateElements(
+    args.using,
+    args.value,
+    true,
+    args.contextElementId,
+    wrapForDotnetBridge(this.sendCommand.bind(this)),
+  );
 }
 
 /**
@@ -1259,10 +1375,10 @@ export async function findElementsViaDotnetBridge(
  * @returns The bridge tree as XML.
  */
 export async function getPageSourceViaDotnetBridge(
-    this: AppiumDesktopDriver,
-    args?: { contextElementId?: string }
+  this: AppiumDesktopDriver,
+  args?: {contextElementId?: string},
 ): Promise<string> {
-    return await this.sendCommand('getPageSourceDotnetBridge', {
-        contextElementId: args?.contextElementId ?? null,
-    }) as string;
+  return (await this.sendCommand('getPageSourceDotnetBridge', {
+    contextElementId: args?.contextElementId ?? null,
+  })) as string;
 }

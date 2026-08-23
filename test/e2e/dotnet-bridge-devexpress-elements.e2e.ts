@@ -1,12 +1,10 @@
-import type { ChildProcess } from 'node:child_process';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser, Selector } from 'webdriverio';
-import { remote } from 'webdriverio';
-import {
-    APPIUM_SERVER,
-    launchDevExpressElementsGalleryExternally,
-    quitSession,
-} from './helpers/session.js';
+import type {ChildProcess} from 'node:child_process';
+
+import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import type {Browser, Selector} from 'webdriverio';
+import {remote} from 'webdriverio';
+
+import {APPIUM_SERVER, launchDevExpressElementsGalleryExternally, quitSession} from './helpers/session.js';
 
 // Phase 2b/4 coverage: 4 real DevExpress-specific element shapes in one file, one shared
 // session/attach (see appium-windows2-test-apps/devexpress-elements-gallery/Program.cs). Each shape was
@@ -15,125 +13,132 @@ import {
 // were probed and dropped because they turned out to already be UIA-visible.
 
 function killProc(proc: ChildProcess | null): void {
-    try { proc?.kill(); } catch { /* already exited */ }
+  try {
+    proc?.kill();
+  } catch {
+    /* already exited */
+  }
 }
 
 describe('.NET Bridge — DevExpress-specific elements gallery', () => {
-    let driver: Browser;
-    let appProc: ChildProcess;
+  let driver: Browser;
+  let appProc: ChildProcess;
 
-    beforeAll(async () => {
-        const launched = await launchDevExpressElementsGalleryExternally();
-        appProc = launched.proc;
+  beforeAll(async () => {
+    const launched = await launchDevExpressElementsGalleryExternally();
+    appProc = launched.proc;
 
-        driver = await remote({
-            ...APPIUM_SERVER,
-            capabilities: {
-                platformName: 'Windows',
-                'appium:automationName': 'DesktopDriver',
-                'appium:appTopLevelWindow': launched.hwnd,
-                'appium:shouldCloseApp': false,
-            } as WebdriverIO.Capabilities,
-        });
-        await driver.setTimeout({ implicit: 3000 });
-    }, 30_000);
-
-    afterAll(async () => {
-        await quitSession(driver);
-        killProc(appProc);
+    driver = await remote({
+      ...APPIUM_SERVER,
+      capabilities: {
+        platformName: 'Windows',
+        'appium:automationName': 'DesktopDriver',
+        'appium:appTopLevelWindow': launched.hwnd,
+        'appium:shouldCloseApp': false,
+      } as WebdriverIO.Capabilities,
     });
+    await driver.setTimeout({implicit: 3000});
+  }, 30_000);
 
-    it('plain UIA cannot see any real DevExpress value before the bridge attaches', async () => {
-        const source = await driver.getPageSource();
-        expect(source).not.toContain('Healthy');
-        expect(source).not.toContain('RealRed');
-        expect(source).not.toContain('AlphaReal');
-        expect(source).not.toContain('Fruit (2 items)');
-    });
+  afterAll(async () => {
+    await quitSession(driver);
+    killProc(appProc);
+  });
 
-    it('windows: attachDotnetBridge makes real DevExpress values readable via the bridge', async () => {
-        await driver.executeScript('windows: attachDotnetBridge', [{}]);
-        await driver.waitUntil(
-            async () => (await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}]) as string).includes('Healthy'),
-            { timeout: 10_000, interval: 500, timeoutMsg: 'Real TreeList value never appeared after attachDotnetBridge' }
-        );
-    });
+  it('plain UIA cannot see any real DevExpress value before the bridge attaches', async () => {
+    const source = await driver.getPageSource();
+    expect(source).not.toContain('Healthy');
+    expect(source).not.toContain('RealRed');
+    expect(source).not.toContain('AlphaReal');
+    expect(source).not.toContain('Fruit (2 items)');
+  });
 
-    // Every element kind below is genuinely invisible to real UIA (see the file header) — reached
-    // through the explicit .NET bridge find, not standard find (which stays pure UIA even here).
-    async function findViaBridge(xpath: string) {
-        const found = await driver.executeScript('windows: findElementViaDotnetBridge', [{ using: 'xpath', value: xpath }]);
-        return found ? driver.$(found as unknown as Selector) : null;
-    }
-    async function findAllViaBridge(xpath: string) {
-        return await driver.executeScript('windows: findElementsViaDotnetBridge', [{ using: 'xpath', value: xpath }]) as unknown[];
-    }
+  it('windows: attachDotnetBridge makes real DevExpress values readable via the bridge', async () => {
+    await driver.executeScript('windows: attachDotnetBridge', [{}]);
+    await driver.waitUntil(
+      async () =>
+        ((await driver.executeScript('windows: getPageSourceViaDotnetBridge', [{}])) as string).includes('Healthy'),
+      {timeout: 10_000, interval: 500, timeoutMsg: 'Real TreeList value never appeared after attachDotnetBridge'},
+    );
+  });
 
-    // ─── TreeList ───────────────────────────────────────────────────────────
+  // Every element kind below is genuinely invisible to real UIA (see the file header) — reached
+  // through the explicit .NET bridge find, not standard find (which stays pure UIA even here).
+  async function findViaBridge(xpath: string) {
+    const found = await driver.executeScript('windows: findElementViaDotnetBridge', [{using: 'xpath', value: xpath}]);
+    return found ? driver.$(found as unknown as Selector) : null;
+  }
+  async function findAllViaBridge(xpath: string) {
+    return (await driver.executeScript('windows: findElementsViaDotnetBridge', [
+      {using: 'xpath', value: xpath},
+    ])) as unknown[];
+  }
 
-    it('TreeList: real per-column values readable, and expand/select work', async () => {
-        const rootA = await findViaBridge('//DevExpressTreeListNode[contains(@Name,"Root A")]');
-        expect(rootA).not.toBeNull();
-        expect(await rootA!.isExisting()).toBe(true);
-        expect(await rootA!.getText()).toContain('Status: Healthy');
+  // ─── TreeList ───────────────────────────────────────────────────────────
 
-        expect(await rootA!.getAttribute('IsExpanded')).toBe(false);
-        const childBefore = await findAllViaBridge('//DevExpressTreeListNode[contains(@Name,"Child A1")]');
-        expect(childBefore.length).toBe(0);
+  it('TreeList: real per-column values readable, and expand/select work', async () => {
+    const rootA = await findViaBridge('//DevExpressTreeListNode[contains(@Name,"Root A")]');
+    expect(rootA).not.toBeNull();
+    expect(await rootA!.isExisting()).toBe(true);
+    expect(await rootA!.getText()).toContain('Status: Healthy');
 
-        const elementId: string = await rootA!.elementId;
-        await driver.executeScript('windows: expand', [{ elementId }]);
+    expect(await rootA!.getAttribute('IsExpanded')).toBe(false);
+    const childBefore = await findAllViaBridge('//DevExpressTreeListNode[contains(@Name,"Child A1")]');
+    expect(childBefore.length).toBe(0);
 
-        expect(await rootA!.getAttribute('IsExpanded')).toBe(true);
-        const childAfter = await findViaBridge('//DevExpressTreeListNode[contains(@Name,"Child A1")]');
-        expect(await childAfter!.isExisting()).toBe(true);
+    const elementId: string = await rootA!.elementId;
+    await driver.executeScript('windows: expand', [{elementId}]);
 
-        await driver.executeScript('windows: select', [{ elementId }]);
-    });
+    expect(await rootA!.getAttribute('IsExpanded')).toBe(true);
+    const childAfter = await findViaBridge('//DevExpressTreeListNode[contains(@Name,"Child A1")]');
+    expect(await childAfter!.isExisting()).toBe(true);
 
-    // ─── ComboBoxEdit ───────────────────────────────────────────────────────
+    await driver.executeScript('windows: select', [{elementId}]);
+  });
 
-    it('ComboBoxEdit: dropdown items expose the real painted text, and select changes the underlying item', async () => {
-        const items = await findAllViaBridge('//DevExpressComboItem');
-        expect(items.length).toBe(3);
+  // ─── ComboBoxEdit ───────────────────────────────────────────────────────
 
-        const green = await findViaBridge('//DevExpressComboItem[contains(@Name,"RealGreen")]');
-        expect(green).not.toBeNull();
-        expect(await green!.isExisting()).toBe(true);
-        const elementId: string = await green!.elementId;
+  it('ComboBoxEdit: dropdown items expose the real painted text, and select changes the underlying item', async () => {
+    const items = await findAllViaBridge('//DevExpressComboItem');
+    expect(items.length).toBe(3);
 
-        await driver.executeScript('windows: select', [{ elementId }]);
+    const green = await findViaBridge('//DevExpressComboItem[contains(@Name,"RealGreen")]');
+    expect(green).not.toBeNull();
+    expect(await green!.isExisting()).toBe(true);
+    const elementId: string = await green!.elementId;
 
-        // The closed box always displays the bound item's ToString() (real DevExpress behavior —
-        // a separate CustomDisplayText hook would be needed to override it), so this asserts the
-        // selection genuinely changed the underlying EditValue rather than the closed-box text.
-        // The combo's real Value is bridge-only too — UIA finds the control but never its value.
-        const combo = await findViaBridge('//*[@AutomationId="ElementsCombo"]');
-        expect(await combo!.getAttribute('Value')).toBe('shownGreen');
-    });
+    await driver.executeScript('windows: select', [{elementId}]);
 
-    // ─── TokenEdit ──────────────────────────────────────────────────────────
+    // The closed box always displays the bound item's ToString() (real DevExpress behavior —
+    // a separate CustomDisplayText hook would be needed to override it), so this asserts the
+    // selection genuinely changed the underlying EditValue rather than the closed-box text.
+    // The combo's real Value is bridge-only too — UIA finds the control but never its value.
+    const combo = await findViaBridge('//*[@AutomationId="ElementsCombo"]');
+    expect(await combo!.getAttribute('Value')).toBe('shownGreen');
+  });
 
-    it('TokenEdit: tokens expose Value (real) distinct from Description (bound placeholder)', async () => {
-        const tokens = await findAllViaBridge('//DevExpressToken');
-        expect(tokens.length).toBe(2);
+  // ─── TokenEdit ──────────────────────────────────────────────────────────
 
-        const alpha = await findViaBridge('//DevExpressToken[contains(@Name,"AlphaReal")]');
-        expect(await alpha!.isExisting()).toBe(true);
-        const bravo = await findViaBridge('//DevExpressToken[contains(@Name,"BravoReal")]');
-        expect(await bravo!.isExisting()).toBe(true);
-    });
+  it('TokenEdit: tokens expose Value (real) distinct from Description (bound placeholder)', async () => {
+    const tokens = await findAllViaBridge('//DevExpressToken');
+    expect(tokens.length).toBe(2);
 
-    // ─── Grouped GridControl ────────────────────────────────────────────────
+    const alpha = await findViaBridge('//DevExpressToken[contains(@Name,"AlphaReal")]');
+    expect(await alpha!.isExisting()).toBe(true);
+    const bravo = await findViaBridge('//DevExpressToken[contains(@Name,"BravoReal")]');
+    expect(await bravo!.isExisting()).toBe(true);
+  });
 
-    it('GroupGrid: group rows expose the real group value and item count', async () => {
-        const fruitGroup = await findViaBridge('//GridGroupRow[contains(@Name,"Fruit")]');
-        expect(fruitGroup).not.toBeNull();
-        expect(await fruitGroup!.isExisting()).toBe(true);
-        expect(await fruitGroup!.getAttribute('Name')).toBe('Fruit (2 items)');
-        expect(await fruitGroup!.getText()).toBe('Fruit');
+  // ─── Grouped GridControl ────────────────────────────────────────────────
 
-        const vegGroup = await findViaBridge('//GridGroupRow[contains(@Name,"Veg")]');
-        expect(await vegGroup!.getAttribute('Name')).toBe('Veg (1 items)');
-    });
+  it('GroupGrid: group rows expose the real group value and item count', async () => {
+    const fruitGroup = await findViaBridge('//GridGroupRow[contains(@Name,"Fruit")]');
+    expect(fruitGroup).not.toBeNull();
+    expect(await fruitGroup!.isExisting()).toBe(true);
+    expect(await fruitGroup!.getAttribute('Name')).toBe('Fruit (2 items)');
+    expect(await fruitGroup!.getText()).toBe('Fruit');
+
+    const vegGroup = await findViaBridge('//GridGroupRow[contains(@Name,"Veg")]');
+    expect(await vegGroup!.getAttribute('Name')).toBe('Veg (1 items)');
+  });
 });

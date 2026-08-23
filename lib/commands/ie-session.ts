@@ -1,8 +1,8 @@
-import { AppiumDesktopDriver } from '../driver';
-import { IESession, registerIESession, deleteIESession } from '../ie/session';
-import { isIEWindowHwnd } from '../winapi/user32';
+import type {AppiumDesktopDriver} from '../driver';
+import {IESession, registerIESession, deleteIESession} from '../ie/session';
+import {isIEWindowHwnd} from '../winapi/user32';
 
-export { isIEWindowHwnd };
+export {isIEWindowHwnd};
 
 /**
  * Enables IE-mode automation for the given window, creating (or replacing, if the target
@@ -10,24 +10,24 @@ export { isIEWindowHwnd };
  * @param hwnd - The native window handle of the IE window to attach to.
  * @returns Resolves once IE mode is enabled.
  */
-export async function enableIEMode(
-    this: AppiumDesktopDriver, hwnd: number,
-): Promise<void> {
-    this.log.info(`IE HWND 0x${hwnd.toString(16).padStart(8, '0')}`);
+export async function enableIEMode(this: AppiumDesktopDriver, hwnd: number): Promise<void> {
+  this.log.info(`IE HWND 0x${hwnd.toString(16).padStart(8, '0')}`);
 
-    if (!this.ieSession || this.ieHwnd !== hwnd) {
-        this.ieSession?.dispose();
-        this.ieSession = new IESession(hwnd, () => {
-            this.ieContext = false;
-            this.ieSession = null;
-            this.log.warn('IE bridge exited unexpectedly.');
-        });
-        this.ieHwnd = hwnd;
-        if (this.sessionId) { registerIESession(this.sessionId, this.ieSession); }
+  if (!this.ieSession || this.ieHwnd !== hwnd) {
+    this.ieSession?.dispose();
+    this.ieSession = new IESession(hwnd, () => {
+      this.ieContext = false;
+      this.ieSession = null;
+      this.log.warn('IE bridge exited unexpectedly.');
+    });
+    this.ieHwnd = hwnd;
+    if (this.sessionId) {
+      registerIESession(this.sessionId, this.ieSession);
     }
+  }
 
-    this.ieContext = true;
-    this.log.info(`IE mode enabled for HWND 0x${hwnd.toString(16)}`);
+  this.ieContext = true;
+  this.log.info(`IE mode enabled for HWND 0x${hwnd.toString(16)}`);
 }
 
 /**
@@ -35,8 +35,8 @@ export async function enableIEMode(
  * @returns Nothing.
  */
 export function disableIEMode(this: AppiumDesktopDriver): void {
-    this.ieContext = false;
-    this.log.info('IE mode disabled — back to UIA.');
+  this.ieContext = false;
+  this.log.info('IE mode disabled — back to UIA.');
 }
 
 /**
@@ -44,9 +44,11 @@ export function disableIEMode(this: AppiumDesktopDriver): void {
  * @returns Resolves once the IE session has been terminated.
  */
 export async function terminateIEMode(this: AppiumDesktopDriver): Promise<void> {
-    this.ieContext = false;
-    if (this.sessionId) { deleteIESession(this.sessionId); }
-    this.ieSession = null;
-    this.ieHwnd = undefined;
-    this.log.debug('IE bridge session terminated.');
+  this.ieContext = false;
+  if (this.sessionId) {
+    deleteIESession(this.sessionId);
+  }
+  this.ieSession = null;
+  this.ieHwnd = undefined;
+  this.log.debug('IE bridge session terminated.');
 }

@@ -1,8 +1,9 @@
-import { describe, it, beforeAll, afterAll, beforeEach, afterEach, expect } from 'vitest';
-import type { Browser } from 'webdriverio';
-import { createWinformComboSession, quitSession } from './helpers/session.js';
-import { isNumLockOn, setNumLockState } from '../../lib/winapi/user32.js';
-import { Key } from '../../lib/enums.js';
+import {describe, it, beforeAll, afterAll, beforeEach, afterEach, expect} from 'vitest';
+import type {Browser} from 'webdriverio';
+
+import {Key} from '../../lib/enums.js';
+import {isNumLockOn, setNumLockState} from '../../lib/winapi/user32.js';
+import {createWinformComboSession, quitSession} from './helpers/session.js';
 
 // Proves the SendInput KEYEVENTF_EXTENDEDKEY fix (lib/winapi/user32.ts
 // isExtendedKeyVk) against a receiver we fully control: the test app's
@@ -23,65 +24,65 @@ import { Key } from '../../lib/enums.js';
 // reaches the app at all. So the observable signal is "Down never
 // registers" (counter stays 0), not "a stray 2 gets typed."
 describe('extended-key SendInput flag (WM_KEYDOWN lParam bit 24)', () => {
-    let app: Browser;
-    let wasNumLockOn: boolean;
+  let app: Browser;
+  let wasNumLockOn: boolean;
 
-    beforeAll(() => {
-        wasNumLockOn = isNumLockOn();
-    });
+  beforeAll(() => {
+    wasNumLockOn = isNumLockOn();
+  });
 
-    afterAll(() => {
-        setNumLockState(wasNumLockOn);
-    });
+  afterAll(() => {
+    setNumLockState(wasNumLockOn);
+  });
 
-    beforeEach(async () => {
-        app = await createWinformComboSession();
-        // Click into the app to guarantee real OS keyboard focus before
-        // sending raw SendInput-based keys — session creation alone doesn't
-        // promise the window has actually taken focus yet.
-        await (await app.$('~txtLog')).click();
-    });
+  beforeEach(async () => {
+    app = await createWinformComboSession();
+    // Click into the app to guarantee real OS keyboard focus before
+    // sending raw SendInput-based keys — session creation alone doesn't
+    // promise the window has actually taken focus yet.
+    await (await app.$('~txtLog')).click();
+  });
 
-    afterEach(async () => {
-        await quitSession(app);
-    });
+  afterEach(async () => {
+    await quitSession(app);
+  });
 
-    it('raw unflagged VK_DOWN + NumLock OFF: registers as a real key', async () => {
-        setNumLockState(false);
+  it('raw unflagged VK_DOWN + NumLock OFF: registers as a real key', async () => {
+    setNumLockState(false);
 
-        await app.executeScript('windows: keys', [{ actions: { virtualKeyCode: 0x28 }, forceUnicode: false }]);
-        await app.pause(200);
+    await app.executeScript('windows: keys', [{actions: {virtualKeyCode: 0x28}, forceUnicode: false}]);
+    await app.pause(200);
 
-        const counter = await app.$('~lblRealDownCount');
-        expect(await counter.getText()).toBe('Real Down received: 1');
-    });
+    const counter = await app.$('~lblRealDownCount');
+    expect(await counter.getText()).toBe('Real Down received: 1');
+  });
 
-    it('raw unflagged VK_DOWN + NumLock ON: reproduces the bug — Down never registers', async () => {
-        setNumLockState(true);
-        // GetKeyState only refreshes once the target process's UI thread
-        // pumps a message after the toggle. The toggle's own SendInput call
-        // can also disturb OS foreground focus, so re-click afterward.
-        await app.pause(300);
-        await (await app.$('~txtLog')).click();
-        await app.pause(100);
+  it('raw unflagged VK_DOWN + NumLock ON: reproduces the bug — Down never registers', async () => {
+    setNumLockState(true);
+    // GetKeyState only refreshes once the target process's UI thread
+    // pumps a message after the toggle. The toggle's own SendInput call
+    // can also disturb OS foreground focus, so re-click afterward.
+    await app.pause(300);
+    await (await app.$('~txtLog')).click();
+    await app.pause(100);
 
-        await app.executeScript('windows: keys', [{ actions: { virtualKeyCode: 0x28 }, forceUnicode: false }]);
-        await app.pause(200);
+    await app.executeScript('windows: keys', [{actions: {virtualKeyCode: 0x28}, forceUnicode: false}]);
+    await app.pause(200);
 
-        const counter = await app.$('~lblRealDownCount');
-        expect(await counter.getText()).toBe('Real Down received: 0');
-    });
+    const counter = await app.$('~lblRealDownCount');
+    expect(await counter.getText()).toBe('Real Down received: 0');
+  });
 
-    it('driver Down key (fixed, extended flag set) + NumLock ON: registers as a real key', async () => {
-        setNumLockState(true);
-        await app.pause(300);
-        await (await app.$('~txtLog')).click();
-        await app.pause(100);
+  it('driver Down key (fixed, extended flag set) + NumLock ON: registers as a real key', async () => {
+    setNumLockState(true);
+    await app.pause(300);
+    await (await app.$('~txtLog')).click();
+    await app.pause(100);
 
-        await app.keys([Key.DOWN]);
-        await app.pause(200);
+    await app.keys([Key.DOWN]);
+    await app.pause(200);
 
-        const counter = await app.$('~lblRealDownCount');
-        expect(await counter.getText()).toBe('Real Down received: 1');
-    });
+    const counter = await app.$('~lblRealDownCount');
+    expect(await counter.getText()).toBe('Real Down received: 1');
+  });
 });

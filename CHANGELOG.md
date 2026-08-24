@@ -1,3 +1,10 @@
+## [2.6.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.1...v2.6.2) (2026-08-24)
+
+### Bug Fixes
+
+* **bridges:** expose real HasKeyboardFocus on Java and .NET bridge elements ([e1f0273](https://github.com/verisoft-ai/appium-desktop-driver/commit/e1f027346300a0f7b2f447065278bf4930c22c51))
+* **commands:** stop gatekeeping windows: execute-script commands on the driver's own static map ([e856817](https://github.com/verisoft-ai/appium-desktop-driver/commit/e856817bcdecc77e2c881f140563bb3832684765))
+
 ## [2.6.1](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.0...v2.6.1) (2026-08-20)
 
 ### Bug Fixes

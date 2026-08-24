@@ -28,18 +28,68 @@ describe('.NET Bridge — CoreCLR profiler attach (net8-winforms-minimal fixture
     });
 
     it('setValue writes real WinForms TextBox.Text on a CoreCLR target', async () => {
-        const input = await driver.$('//*[@AutomationId="TxtInput"]');
-        await input.setValue('hello coreclr');
-        expect(await input.getText()).toBe('hello coreclr');
+        // Found through the .NET bridge (not standard find) so the elementId is
+        // bridge-tagged and setValue routes through BridgeAgentElement.IsDotnetId ->
+        // state.DotNetBridge.SetValue, exercising the real bridge RPC path instead of
+        // the plain UIA ValuePattern that a standard find's elementId would hit.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'TxtInput' }]
+        );
+        const input = await driver.$(found as unknown as Selector);
+        const elementId: string = await input.elementId;
+        await driver.executeScript('windows: setValue', [{ elementId, value: 'hello coreclr' }]);
+
+        const plainInput = await driver.$('//*[@AutomationId="TxtInput"]');
+        expect(await plainInput.getText()).toBe('hello coreclr');
     });
 
     it('invoke fires the real Button.Click handler on a CoreCLR target', async () => {
-        const button = await driver.$('//*[@AutomationId="BtnClick"]');
+        // Found through the .NET bridge so the elementId routes windows: invoke through
+        // state.DotNetBridge.Invoke instead of a plain UIA InvokePattern call.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'BtnClick' }]
+        );
+        const button = await driver.$(found as unknown as Selector);
         const elementId: string = await button.elementId;
         await driver.executeScript('windows: invoke', [{ elementId }]);
 
         const label = await driver.$('//*[@AutomationId="LblClickCount"]');
         expect(await label.getText()).toBe('Clicked: 1');
+    });
+
+    it('element.click() performs a real mouse click on a bridge-found CoreCLR target', async () => {
+        // Bridge-found elementId — click() reads ClickablePoint/getRect through
+        // BridgeAgentElement.IsDotnetId -> state.DotNetBridge.GetRect for coordinates,
+        // then fires a real OS mouse click, landing on the real Button.Click handler.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'BtnClick' }]
+        );
+        const button = await driver.$(found as unknown as Selector);
+        await button.click();
+
+        const label = await driver.$('//*[@AutomationId="LblClickCount"]');
+        expect(await label.getText()).toBe('Clicked: 2');
+    });
+
+    it('HasKeyboardFocus reflects real WinForms Control.Focused, not a silent-fail empty string', async () => {
+        const input = await driver.$('//*[@AutomationId="TxtInput"]');
+        const inputElementId: string = await input.elementId;
+        const button = await driver.$('//*[@AutomationId="BtnClick"]');
+        const buttonElementId: string = await button.elementId;
+
+        await driver.executeScript('windows: setFocus', [{ elementId: inputElementId }]);
+        await driver.waitUntil(
+            async () => String(await input.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'TxtInput never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await button.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+
+        await driver.executeScript('windows: setFocus', [{ elementId: buttonElementId }]);
+        await driver.waitUntil(
+            async () => String(await button.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'BtnClick never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await input.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
     });
 
     it('selectElement moves real state on an owner-drawn CoreCLR list element', async () => {

@@ -42,18 +42,47 @@ describe('.NET Bridge — CoreCLR profiler attach, 32-bit target (net8-winforms-
     });
 
     it('setValue writes real WinForms TextBox.Text on a 32-bit CoreCLR target', async () => {
-        const input = await driver.$('//*[@AutomationId="TxtInput"]');
-        await input.setValue('hello 32-bit coreclr');
-        expect(await input.getText()).toBe('hello 32-bit coreclr');
+        // Found through the .NET bridge (not standard find) so the elementId is
+        // bridge-tagged and setValue routes through BridgeAgentElement.IsDotnetId ->
+        // state.DotNetBridge.SetValue, exercising the real bridge RPC path instead of
+        // the plain UIA ValuePattern that a standard find's elementId would hit.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'TxtInput' }]
+        );
+        const input = await driver.$(found as unknown as Selector);
+        const elementId: string = await input.elementId;
+        await driver.executeScript('windows: setValue', [{ elementId, value: 'hello 32-bit coreclr' }]);
+
+        const plainInput = await driver.$('//*[@AutomationId="TxtInput"]');
+        expect(await plainInput.getText()).toBe('hello 32-bit coreclr');
     });
 
     it('invoke fires the real Button.Click handler on a 32-bit CoreCLR target', async () => {
-        const button = await driver.$('//*[@AutomationId="BtnClick"]');
+        // Found through the .NET bridge so the elementId routes windows: invoke through
+        // state.DotNetBridge.Invoke instead of a plain UIA InvokePattern call.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'BtnClick' }]
+        );
+        const button = await driver.$(found as unknown as Selector);
         const elementId: string = await button.elementId;
         await driver.executeScript('windows: invoke', [{ elementId }]);
 
         const label = await driver.$('//*[@AutomationId="LblClickCount"]');
         expect(await label.getText()).toBe('Clicked: 1');
+    });
+
+    it('element.click() performs a real mouse click on a bridge-found 32-bit CoreCLR target', async () => {
+        // Bridge-found elementId — click() reads ClickablePoint/getRect through
+        // BridgeAgentElement.IsDotnetId -> state.DotNetBridge.GetRect for coordinates,
+        // then fires a real OS mouse click, landing on the real Button.Click handler.
+        const found = await driver.executeScript(
+            'windows: findElementViaDotnetBridge', [{ using: 'accessibility id', value: 'BtnClick' }]
+        );
+        const button = await driver.$(found as unknown as Selector);
+        await button.click();
+
+        const label = await driver.$('//*[@AutomationId="LblClickCount"]');
+        expect(await label.getText()).toBe('Clicked: 2');
     });
 
     it('selectElement moves real state on an owner-drawn 32-bit CoreCLR list element', async () => {

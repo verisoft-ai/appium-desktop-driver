@@ -94,11 +94,6 @@ function coerceExecuteMethodArgs(script: string, args: any[]): any[] | null {
  */
 export async function execute(this: AppiumDesktopDriver, script: string, args: any[]) {
     if (script.startsWith(PLATFORM_COMMAND_PREFIX)) {
-        const ExecuteMethodMapCtor = this.constructor as typeof AppiumDesktopDriver;
-        if (!Object.hasOwn(ExecuteMethodMapCtor.executeMethodMap ?? {}, script)) {
-            throw new errors.UnknownCommandError(`Unknown command '${script}'.`);
-        }
-
         const executeMethodArgs = coerceExecuteMethodArgs(script, args);
         if (executeMethodArgs === null) {
             throw new errors.InvalidArgumentError(
@@ -106,6 +101,12 @@ export async function execute(this: AppiumDesktopDriver, script: string, args: a
             );
         }
 
+        // `this.executeMethod` (inherited from @appium/base-driver) resolves against the
+        // merged driver+active-plugins executeMethodMap and throws its own UnknownCommandError
+        // for anything unmatched — do not gate on `this.constructor.executeMethodMap` here, that
+        // static property is this driver's own map only and has no visibility into commands a
+        // plugin (e.g. `windows: attachUiaBridge`) contributes, which made every plugin-provided
+        // `windows: *` command unreachable via the classic execute/executeScript endpoint.
         return await this.executeMethod(script, executeMethodArgs);
     }
 

@@ -370,6 +370,7 @@ internal static class Reflector
             info["height"] = (double)ctrl2.Height;
             info["IsEnabled"] = ctrl2.Enabled;
             info["IsOffscreen"] = !ctrl2.Visible;
+            info["HasKeyboardFocus"] = ctrl2.Focused;
 
             try
             {
@@ -404,6 +405,7 @@ internal static class Reflector
                 info["height"] = fe.ActualHeight;
                 info["IsEnabled"] = fe.IsEnabled;
                 info["IsOffscreen"] = !fe.IsVisible;
+                info["HasKeyboardFocus"] = fe.IsFocused;
             }
 
             try

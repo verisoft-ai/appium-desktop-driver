@@ -253,6 +253,24 @@ describe('Java Swing Form', () => {
             const btn = await driver.$('~submitButton');
             expect(await btn.isEnabled()).toBe(true);
         });
+
+        it('HasKeyboardFocus becomes true on the clicked field and false on the previously focused one', async () => {
+            const firstName = await driver.$('~firstName');
+            const lastName = await driver.$('~lastName');
+
+            await firstName.click();
+            await driver.waitUntil(
+                async () => String(await firstName.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+                { timeoutMsg: 'firstName did not receive keyboard focus after click' }
+            );
+
+            await lastName.click();
+            await driver.waitUntil(
+                async () => String(await lastName.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+                { timeoutMsg: 'lastName did not receive keyboard focus after click' }
+            );
+            expect(String(await firstName.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+        });
     });
 
     describe('element rect', () => {

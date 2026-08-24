@@ -40,6 +40,17 @@ public static class ElementCommands
                 return "";
             }
 
+            // JAB has no HasKeyboardFocus property — literal key lookup misses and
+            // silently returns "" (falsy), indistinguishable from a real "not focused".
+            // Focus is reported via the AccessibleState list instead, same as
+            // ExpandCollapseState above.
+            if (propertyName.Equals("HasKeyboardFocus", StringComparison.OrdinalIgnoreCase))
+            {
+                state.Java.GetFreshInfo(javaEl);
+                var states = state.Java.GetProperty(javaEl, "States")?.ToString() ?? "";
+                return states.Contains("focused", StringComparison.OrdinalIgnoreCase);
+            }
+
             return state.Java.GetProperty(javaEl, propertyName);
         }
 

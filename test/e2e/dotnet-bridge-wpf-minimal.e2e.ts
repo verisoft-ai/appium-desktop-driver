@@ -61,6 +61,27 @@ describe('.NET Bridge — WPF Dispatcher marshaling (wpf-minimal fixture)', () =
         expect(await active.getAttribute('AutomationId')).toBe('TxtInput');
     });
 
+    it('HasKeyboardFocus reflects real WPF FrameworkElement.IsFocused, not a silent-fail empty string', async () => {
+        const input = await driver.$('//*[@AutomationId="TxtInput"]');
+        const inputElementId: string = await input.elementId;
+        const button = await driver.$('//*[@AutomationId="BtnClick"]');
+        const buttonElementId: string = await button.elementId;
+
+        await driver.executeScript('windows: setFocus', [{ elementId: inputElementId }]);
+        await driver.waitUntil(
+            async () => String(await input.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'TxtInput never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await button.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+
+        await driver.executeScript('windows: setFocus', [{ elementId: buttonElementId }]);
+        await driver.waitUntil(
+            async () => String(await button.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'BtnClick never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await input.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+    });
+
     it('selectElement moves real state on an owner-drawn WPF list element (no Control ancestor to marshal onto)', async () => {
         // Owner-drawn list items are genuinely invisible to real UIA — reached via the
         // explicit .NET bridge find, not standard find (which stays pure UIA even here).

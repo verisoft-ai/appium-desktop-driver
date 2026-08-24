@@ -42,6 +42,27 @@ describe('.NET Bridge — CoreCLR profiler attach (net8-winforms-minimal fixture
         expect(await label.getText()).toBe('Clicked: 1');
     });
 
+    it('HasKeyboardFocus reflects real WinForms Control.Focused, not a silent-fail empty string', async () => {
+        const input = await driver.$('//*[@AutomationId="TxtInput"]');
+        const inputElementId: string = await input.elementId;
+        const button = await driver.$('//*[@AutomationId="BtnClick"]');
+        const buttonElementId: string = await button.elementId;
+
+        await driver.executeScript('windows: setFocus', [{ elementId: inputElementId }]);
+        await driver.waitUntil(
+            async () => String(await input.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'TxtInput never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await button.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+
+        await driver.executeScript('windows: setFocus', [{ elementId: buttonElementId }]);
+        await driver.waitUntil(
+            async () => String(await button.getAttribute('HasKeyboardFocus')).toLowerCase() === 'true',
+            { timeoutMsg: 'BtnClick never reported HasKeyboardFocus=true after setFocus' }
+        );
+        expect(String(await input.getAttribute('HasKeyboardFocus')).toLowerCase()).toBe('false');
+    });
+
     it('selectElement moves real state on an owner-drawn CoreCLR list element', async () => {
         // Owner-drawn list items are genuinely invisible to real UIA — reached via the
         // explicit .NET bridge find, not standard find (which stays pure UIA even here).

@@ -277,10 +277,15 @@ export async function processExprNode<T>(exprNode: ExprNode, context: XPathEleme
         case INEQUALITY: {
             const [lhs] = await handleFunctionCall<string>(STRING, context, sendCommand, exprNode.lhs);
             const [rhs] = await handleFunctionCall<string>(STRING, context, sendCommand, exprNode.rhs);
-            if (isNaN(Number(lhs)) || isNaN(Number(rhs))) {
+            // An absent attribute surfaces as "". Number("") is 0, so without this guard
+            // `@TableColumn="0"` (or any `@x="0"`) would match every element that lacks
+            // the attribute. Empty/blank strings are never numeric operands here.
+            const lhsNum = (lhs ?? '').trim() === '' ? NaN : Number(lhs);
+            const rhsNum = (rhs ?? '').trim() === '' ? NaN : Number(rhs);
+            if (isNaN(lhsNum) || isNaN(rhsNum)) {
                 return [exprNode.type === EQUALITY ? (lhs === rhs) as T : (lhs !== rhs) as T];
             }
-            return [exprNode.type === EQUALITY ? (Number(lhs) === Number(rhs)) as T : (Number(lhs) !== Number(rhs)) as T];
+            return [exprNode.type === EQUALITY ? (lhsNum === rhsNum) as T : (lhsNum !== rhsNum) as T];
         }
         case ADDITIVE:
         case DIVISIONAL:

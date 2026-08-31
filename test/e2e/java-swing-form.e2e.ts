@@ -705,7 +705,7 @@ describe('Java Swing Form', () => {
 
         it('the cell at row 1, col 0 contains "Bob"', async () => {
             const cells = await driver.$$('//Table[@Name="dataTable"]/*');
-            let match: (typeof cells)[number] | undefined;
+            let match: WebdriverIO.Element | undefined;
             for (const cell of cells) {
                 const row = await cell.getAttribute('TableRow');
                 const col = await cell.getAttribute('TableColumn');

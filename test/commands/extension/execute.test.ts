@@ -56,7 +56,7 @@ describe('execute (command router)', () => {
     it('throws UnknownCommandError for unknown windows command', async () => {
         await expect(
             extension.execute.call(driver, 'windows: unknownCommand', [])
-        ).rejects.toThrow('Unknown command');
+        ).rejects.toThrow(/Unsupported execute method 'windows: unknownCommand'/);
     });
 
     it('routes powerShell to executePowerShellScript', async () => {

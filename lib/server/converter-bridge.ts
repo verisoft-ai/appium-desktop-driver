@@ -141,6 +141,45 @@ export function registerPropertyCondition(condition: Condition, property: string
     });
 }
 
+/**
+ * DTO metadata for a string match-mode condition (contains / startsWith). Value is
+ * always a plain string literal (the XPath function's second argument); no PS wrapper
+ * gymnastics needed. Property name is normalized the same way as an equality condition.
+ */
+export function registerMatchPropertyCondition(
+    condition: Condition,
+    property: string,
+    value: string,
+    match: 'contains' | 'startsWith',
+): void {
+    let normalizedProperty = property.toLowerCase();
+    if (normalizedProperty.endsWith('property')) {
+        normalizedProperty = normalizedProperty.slice(0, -8);
+    }
+
+    const propertyNameMap: Record<string, string> = {
+        automationid: 'AutomationId',
+        name: 'Name',
+        classname: 'ClassName',
+        localizedcontroltype: 'LocalizedControlType',
+        helptext: 'HelpText',
+        acceleratorkey: 'AcceleratorKey',
+        accesskey: 'AccessKey',
+        itemstatus: 'ItemStatus',
+        itemtype: 'ItemType',
+        frameworkid: 'FrameworkId',
+        javaclass: 'JavaClass',
+        javasimpleclass: 'JavaSimpleClass',
+    };
+
+    conditionDtoMap.set(condition, {
+        type: 'property',
+        property: propertyNameMap[normalizedProperty] ?? property,
+        value,
+        match,
+    });
+}
+
 export function registerAndCondition(condition: Condition, ...conditions: Condition[]): void {
     conditionDtoMap.set(condition, {
         type: 'and',

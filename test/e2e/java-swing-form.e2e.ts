@@ -566,6 +566,22 @@ describe('Java Swing Form', () => {
             expect(await submitBtn.isExisting()).toBe(true);
         });
 
+        it('contains(@Name, ...) with a Hebrew (RTL) substring finds the dialog message label', async () => {
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+
+            // Dialog body text is "אירעה שגיאה"; match on the trailing word only.
+            const labels = await driver.$$('//*[contains(@Name,"שגיאה")]');
+            expect(labels.length).toBeGreaterThanOrEqual(1);
+            const texts = await labels.map((l) => l.getAttribute('Name'));
+            expect(texts.some((t) => t?.includes('אירעה שגיאה'))).toBe(true);
+
+            await (await driver.$('~OK')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
     });
 
     describe('tag name strategy (UIA ControlType mapped to Java role)', () => {
@@ -747,6 +763,41 @@ describe('Java Swing Form', () => {
 
             const scoped = await driver.$$('//Table[@Name="dataTable"]//*[@TableColumn="1"]');
             expect(scoped.length).toBe(3);
+        });
+    });
+
+    describe('XPath contains() and starts-with() predicates', () => {
+        it('contains(@Name, ...) matches by substring', async () => {
+            // firstName + lastName both contain "Name"; email does not.
+            const fields = await driver.$$('//Edit[contains(@Name,"Name")]');
+            const names = (await fields.map((f) => f.getAttribute('Name'))).sort();
+            expect(names).toEqual(['firstName', 'lastName']);
+        });
+
+        it('contains(@Name, ...) works on a whole-tree //* scan', async () => {
+            const els = await driver.$$('//*[contains(@Name,"Checkbox")]');
+            expect(els.length).toBe(1);
+            expect(await els[0].getAttribute('Name')).toBe('agreeCheckbox');
+        });
+
+        it('starts-with(@Name, ...) matches by prefix only', async () => {
+            const first = await driver.$$('//Edit[starts-with(@Name,"first")]');
+            expect(first.length).toBe(1);
+            expect(await first[0].getAttribute('Name')).toBe('firstName');
+
+            // "Name" is a substring but not a prefix of any field name → no match.
+            expect((await driver.$$('//Edit[starts-with(@Name,"Name")]')).length).toBe(0);
+        });
+
+        it('contains() combines with other predicates', async () => {
+            const el = await driver.$('//*[@JavaSimpleClass="JButton" and contains(@Name,"Error")]');
+            expect(await el.isExisting()).toBe(true);
+            expect(await el.getAttribute('Name')).toBe('showErrorButton');
+        });
+
+        it('contains(@JavaClass, ...) matches on the fully-qualified class name', async () => {
+            const fields = await driver.$$('//*[contains(@JavaClass,"JTextField")]');
+            expect(fields.length).toBe(3);
         });
     });
 

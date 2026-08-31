@@ -149,6 +149,18 @@ public static class ConditionBuilder
             throw new ArgumentException("Property condition requires 'property' and 'value' fields.");
         }
 
+        // Substring / prefix match modes ("contains", "startsWith") are only understood
+        // by the bridge agents (Java/.NET), which read dto.Match off the wire directly.
+        // UIA3's native FindFirst/FindAll has no reliable substring predicate, so here it
+        // degrades to a true-condition — the XPath engine keeps the original contains()/
+        // starts-with() expression as a client-side post-filter, so results are identical
+        // to the pre-existing behaviour, just without a native pre-filter.
+        if (!string.IsNullOrEmpty(dto.Match) &&
+            !dto.Match.Equals("equals", StringComparison.OrdinalIgnoreCase))
+        {
+            return automation.CreateTrueCondition();
+        }
+
         var propertyId = GetPropertyId(dto.Property);
         var value = ConvertValue(propertyId, dto.Value.Value);
 

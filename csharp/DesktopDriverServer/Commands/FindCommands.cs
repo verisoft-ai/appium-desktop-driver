@@ -630,14 +630,14 @@ public static class FindCommands
 
         // TreeScope.Subtree already includes the element itself, but a broken provider
         // can omit it from FindAll while still matching it via TreeScope.Element.
+        // Prepend it: descendant-or-self is document order, so self comes first.
         if (includeSelf)
         {
-            var seen = new HashSet<string>(results);
             var self = element.FindFirst(TreeScope.Element, condition);
             if (self != null)
             {
                 var id = state.TrySaveElementAndReturnId(self);
-                if (id != null && seen.Add(id)) results.Add(id);
+                if (id != null && !results.Contains(id)) results.Insert(0, id);
             }
         }
         return results.ToArray();

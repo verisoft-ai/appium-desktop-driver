@@ -292,8 +292,10 @@ public class CommandHandler {
         AccessibleExtendedTable extTable = (AccessibleExtendedTable) table;
         int index = ac.getAccessibleIndexInParent();
         if (index < 0) return;
-        info.put("TableRow", extTable.getAccessibleRow(index));
-        info.put("TableColumn", extTable.getAccessibleColumn(index));
+        // Strings, not raw ints: WebDriver getAttribute must return a string, and the
+        // non-cell case already yields "" — keep the type consistent both ways.
+        info.put("TableRow", String.valueOf(extTable.getAccessibleRow(index)));
+        info.put("TableColumn", String.valueOf(extTable.getAccessibleColumn(index)));
     }
 
     static Map<String, Object> buildInfoFromAccessible(Accessible a, String id) {

@@ -1,3 +1,18 @@
+## [2.7.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.2...v2.7.0) (2026-08-31)
+
+### Features
+
+* **xpath:** push contains()/starts-with() down to bridge agents as native match ([7da9d3b](https://github.com/verisoft-ai/appium-desktop-driver/commit/7da9d3bd08324849eb628038d8f7eeb3f8313a8c))
+
+### Bug Fixes
+
+* **find:** drop unbounded child-walk fallback in descendant/subtree search ([c41dab9](https://github.com/verisoft-ai/appium-desktop-driver/commit/c41dab906fa38f376e59cf71790783be8e974f8c))
+* **find:** prepend self match in subtree fallback ([0abddb9](https://github.com/verisoft-ai/appium-desktop-driver/commit/0abddb9d4844b538739aac5c93a0ff32293036f3))
+* **java-agent:** hold JAB element handles with strong refs, not weak ([dfd42aa](https://github.com/verisoft-ai/appium-desktop-driver/commit/dfd42aac585897586ffc412f02eb5ea8e34dbc35))
+* **java-agent:** return TableRow/TableColumn as strings ([dc02abc](https://github.com/verisoft-ai/appium-desktop-driver/commit/dc02abc7fb146badb7333fc89bc2cc75eb0b292f))
+* **test:** correct match var type in JTable cell e2e test ([00bff57](https://github.com/verisoft-ai/appium-desktop-driver/commit/00bff57463bb4a4bb61e436b279640164bf87a99))
+* **xpath:** don't numeric-coerce an absent attribute in "=" comparison ([04bcdae](https://github.com/verisoft-ai/appium-desktop-driver/commit/04bcdae022a20f834785419f8602484ad739cf98))
+
 ## [2.6.2](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.1...v2.6.2) (2026-08-24)
 
 ### Bug Fixes

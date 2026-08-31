@@ -33,6 +33,11 @@ describe('windows: pattern extension commands', () => {
 
         beforeAll(async () => {
             calc = await createCalculatorSession();
+            // Calculator (UWP) finishes building its keypad UIA subtree a beat after
+            // the window is up. Without this, the first `$('~num1Button')` in the
+            // block races the tree and findElement throws NoSuchElement (later tests
+            // don't see it — the tree is warm by then).
+            await calc.$('~num1Button').waitForExist({ timeout: 15_000 });
         });
 
         afterAll(async () => {
@@ -55,9 +60,9 @@ describe('windows: pattern extension commands', () => {
         });
 
         it('invokes the Equals button and result display shows the sum', async () => {
-            await (calc.$('~num2Button')).click();
-            await (calc.$('~plusButton')).click();
-            await (calc.$('~num3Button')).click();
+            await calc.$('~num2Button').click();
+            await calc.$('~plusButton').click();
+            await calc.$('~num3Button').click();
             const equalsBtn = await calc.$('~equalButton');
             await calc.executeScript('windows: invoke', [equalsBtn]);
 

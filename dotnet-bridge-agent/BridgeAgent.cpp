@@ -1170,7 +1170,8 @@ public:
             String^ prop = condition->ContainsKey("property") ? (String^)condition["property"] : nullptr;
             Object^ valueObj = condition->ContainsKey("value") ? condition["value"] : nullptr;
             String^ value = valueObj != nullptr ? valueObj->ToString() : "";
-            return MatchesProperty(target, prop, value);
+            String^ match = condition->ContainsKey("match") ? (String^)condition["match"] : nullptr;
+            return MatchesProperty(target, prop, value, match);
         }
         return false;
     }
@@ -1522,7 +1523,7 @@ private:
     // Case-insensitive lookup directly against whatever BuildInfo populated for this target —
     // covers name/automationid/classname (previously the only 3 hardcoded branches) plus "value"
     // and any future element kind's custom info fields, with no per-property branch needed here.
-    static bool MatchesProperty(Object^ target, String^ property, String^ value)
+    static bool MatchesProperty(Object^ target, String^ property, String^ value, String^ match)
     {
         if (property == nullptr) return false;
         String^ prop = property->ToLowerInvariant();
@@ -1542,6 +1543,12 @@ private:
 
         Object^ actual = info[key];
         String^ actualStr = actual != nullptr ? actual->ToString() : "";
+        if (match != nullptr)
+        {
+            String^ m = match->ToLowerInvariant();
+            if (m == "contains") return actualStr->Contains(value);
+            if (m == "startswith") return actualStr->StartsWith(value, StringComparison::Ordinal);
+        }
         return actualStr == value;
     }
 };

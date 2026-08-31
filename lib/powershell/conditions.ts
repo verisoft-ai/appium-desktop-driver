@@ -33,6 +33,7 @@ import {
 } from './common';
 import {
     registerPropertyCondition,
+    registerMatchPropertyCondition,
     registerAndCondition,
     registerOrCondition,
     registerNotCondition,
@@ -127,6 +128,21 @@ export class PropertyCondition extends Condition {
 
         super(PROPERTY_CONDITION.format(property, value));
         registerPropertyCondition(this, property, value);
+    }
+}
+
+/**
+ * A property condition that matches by substring ("contains") or prefix ("startsWith")
+ * instead of equality. Carried to the server as a normal property ConditionDto plus a
+ * `match` field. Bridge agents evaluate it natively; UIA falls back to a true-condition
+ * (the XPath engine keeps the original expression as a client-side post-filter), so this
+ * must always be paired with that post-filter — never rely on it as the sole check on
+ * the UIA path.
+ */
+export class MatchPropertyCondition extends Condition {
+    constructor(property: string, value: string, match: 'contains' | 'startsWith') {
+        super(`[MatchPropertyCondition ${property} ${match} ${JSON.stringify(value)}]`);
+        registerMatchPropertyCondition(this, property, value, match);
     }
 }
 

@@ -9,6 +9,8 @@ import XPathAnalyzer, {
     DIVISIONAL,
     EQUALITY,
     ExprNode,
+    CONTAINS,
+    STARTS_WITH,
     FILTER,
     FUNCTION_CALL,
     GREATER_THAN,
@@ -60,7 +62,7 @@ import {
 } from '../powershell/types';
 
 import { conditionToDto } from '../server/converter-bridge';
-import { Condition, PropertyCondition, TrueCondition, FalseCondition, AndCondition, OrCondition } from '../powershell/conditions';
+import { Condition, PropertyCondition, MatchPropertyCondition, TrueCondition, FalseCondition, AndCondition, OrCondition } from '../powershell/conditions';
 import { PSControlType, PSString, PSInt32, PSInt32Array, PSBoolean, PSOrientationType } from '../powershell/common';
 import type { RectResult } from '../server/protocol';
 
@@ -99,6 +101,48 @@ const XPathAllowedProperties = Object.freeze([
 ] as const);
 
 type XPathAllowedProperties = typeof XPathAllowedProperties[number];
+
+// Free-text string attributes for which contains()/starts-with() can be pushed down to
+// the server as a native match. Role/boolean/numeric attributes are excluded — substring
+// semantics on those are meaningless and the bridge matchers only special-case these.
+const XPathStringMatchProperties: readonly string[] = Object.freeze([
+    'name',
+    'automationid',
+    'classname',
+    'helptext',
+    'localizedcontroltype',
+    'acceleratorkey',
+    'accesskey',
+    'itemstatus',
+    'itemtype',
+    'frameworkid',
+    'javaclass',
+    'javasimpleclass',
+]);
+
+/**
+ * Recognizes `contains(@Prop, 'literal')` / `starts-with(@Prop, 'literal')` where Prop is a
+ * whitelisted string attribute and the second argument is a string literal, and returns a
+ * native match condition for it. Any other shape (function on `.`, non-literal argument,
+ * non-whitelisted attribute, nested expression) returns null so the caller keeps the
+ * existing client-side evaluation.
+ */
+function tryBuildMatchCondition(exprNode: ExprNode): MatchPropertyCondition | null {
+    if (exprNode.type !== FUNCTION_CALL) {return null;}
+    if (exprNode.name !== CONTAINS && exprNode.name !== STARTS_WITH) {return null;}
+    if (exprNode.args.length !== 2) {return null;}
+
+    const [attr, literal] = exprNode.args;
+    if (literal.type !== LITERAL) {return null;}
+    if (attr.type !== RELATIVE_LOCATION_PATH || attr.steps.length !== 1) {return null;}
+
+    const step = attr.steps[0];
+    if (step.axis !== ATTRIBUTE || step.test.type !== NODE_NAME_TEST || !step.test.name) {return null;}
+    if (!XPathStringMatchProperties.includes(step.test.name.toLowerCase())) {return null;}
+
+    const match = exprNode.name === CONTAINS ? 'contains' : 'startsWith';
+    return new MatchPropertyCondition(step.test.name, literal.string, match);
+}
 
 // Element context in XPath processing
 interface XPathElement {
@@ -233,10 +277,15 @@ export async function processExprNode<T>(exprNode: ExprNode, context: XPathEleme
         case INEQUALITY: {
             const [lhs] = await handleFunctionCall<string>(STRING, context, sendCommand, exprNode.lhs);
             const [rhs] = await handleFunctionCall<string>(STRING, context, sendCommand, exprNode.rhs);
-            if (isNaN(Number(lhs)) || isNaN(Number(rhs))) {
+            // An absent attribute surfaces as "". Number("") is 0, so without this guard
+            // `@TableColumn="0"` (or any `@x="0"`) would match every element that lacks
+            // the attribute. Empty/blank strings are never numeric operands here.
+            const lhsNum = (lhs ?? '').trim() === '' ? NaN : Number(lhs);
+            const rhsNum = (rhs ?? '').trim() === '' ? NaN : Number(rhs);
+            if (isNaN(lhsNum) || isNaN(rhsNum)) {
                 return [exprNode.type === EQUALITY ? (lhs === rhs) as T : (lhs !== rhs) as T];
             }
-            return [exprNode.type === EQUALITY ? (Number(lhs) === Number(rhs)) as T : (Number(lhs) !== Number(rhs)) as T];
+            return [exprNode.type === EQUALITY ? (lhsNum === rhsNum) as T : (lhsNum !== rhsNum) as T];
         }
         case ADDITIVE:
         case DIVISIONAL:
@@ -308,6 +357,21 @@ async function handleLocationNode(location: LocationNode, context: XPathElement,
 
 export async function processExprNodeAsPredicate(exprNode: ExprNode, context: XPathElement, positions: Set<number>, sendCommand: SendCommandFn, relativeExprNodes?: ExprNode[]): Promise<[Condition, ExprNode[]?]> {
     relativeExprNodes ??= [];
+
+    // contains(@Prop, 'literal') / starts-with(@Prop, 'literal') on a whitelisted string
+    // attribute: hand the server a native substring/prefix match so bridge agents
+    // (Java/.NET) filter in a single traversal instead of us fetching every descendant and
+    // calling getProperty on each (slow, and — for transient JAB wrappers — race-prone).
+    // The original expression is still kept as a client-side post-filter (relativeExprNodes),
+    // so UIA (which returns a true-condition for this) behaves exactly as before.
+    if (exprNode.type === FUNCTION_CALL) {
+        const matchCond = tryBuildMatchCondition(exprNode);
+        if (matchCond) {
+            relativeExprNodes.push(exprNode);
+            return [matchCond, relativeExprNodes];
+        }
+    }
+
     switch (exprNode.type) {
         case NUMBER:
             return await processExprNodeAsPredicate({

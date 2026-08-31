@@ -565,6 +565,23 @@ describe('Java Swing Form', () => {
             const submitBtn = await driver.$('~submitButton');
             expect(await submitBtn.isExisting()).toBe(true);
         });
+
+        it('contains(@Name, ...) with a Hebrew (RTL) substring finds the dialog message label', async () => {
+            const btn = await driver.$('~showErrorButton');
+            await btn.click();
+            await driver.pause(500);
+            await driver.executeScript('windows: switchToWindowByTitle', [{ title: ERROR_DIALOG_TITLE, exact: true }]);
+
+            // Dialog body text is "אירעה שגיאה"; match on the trailing word only.
+            const labels = await driver.$$('//*[contains(@Name,"שגיאה")]');
+            expect(labels.length).toBeGreaterThanOrEqual(1);
+            const texts = await labels.map((l) => l.getAttribute('Name'));
+            expect(texts.some((t) => t?.includes('אירעה שגיאה'))).toBe(true);
+
+            await (await driver.$('~OK')).click();
+            await driver.pause(300);
+            await driver.switchToWindow(mainWindowHandle);
+        });
     });
 
     describe('tag name strategy (UIA ControlType mapped to Java role)', () => {
@@ -688,7 +705,7 @@ describe('Java Swing Form', () => {
 
         it('the cell at row 1, col 0 contains "Bob"', async () => {
             const cells = await driver.$$('//Table[@Name="dataTable"]/*');
-            let match: (typeof cells)[number] | undefined;
+            let match: WebdriverIO.Element | undefined;
             for (const cell of cells) {
                 const row = await cell.getAttribute('TableRow');
                 const col = await cell.getAttribute('TableColumn');
@@ -706,6 +723,81 @@ describe('Java Swing Form', () => {
             const btn = await driver.$('~submitButton');
             expect(await btn.getAttribute('TableRow')).toBe('');
             expect(await btn.getAttribute('TableColumn')).toBe('');
+        });
+
+        it('getAttribute(TableRow/TableColumn) on a cell found by a broad //* scan', async () => {
+            // The reported bug: a cell located by a whole-tree scan came back with
+            // TableRow/TableColumn === "" on a later getAttribute call, because the
+            // transient AccessibleJTableCell wrapper had been GC'd out of the agent's
+            // (then weakly-referenced) registry between the find and the attribute read.
+            const cells = await driver.$$('//*[@TableColumn="0"]');
+            expect(cells.length).toBe(3); // column 0 across 3 rows
+
+            const rows: string[] = [];
+            for (const cell of cells) {
+                expect(await cell.getAttribute('TableColumn')).toBe('0');
+                const row = await cell.getAttribute('TableRow');
+                expect(row).not.toBe('');
+                rows.push(String(row));
+            }
+            expect(rows.sort()).toEqual(['0', '1', '2']);
+        });
+
+        it('a cell reference survives further queries before its attributes are read', async () => {
+            const [cell] = await driver.$$('//*[@TableColumn="0"]');
+            // Unrelated traffic between the find and the read — with the old weak
+            // registry this window was enough for the wrapper to be collected.
+            await driver.$$('//*');
+            await driver.getPageSource();
+            expect(String(await cell.getAttribute('TableRow'))).not.toBe('');
+            expect(['Alice', 'Bob', 'Carol']).toContain(await cell.getText());
+        });
+
+        it('@TableRow / @TableColumn work as XPath attribute predicates', async () => {
+            expect((await driver.$$('//*[@TableRow="0"]')).length).toBe(2); // 2 columns in row 0
+            expect((await driver.$$('//*[@TableColumn="1"]')).length).toBe(3); // 3 rows in column 1
+
+            const bobCell = await driver.$('//*[@TableRow="1" and @TableColumn="0"]');
+            expect(await bobCell.isExisting()).toBe(true);
+            expect(await bobCell.getText()).toBe('Bob');
+
+            const scoped = await driver.$$('//Table[@Name="dataTable"]//*[@TableColumn="1"]');
+            expect(scoped.length).toBe(3);
+        });
+    });
+
+    describe('XPath contains() and starts-with() predicates', () => {
+        it('contains(@Name, ...) matches by substring', async () => {
+            // firstName + lastName both contain "Name"; email does not.
+            const fields = await driver.$$('//Edit[contains(@Name,"Name")]');
+            const names = (await fields.map((f) => f.getAttribute('Name'))).sort();
+            expect(names).toEqual(['firstName', 'lastName']);
+        });
+
+        it('contains(@Name, ...) works on a whole-tree //* scan', async () => {
+            const els = await driver.$$('//*[contains(@Name,"Checkbox")]');
+            expect(els.length).toBe(1);
+            expect(await els[0].getAttribute('Name')).toBe('agreeCheckbox');
+        });
+
+        it('starts-with(@Name, ...) matches by prefix only', async () => {
+            const first = await driver.$$('//Edit[starts-with(@Name,"first")]');
+            expect(first.length).toBe(1);
+            expect(await first[0].getAttribute('Name')).toBe('firstName');
+
+            // "Name" is a substring but not a prefix of any field name → no match.
+            expect((await driver.$$('//Edit[starts-with(@Name,"Name")]')).length).toBe(0);
+        });
+
+        it('contains() combines with other predicates', async () => {
+            const el = await driver.$('//*[@JavaSimpleClass="JButton" and contains(@Name,"Error")]');
+            expect(await el.isExisting()).toBe(true);
+            expect(await el.getAttribute('Name')).toBe('showErrorButton');
+        });
+
+        it('contains(@JavaClass, ...) matches on the fully-qualified class name', async () => {
+            const fields = await driver.$$('//*[contains(@JavaClass,"JTextField")]');
+            expect(fields.length).toBe(3);
         });
     });
 

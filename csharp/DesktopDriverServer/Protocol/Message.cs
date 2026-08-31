@@ -50,6 +50,16 @@ public class ConditionDto
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Property { get; set; }
 
+    /// <summary>
+    /// Optional string match mode for a property condition: "contains" or "startsWith".
+    /// Absent means exact equality. Only the bridge agents (Java/.NET) evaluate this
+    /// natively; for UIA it degrades to a true-condition and the caller re-verifies
+    /// client-side (see ConditionBuilder.BuildPropertyCondition).
+    /// </summary>
+    [JsonPropertyName("match")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Match { get; set; }
+
     [JsonPropertyName("value")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Value { get; set; }

@@ -4,12 +4,14 @@
 import { describe, it, expect } from 'vitest';
 import {
     PropertyCondition,
+    MatchPropertyCondition,
     AndCondition,
     OrCondition,
     NotCondition,
     TrueCondition,
     FalseCondition,
 } from '../../lib/powershell/conditions';
+import { conditionToDto } from '../../lib/server/converter-bridge';
 import { Property } from '../../lib/powershell/types';
 import {
     PSBoolean,
@@ -77,6 +79,39 @@ describe('PropertyCondition', () => {
     it('creates condition for int32 array property (RUNTIME_ID)', () => {
         const c = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array([1, 2, 3]));
         expect(c.toString()).toContain('runtimeid');
+    });
+});
+
+describe('MatchPropertyCondition', () => {
+    it('serializes contains() to a property DTO with match: "contains" and a normalized property name', () => {
+        const c = new MatchPropertyCondition('name', 'שורות', 'contains');
+        expect(conditionToDto(c)).toEqual({
+            type: 'property',
+            property: 'Name',
+            value: 'שורות',
+            match: 'contains',
+        });
+    });
+
+    it('serializes starts-with() to match: "startsWith"', () => {
+        const c = new MatchPropertyCondition('AutomationId', 'first', 'startsWith');
+        expect(conditionToDto(c)).toEqual({
+            type: 'property',
+            property: 'AutomationId',
+            value: 'first',
+            match: 'startsWith',
+        });
+    });
+
+    it('nests inside an AndCondition DTO alongside the node-test condition', () => {
+        const and = new AndCondition(new TrueCondition(), new MatchPropertyCondition('JavaSimpleClass', 'Cell', 'contains'));
+        expect(conditionToDto(and)).toEqual({
+            type: 'and',
+            conditions: [
+                { type: 'true' },
+                { type: 'property', property: 'JavaSimpleClass', value: 'Cell', match: 'contains' },
+            ],
+        });
     });
 });
 

@@ -651,7 +651,8 @@ internal static class Reflector
             string? prop = condition.TryGetValue("property", out var p) ? p as string : null;
             object? valueObj = condition.TryGetValue("value", out var v) ? v : null;
             string value = valueObj?.ToString() ?? "";
-            return MatchesProperty(target, prop, value);
+            string? match = condition.TryGetValue("match", out var m) ? m as string : null;
+            return MatchesProperty(target, prop, value, match);
         }
         return false;
     }
@@ -894,7 +895,7 @@ internal static class Reflector
     }
 
     // Case-insensitive lookup directly against whatever BuildInfo populated for this target.
-    private static bool MatchesProperty(object target, string? property, string value)
+    private static bool MatchesProperty(object target, string? property, string value, string? match = null)
     {
         if (property == null) return false;
         var info = BuildInfo(target);
@@ -909,6 +910,11 @@ internal static class Reflector
 
         object? actual = info[key];
         string actualStr = actual?.ToString() ?? "";
-        return actualStr == value;
+        return (match?.ToLowerInvariant()) switch
+        {
+            "contains" => actualStr.Contains(value, StringComparison.Ordinal),
+            "startswith" => actualStr.StartsWith(value, StringComparison.Ordinal),
+            _ => actualStr == value,
+        };
     }
 }

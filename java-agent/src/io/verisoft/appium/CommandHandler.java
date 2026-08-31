@@ -292,8 +292,10 @@ public class CommandHandler {
         AccessibleExtendedTable extTable = (AccessibleExtendedTable) table;
         int index = ac.getAccessibleIndexInParent();
         if (index < 0) return;
-        info.put("TableRow", extTable.getAccessibleRow(index));
-        info.put("TableColumn", extTable.getAccessibleColumn(index));
+        // Strings, not raw ints: WebDriver getAttribute must return a string, and the
+        // non-cell case already yields "" — keep the type consistent both ways.
+        info.put("TableRow", String.valueOf(extTable.getAccessibleRow(index)));
+        info.put("TableColumn", String.valueOf(extTable.getAccessibleColumn(index)));
     }
 
     static Map<String, Object> buildInfoFromAccessible(Accessible a, String id) {
@@ -620,24 +622,41 @@ public class CommandHandler {
             String prop = (String) condition.get("property");
             Object valObj = condition.get("value");
             String value = valObj instanceof String ? (String) valObj : String.valueOf(valObj);
-            return matchesAccessibleProperty(a, prop, value);
+            String match = (String) condition.get("match");
+            return matchesAccessibleProperty(a, prop, value, match);
         }
         return false;
     }
 
-    private static boolean matchesAccessibleProperty(Accessible a, String property, String value) {
+    /**
+     * Compares an element's actual attribute value against the wanted value using the
+     * requested match mode. {@code match} comes straight off the wire ("contains" /
+     * "startswith"); null or anything else means exact equality. Only the free-text
+     * string attributes (name, description, java class) route through here — role /
+     * boolean / index comparisons stay exact.
+     */
+    private static boolean applyMatch(String actual, String expected, String match) {
+        if (match == null) return actual.equals(expected);
+        switch (match.toLowerCase(Locale.US)) {
+            case "contains":    return actual.contains(expected);
+            case "startswith":  return actual.startsWith(expected);
+            default:            return actual.equals(expected);
+        }
+    }
+
+    private static boolean matchesAccessibleProperty(Accessible a, String property, String value, String match) {
         AccessibleContext ac = a.getAccessibleContext();
         String prop = property.toLowerCase(Locale.US);
         switch (prop) {
             case "name":
             case "automationid": {
                 String name = ac != null ? nullToEmpty(ac.getAccessibleName()) : "";
-                return name.equals(value);
+                return applyMatch(name, value, match);
             }
             case "description":
             case "helptext": {
                 String desc = ac != null ? nullToEmpty(ac.getAccessibleDescription()) : "";
-                return desc.equals(value);
+                return applyMatch(desc, value, match);
             }
             case "controltype":
             case "classname":
@@ -654,9 +673,9 @@ public class CommandHandler {
                 return roleNorm.equals(valueNorm);
             }
             case "javaclass":
-                return a.getClass().getName().equals(value);
+                return applyMatch(a.getClass().getName(), value, match);
             case "javasimpleclass":
-                return a.getClass().getSimpleName().equals(value);
+                return applyMatch(a.getClass().getSimpleName(), value, match);
             case "isenabled": {
                 if (ac == null) return false;
                 AccessibleStateSet states = ac.getAccessibleStateSet();
@@ -705,31 +724,31 @@ public class CommandHandler {
             String prop = (String) condition.get("property");
             Object valObj = condition.get("value");
             String value = valObj instanceof String ? (String) valObj : String.valueOf(valObj);
-            return matchesProperty(c, prop, value);
+            String match = (String) condition.get("match");
+            return matchesProperty(c, prop, value, match);
         }
         return false;
     }
 
-    private static boolean matchesProperty(Component c, String property, String value) {
-        Map<String, Object> info = buildInfo(c, "");
+    private static boolean matchesProperty(Component c, String property, String value, String match) {
         String prop = property.toLowerCase(Locale.US);
 
         switch (prop) {
             case "javaclass":
-                return c.getClass().getName().equals(value);
+                return applyMatch(c.getClass().getName(), value, match);
             case "javasimpleclass":
-                return c.getClass().getSimpleName().equals(value);
+                return applyMatch(c.getClass().getSimpleName(), value, match);
             case "name":
             case "automationid": {
                 AccessibleContext ac = c.getAccessibleContext();
                 String name = ac != null ? nullToEmpty(ac.getAccessibleName()) : "";
-                return name.equals(value);
+                return applyMatch(name, value, match);
             }
             case "description":
             case "helptext": {
                 AccessibleContext ac = c.getAccessibleContext();
                 String desc = ac != null ? nullToEmpty(ac.getAccessibleDescription()) : "";
-                return desc.equals(value);
+                return applyMatch(desc, value, match);
             }
             case "controltype": {
                 // Map UIA ControlType name → Java AccessibleRole display string, then match.

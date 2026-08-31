@@ -64,6 +64,6 @@ describe('execute (executeMethodMap dispatch)', () => {
     it('throws UnknownCommandError for an unrecognized windows: script', async () => {
         await expect(
             extension.execute.call(driver, 'windows: unknownCommand', [])
-        ).rejects.toThrow('Unknown command');
+        ).rejects.toThrow(/Unsupported execute method 'windows: unknownCommand'/);
     });
 });

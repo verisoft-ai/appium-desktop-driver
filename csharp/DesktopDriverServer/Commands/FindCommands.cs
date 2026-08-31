@@ -594,14 +594,16 @@ public static class FindCommands
         return state.DotNetBridge!.FindAll(root, conditionDto, "subtree");
     }
 
-    // Native UIA3 descendant search first — sub-millisecond on typical apps.
-    // If native misses (happens for elements in subtrees it doesn't traverse —
-    // WPF popup owners hosted in a separate UIA provider, and some virtualised
-    // lists), fall back to a manual child-by-child walk via TreeScope.Children
-    // which does cross those boundaries. The manual walk is slow on miss
-    // (~3–12 s for large trees) but guarantees parity with the original fork's
-    // behaviour — tests that were passing before rely on it to find
-    // elements the native scope skips.
+    // Descendant / subtree search is UIA's own scoped FindFirst/FindAll and nothing
+    // more. A previous implementation supplemented this with a manual child-by-child
+    // walk via TreeScope.Children to recover matches native scope skips (WPF popups
+    // hosted in a separate fragment root, virtualised lists). That walk was removed:
+    // it ran unconditionally even when native returned complete results, had no
+    // containment guard, and on legacy Win32 providers (ComboBox, old ActiveX) whose
+    // TreeScope.Children navigation is broken it escaped the element's subtree and
+    // enumerated the whole desktop (20k+ elements for `.//*`). Provider-boundary
+    // cases that genuinely need crossing (IE/MSHTML documents, some popups) should be
+    // handled with targeted fragment-root resolution, not a blanket re-walk.
 
     private static string? FindFirstRecursively(IUIAutomationElement element, IUIAutomationCondition condition, SessionState state, bool includeSelf)
     {
@@ -614,62 +616,31 @@ public static class FindCommands
             var self = element.FindFirst(TreeScope.Element, condition);
             if (self != null) return state.TrySaveElementAndReturnId(self);
         }
-        var trueCond = state.Automation.CreateTrueCondition();
-        return WalkForFirst(element, condition, trueCond, state);
-    }
-
-    private static string? WalkForFirst(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state)
-    {
-        var direct = element.FindFirst(TreeScope.Children, condition);
-        if (direct != null) return state.TrySaveElementAndReturnId(direct);
-
-        var children = element.FindAll(TreeScope.Children, trueCond);
-        foreach (var child in IterateArray(children))
-        {
-            var found = WalkForFirst(child, condition, trueCond, state);
-            if (found != null) return found;
-        }
         return null;
     }
 
     private static string[] FindAllRecursively(IUIAutomationElement element, IUIAutomationCondition condition, SessionState state, bool includeSelf)
     {
         var scope = includeSelf ? TreeScope.Subtree : TreeScope.Descendants;
-        var nativeResults = IterateArray(element.FindAll(scope, condition))
+        var results = IterateArray(element.FindAll(scope, condition))
             .Select(el => state.TrySaveElementAndReturnId(el))
             .Where(id => id != null)
             .Select(id => id!)
             .ToList();
 
-        // Supplement with a manual walk to catch matches the native scope
-        // missed. De-dupe by RuntimeId (which is the saved element ID).
-        var seen = new HashSet<string>(nativeResults);
+        // TreeScope.Subtree already includes the element itself, but a broken provider
+        // can omit it from FindAll while still matching it via TreeScope.Element.
         if (includeSelf)
         {
+            var seen = new HashSet<string>(results);
             var self = element.FindFirst(TreeScope.Element, condition);
             if (self != null)
             {
                 var id = state.TrySaveElementAndReturnId(self);
-                if (id != null && seen.Add(id)) nativeResults.Add(id);
-            }
-        }
-        var trueCond = state.Automation.CreateTrueCondition();
-        WalkForAll(element, condition, trueCond, state, nativeResults!, seen);
-        return nativeResults!.ToArray();
-    }
-
-    private static void WalkForAll(IUIAutomationElement element, IUIAutomationCondition condition, IUIAutomationCondition trueCond, SessionState state, List<string> results, HashSet<string> seen)
-    {
-        var children = element.FindAll(TreeScope.Children, trueCond);
-        foreach (var child in IterateArray(children))
-        {
-            if (child.FindFirst(TreeScope.Element, condition) != null)
-            {
-                var id = state.TrySaveElementAndReturnId(child);
                 if (id != null && seen.Add(id)) results.Add(id);
             }
-            WalkForAll(child, condition, trueCond, state, results, seen);
         }
+        return results.ToArray();
     }
 
     // --- UIA3 array iteration ---

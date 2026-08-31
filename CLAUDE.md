@@ -24,11 +24,11 @@ This is an **Appium driver** for Windows desktop UI automation, exposed via the 
 
 ### Core driver flow
 
-`lib/driver.ts` — `AppiumDesktopDriver` extends `BaseDriver`. On `createSession()`, it starts a persistent PowerShell process that remains open for the session lifetime. All UI Automation operations are executed by sending PowerShell commands through this process and reading stdout.
+`lib/driver.ts` — `AppiumDesktopDriver` extends `BaseDriver`. On `createSession()`, it spawns **`DesktopDriverServer.exe`** (`lib/server/client.ts`) — a persistent .NET process that remains open for the session lifetime. Its source lives in this repo at `csharp/DesktopDriverServer/` (command handlers under `Commands/`); `native/win-x64/DesktopDriverServer.exe` is just the build output, not a vendored/external binary. All UI Automation operations are sent to this process as newline-delimited JSON requests over stdin/stdout (`lib/server/protocol.ts`: `{id, method, params}` → `{id, result|error, duration_ms}`), resolved by request id. `DesktopDriverServer.exe` handles far more than tree navigation — process lifecycle (`startProcess`/`stopProcess`/window move/resize), clipboard, screenshots, file ops, bridge injection (Java/.NET), and PowerShell execution (`executePowerShellScript`) all dispatch through it too; there is no persistent PowerShell session on the Node side. The one channel that bypasses this process entirely is raw input synthesis: `lib/winapi/user32.ts` loads `user32.dll`/`kernel32.dll` directly via the `koffi` FFI library and calls `SendInput`/`SetCursorPos`/etc. straight from Node.
 
 ### Element finding
 
-Element searches go through `lib/powershell/` which builds PowerShell scripts using Windows UI Automation APIs. The driver converts Appium locator strategies (XPath, accessibility id, class name, etc.) into `UIA3` conditions via `lib/powershell/conditions.ts` and `converter.ts`. XPath is evaluated in `lib/xpath/` against the live UI Automation tree.
+Appium locator strategies (XPath, accessibility id, class name, etc.) are converted into `ConditionDto` JSON objects (`lib/server/protocol.ts`, built via `lib/server/conditions.ts` and `lib/server/converter-bridge.ts`) and sent to `DesktopDriverServer.exe`, which reconstructs real `UIA3` `Condition` objects natively in .NET and runs `FindFirst`/`FindAll` against the live tree. `lib/powershell/` (`conditions.ts`, `converter.ts`) is legacy naming kept for the `-windows uiautomation` locator converter and XPath plumbing — it no longer executes PowerShell scripts; `converter-bridge.ts` bridges its PSObject-shaped `Condition` classes into `ConditionDto`s for the server. XPath is evaluated in `lib/xpath/` against the live UI Automation tree via the same DTO conditions and element-id refs. As a fallback for legacy controls with no UIA children (old ActiveX/hand-rolled Win32 grids), `lib/commands/native.ts` walks the raw `IAccessible` (MSAA) tree instead — dispatched over the same JSON protocol.
 
 ### Input simulation
 
@@ -42,7 +42,8 @@ All driver commands live in `lib/commands/` and are mixed into the driver class 
 - `element.ts` — element finding and attribute retrieval
 - `app.ts` — app launch/close/window management
 - `extension.ts` — `executeScript()` platform-specific commands
-- `powershell.ts` — raw PowerShell execution
+- `native.ts` — MSAA fallback tree walk for legacy controls with no UIA children
+- `server-session.ts` — session-level root element / server lifecycle
 - `screen-recorder.ts` — FFmpeg-based recording
 
 ### TypeScript paths

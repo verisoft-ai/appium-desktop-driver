@@ -1,10 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Xml;
-using System.Xml.XPath;
 using DesktopDriverServer.DotNet;
 using DesktopDriverServer.Java;
-using DesktopDriverServer.Protocol;
 using DesktopDriverServer.Server;
 using DesktopDriverServer.State;
 using DesktopDriverServer.Uia3;

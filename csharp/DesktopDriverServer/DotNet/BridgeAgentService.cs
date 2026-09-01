@@ -132,6 +132,25 @@ internal sealed class BridgeAgentService : IDisposable
             .ToArray();
     }
 
+    /// <summary>
+    /// "evaluateXPath" — the bridge process evaluates the whole expression against
+    /// its own reflected object model (System.Xml.XPath over a materialised tree)
+    /// and returns element-table ids in document order.
+    /// </summary>
+    public object? EvaluateXPath(BridgeAgentElement root, string expression, bool multiple)
+    {
+        var result = Call("evaluateXPath", new { rootId = root.Id, expression, multiple });
+        if (result == null || result.Value.ValueKind != JsonValueKind.Array)
+        {
+            return multiple ? Array.Empty<string>() : null;
+        }
+        var ids = result.Value.EnumerateArray()
+            .Select(e => e.GetString() ?? "")
+            .Where(s => s.Length > 0)
+            .ToArray();
+        return multiple ? ids : (ids.Length > 0 ? ids[0] : null);
+    }
+
     // ── Property access ────────────────────────────────────────────────────────
 
     public object? GetProperty(BridgeAgentElement el, string property)

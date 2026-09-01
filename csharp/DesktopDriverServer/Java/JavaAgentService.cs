@@ -153,30 +153,9 @@ internal sealed class JavaAgentService : IDisposable
         var rootXml = BuildXPathNode(root, doc, nodes, ref counter, 0) ?? doc.CreateElement("DummyRoot");
         doc.AppendChild(rootXml);
 
-        object evaluated;
-        try
-        {
-            evaluated = doc.CreateNavigator()!.Evaluate(expression);
-        }
-        catch (System.Xml.XPath.XPathException ex)
-        {
-            throw new DesktopDriverServer.Protocol.InvalidSelectorException($"Malformed XPath: {ex.Message}");
-        }
-
-        var ids = new List<string>();
-        if (evaluated is System.Xml.XPath.XPathNodeIterator it)
-        {
-            while (it.MoveNext())
-            {
-                var cur = it.Current;
-                if (cur == null || cur.NodeType != System.Xml.XPath.XPathNodeType.Element) continue;
-                var xmlEl = (cur as IHasXmlNode)?.GetNode() as XmlElement;
-                var nodeId = xmlEl?.GetAttribute("__javaNodeId");
-                if (string.IsNullOrEmpty(nodeId) || !nodes.TryGetValue(nodeId!, out var elId)) continue;
-                if (!ids.Contains(elId)) ids.Add(elId);
-                if (!multiple && ids.Count > 0) break;
-            }
-        }
+        var ids = DesktopDriverServer.Commands.XPathEvaluator.Evaluate(
+            doc, null, "__javaNodeId", expression, multiple,
+            nodeId => nodes.TryGetValue(nodeId, out var elId) ? elId : null);
 
         return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
     }

@@ -1,8 +1,38 @@
 # Plan: move XPath evaluation into the runtime that owns the tree
 
-Status: proposal / not scheduled
+Status: implemented (branch `plan/xpath-engine-in-runtime`)
 Author: initial draft via Claude Code
-Related: PR #77 (three evaluator bugs fixed in the current design)
+Related: PR #77 (three evaluator bugs fixed in the since-deleted client design)
+
+## What actually shipped (differs from the design below)
+
+- **One engine for all three runtimes.** Rather than a bespoke `XPathNavigator`
+  per runtime (and Jaxen for Java), every path materialises its subtree into an
+  `XmlDocument` and runs the expression through `System.Xml.XPath`. That is still
+  a complete, Microsoft-maintained XPath 1.0 engine — not hand-rolled — so the
+  motivation ("stop hand-writing an evaluator") holds, with far less new code and
+  no vendored dependency / no C++-CLI or Java build changes.
+  - UIA: materialised and evaluated inside `DesktopDriverServer.exe`
+    (`Commands/XPathCommands.cs`, `UiaXmlModel`).
+  - .NET bridge + Java agent: materialised host-side from the existing
+    `getChildren` traversal (the one page source already uses) and evaluated on
+    the host (`BridgeAgentService.EvaluateXPath`, `JavaAgentService.EvaluateXPath`).
+    No agent-side changes, so both the modern core agent and the legacy
+    C++/CLI Framework agent are covered.
+  - Shared result rules (document order, dedupe, single-vs-multiple, non-node-set
+    → not a locator, malformed → `InvalidSelectorException`) live once in
+    `Commands/XPathEvaluator.cs`, unit-tested in `csharp/DesktopDriverServer.Tests`.
+- **Default is the new engine, unconditionally.** No `appium:xpathEngine`
+  capability; `lib/xpath/core.ts` + `functions.ts` and the `xpath-analyzer`
+  dependency are deleted. `lib/xpath/index.ts` is the ~50-line shim.
+- **Language independence:** element tag names come from the language-neutral
+  name (`ControlType` map for UIA, reflected type name for the .NET bridge,
+  `role_en_US` for JAB), so `//Button` / `//PushButton` match identically on a
+  Hebrew, English or any localised Windows / JVM.
+- **Not yet done:** run the full xpath e2e suites (`find-element.e2e.ts`,
+  `xpath-axes.e2e.ts`, the bridge suites) on Windows against a real app to
+  confirm parity. Semantics were verified against every expression in those
+  suites via `csharp/DesktopDriverServer.Tests/XPathEvaluatorTests.cs`.
 
 ## Problem
 

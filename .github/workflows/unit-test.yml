@@ -23,3 +23,10 @@ jobs:
 
             - name: Run unit tests
               run: npm run test
+
+            - uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: '10.0.x'
+
+            - name: Run C# unit tests
+              run: dotnet test csharp/DesktopDriverServer.Tests/DesktopDriverServer.Tests.csproj -c Release

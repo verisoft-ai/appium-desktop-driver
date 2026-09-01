@@ -83,45 +83,11 @@ public static class XPathCommands
 
         // Evaluate relative to the context node when one was given, so relative
         // expressions (`.//x`, `..`, `self::`) and the upward axes work.
-        XPathNavigator nav = model.NavigatorFor(contextElementId);
+        var ids = XPathEvaluator.Evaluate(
+            model.Document, model.ContextNode(contextElementId), UiaXmlModel.IdAttr, expression, multiple,
+            nodeId => model.Elements.TryGetValue(nodeId, out var el) ? state.TrySaveElementAndReturnId(el) : null);
 
-        object evaluated;
-        try
-        {
-            evaluated = nav.Evaluate(expression);
-        }
-        catch (XPathException ex)
-        {
-            throw new InvalidSelectorException($"Malformed XPath: {ex.Message}");
-        }
-        catch (ArgumentException ex)
-        {
-            throw new InvalidSelectorException($"Malformed XPath: {ex.Message}");
-        }
-
-        if (evaluated is not XPathNodeIterator it)
-        {
-            // A non-node-set result (string(...), count(...), boolean(...)) is not a
-            // valid element locator.
-            return multiple ? Array.Empty<string>() : null;
-        }
-
-        var ids = new List<string>();
-        while (it.MoveNext())
-        {
-            var cur = it.Current;
-            if (cur == null || cur.NodeType != XPathNodeType.Element) continue;
-            var xmlEl = (cur as IHasXmlNode)?.GetNode() as XmlElement;
-            var nodeId = xmlEl?.GetAttribute(UiaXmlModel.IdAttr);
-            if (string.IsNullOrEmpty(nodeId)) continue;
-            if (!model.Elements.TryGetValue(nodeId, out var el)) continue;
-            var savedId = state.TrySaveElementAndReturnId(el);
-            if (savedId != null && !ids.Contains(savedId)) ids.Add(savedId);
-            if (!multiple && ids.Count > 0) break;
-        }
-
-        if (multiple) return ids.ToArray();
-        return ids.Count > 0 ? ids[0] : null;
+        return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
     }
 
     /// <summary>
@@ -180,32 +146,23 @@ internal sealed class UiaXmlModel
 
     public XmlDocument Document { get; }
     public Dictionary<string, IUIAutomationElement> Elements { get; }
-    private readonly XmlElement _rootXml;
 
-    private UiaXmlModel(XmlDocument doc, XmlElement rootXml, Dictionary<string, IUIAutomationElement> elements)
+    private UiaXmlModel(XmlDocument doc, Dictionary<string, IUIAutomationElement> elements)
     {
         Document = doc;
-        _rootXml = rootXml;
         Elements = elements;
     }
 
     /// <summary>
-    /// Navigator positioned on the node built from <paramref name="contextElementId"/>,
-    /// or on the materialisation root when no context was given / it is not in the tree.
+    /// The node built from <paramref name="contextElementId"/>, or null (evaluate
+    /// from the document root) when no context was given / it is not in the tree.
     /// </summary>
-    public XPathNavigator NavigatorFor(string? contextElementId)
+    public XmlElement? ContextNode(string? contextElementId)
     {
-        XmlElement target = _rootXml;
-        if (contextElementId != null)
-        {
-            var match = Elements.FirstOrDefault(kv => IdOf(kv.Value) == contextElementId).Key;
-            if (match != null)
-            {
-                var node = Document.SelectSingleNode($"//*[@{IdAttr}='{match}']") as XmlElement;
-                if (node != null) target = node;
-            }
-        }
-        return target.CreateNavigator()!;
+        if (contextElementId == null) return null;
+        var match = Elements.FirstOrDefault(kv => IdOf(kv.Value) == contextElementId).Key;
+        if (match == null) return null;
+        return Document.SelectSingleNode($"//*[@{IdAttr}='{match}']") as XmlElement;
     }
 
     private static string IdOf(IUIAutomationElement element)
@@ -229,7 +186,7 @@ internal sealed class UiaXmlModel
             ?? doc.CreateElement("DummyRoot");
         doc.AppendChild(rootXml);
 
-        return new UiaXmlModel(doc, rootXml, elements);
+        return new UiaXmlModel(doc, elements);
     }
 
     private static XmlElement? BuildElement(

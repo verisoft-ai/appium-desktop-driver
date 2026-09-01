@@ -134,21 +134,133 @@ internal sealed class JavaAgentService : IDisposable
     }
 
     /// <summary>
-    /// "evaluateXPath" — the Java agent evaluates the whole expression against the
-    /// AccessibleContext tree via Jaxen and returns element-table ids in document order.
+    /// "evaluateXPath" for a Java (JAB / AccessibleContext) subtree. The tree is
+    /// materialised into an <see cref="XmlDocument"/> (same traversal
+    /// <see cref="BuildXml"/> uses for page source) and the whole expression is run
+    /// through System.Xml.XPath here on the host — a complete XPath 1.0 engine, so
+    /// axes / positional & filter predicates / count() / string functions all work,
+    /// which the per-step round-trip evaluator only partially did.
+    ///
+    /// Tag names come from the JAB role via <see cref="NormalizeTagName"/> — the
+    /// role_en_US programmatic name, so <c>//PushButton</c> matches on a Hebrew,
+    /// English or any localised JVM. Attribute values are the app's own strings.
     /// </summary>
     public object? EvaluateXPath(JavaAgentElement root, string expression, bool multiple)
     {
-        var result = Call("evaluateXPath", new { rootId = root.Id, expression, multiple });
-        if (result == null || result.Value.ValueKind != JsonValueKind.Array)
+        var doc = new XmlDocument();
+        var nodes = new Dictionary<string, string>(); // __javaNodeId -> element id
+        var counter = 0;
+        var rootXml = BuildXPathNode(root, doc, nodes, ref counter, 0) ?? doc.CreateElement("DummyRoot");
+        doc.AppendChild(rootXml);
+
+        object evaluated;
+        try
         {
-            return multiple ? Array.Empty<string>() : null;
+            evaluated = doc.CreateNavigator()!.Evaluate(expression);
         }
-        var ids = result.Value.EnumerateArray()
-            .Select(e => e.GetString() ?? "")
-            .Where(s => s.Length > 0)
-            .ToArray();
-        return multiple ? ids : (ids.Length > 0 ? ids[0] : null);
+        catch (System.Xml.XPath.XPathException ex)
+        {
+            throw new DesktopDriverServer.Protocol.InvalidSelectorException($"Malformed XPath: {ex.Message}");
+        }
+
+        var ids = new List<string>();
+        if (evaluated is System.Xml.XPath.XPathNodeIterator it)
+        {
+            while (it.MoveNext())
+            {
+                var cur = it.Current;
+                if (cur == null || cur.NodeType != System.Xml.XPath.XPathNodeType.Element) continue;
+                var xmlEl = (cur as IHasXmlNode)?.GetNode() as XmlElement;
+                var nodeId = xmlEl?.GetAttribute("__javaNodeId");
+                if (string.IsNullOrEmpty(nodeId) || !nodes.TryGetValue(nodeId!, out var elId)) continue;
+                if (!ids.Contains(elId)) ids.Add(elId);
+                if (!multiple && ids.Count > 0) break;
+            }
+        }
+
+        return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
+    }
+
+    private XmlElement? BuildXPathNode(
+        JavaAgentElement node, XmlDocument doc, Dictionary<string, string> nodes, ref int counter, int depth)
+    {
+        if (depth > 100) return null;
+        XmlElement el;
+        try
+        {
+            var info = node.Info;
+            el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
+
+            var nodeId = "n" + counter++;
+            el.SetAttribute("__javaNodeId", nodeId);
+            nodes[nodeId] = node.Id;
+
+            void A(string name, string? value)
+            {
+                try { el.SetAttribute(name, XPathSanitize(value ?? "")); } catch { }
+            }
+
+            A("Name", GetString(info, "Name"));
+            A("AutomationId", GetString(info, "AutomationId"));
+            A("ClassName", GetString(info, "ClassName"));
+            A("JavaClass", GetString(info, "JavaClass"));
+            A("JavaSimpleClass", GetString(info, "JavaSimpleClass"));
+            A("LocalizedControlType", GetString(info, "LocalizedControlType"));
+            A("HelpText", GetString(info, "Description"));
+            A("States", GetString(info, "States"));
+            A("x", GetString(info, "x") ?? "0");
+            A("y", GetString(info, "y") ?? "0");
+            A("width", GetString(info, "width") ?? "0");
+            A("height", GetString(info, "height") ?? "0");
+            A("IsEnabled", (GetString(info, "IsEnabled") ?? "false").ToLowerInvariant());
+            A("IsOffscreen", (GetString(info, "IsOffscreen") ?? "false").ToLowerInvariant());
+            A("IndexInParent", GetString(info, "IndexInParent") ?? "0");
+            A("RuntimeId", node.Id);
+            A("TableRow", GetString(info, "TableRow"));
+            A("TableColumn", GetString(info, "TableColumn"));
+            A("RowCount", GetString(info, "RowCount"));
+            A("ColumnCount", GetString(info, "ColumnCount"));
+
+            var text = XPathSanitize(GetString(info, "Name") ?? "");
+            if (text.Length > 0) el.AppendChild(doc.CreateTextNode(text));
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var childrenResult = Call("getChildren", new { id = node.Id });
+            if (childrenResult?.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var childJson in childrenResult.Value.EnumerateArray())
+                {
+                    var child = SaveFromResult(childJson);
+                    if (child == null) continue;
+                    var childXml = BuildXPathNode(child, doc, nodes, ref counter, depth + 1);
+                    if (childXml != null) el.AppendChild(childXml);
+                }
+            }
+        }
+        catch { }
+
+        return el;
+    }
+
+    private static string XPathSanitize(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s)
+        {
+            if (ch == '\t' || ch == '\n' || ch == '\r' ||
+                (ch >= 0x20 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFD))
+            {
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
     }
 
     // ── Property access ────────────────────────────────────────────────────────

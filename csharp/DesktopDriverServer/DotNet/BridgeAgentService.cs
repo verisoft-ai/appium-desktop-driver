@@ -133,22 +133,126 @@ internal sealed class BridgeAgentService : IDisposable
     }
 
     /// <summary>
-    /// "evaluateXPath" — the bridge process evaluates the whole expression against
-    /// its own reflected object model (System.Xml.XPath over a materialised tree)
-    /// and returns element-table ids in document order.
+    /// "evaluateXPath" for a .NET bridge subtree. The bridge's reflected tree is
+    /// materialised into an <see cref="XmlDocument"/> (same traversal
+    /// <see cref="BuildXml"/> uses for page source) and the whole expression is run
+    /// through System.Xml.XPath here on the host — a complete XPath 1.0 engine, so
+    /// axes / positional & filter predicates / count() / string functions are all
+    /// handled. Replaces the old path where bridge XPath leaned on
+    /// BridgeServer.CollectMatches, which only ever did a descendant scan and
+    /// ignored the requested scope entirely.
+    ///
+    /// Tag names come from the reflected type name via <see cref="NormalizeTagName"/>
+    /// — language-neutral, so a node test agrees across locales just like real UIA.
     /// </summary>
     public object? EvaluateXPath(BridgeAgentElement root, string expression, bool multiple)
     {
-        var result = Call("evaluateXPath", new { rootId = root.Id, expression, multiple });
-        if (result == null || result.Value.ValueKind != JsonValueKind.Array)
+        var doc = new XmlDocument();
+        var nodes = new Dictionary<string, string>(); // __bridgeNodeId -> element id
+        var counter = 0;
+        var rootXml = BuildXPathNode(root, doc, nodes, ref counter, 0) ?? doc.CreateElement("DummyRoot");
+        doc.AppendChild(rootXml);
+
+        object evaluated;
+        try
         {
-            return multiple ? Array.Empty<string>() : null;
+            evaluated = doc.CreateNavigator()!.Evaluate(expression);
         }
-        var ids = result.Value.EnumerateArray()
-            .Select(e => e.GetString() ?? "")
-            .Where(s => s.Length > 0)
-            .ToArray();
-        return multiple ? ids : (ids.Length > 0 ? ids[0] : null);
+        catch (System.Xml.XPath.XPathException ex)
+        {
+            throw new DesktopDriverServer.Protocol.InvalidSelectorException($"Malformed XPath: {ex.Message}");
+        }
+
+        var ids = new List<string>();
+        if (evaluated is System.Xml.XPath.XPathNodeIterator it)
+        {
+            while (it.MoveNext())
+            {
+                var cur = it.Current;
+                if (cur == null || cur.NodeType != System.Xml.XPath.XPathNodeType.Element) continue;
+                var xmlEl = (cur as IHasXmlNode)?.GetNode() as XmlElement;
+                var nodeId = xmlEl?.GetAttribute("__bridgeNodeId");
+                if (string.IsNullOrEmpty(nodeId) || !nodes.TryGetValue(nodeId!, out var elId)) continue;
+                if (!ids.Contains(elId)) ids.Add(elId);
+                if (!multiple && ids.Count > 0) break;
+            }
+        }
+
+        return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
+    }
+
+    private XmlElement? BuildXPathNode(
+        BridgeAgentElement node, XmlDocument doc, Dictionary<string, string> nodes, ref int counter, int depth)
+    {
+        if (depth > 100) return null;
+        XmlElement el;
+        try
+        {
+            var info = node.Info;
+            el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
+
+            var nodeId = "n" + counter++;
+            el.SetAttribute("__bridgeNodeId", nodeId);
+            nodes[nodeId] = node.Id;
+
+            void A(string name, string? value)
+            {
+                try { el.SetAttribute(name, XPathSanitize(value ?? "")); } catch { }
+            }
+
+            A("Name", GetString(info, "Name"));
+            A("AutomationId", GetString(info, "AutomationId"));
+            A("ClassName", GetString(info, "ClassName"));
+            A("LocalizedControlType", GetString(info, "LocalizedControlType"));
+            A("HelpText", GetString(info, "Description"));
+            A("Value", GetString(info, "Value"));
+            A("x", GetString(info, "x") ?? "0");
+            A("y", GetString(info, "y") ?? "0");
+            A("width", GetString(info, "width") ?? "0");
+            A("height", GetString(info, "height") ?? "0");
+            A("IsEnabled", (GetString(info, "IsEnabled") ?? "false").ToLowerInvariant());
+            A("IsOffscreen", (GetString(info, "IsOffscreen") ?? "false").ToLowerInvariant());
+            A("RuntimeId", node.Id);
+
+            var text = XPathSanitize(GetString(info, "Name") ?? "");
+            if (text.Length > 0) el.AppendChild(doc.CreateTextNode(text));
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var childrenResult = Call("getChildren", new { id = node.Id });
+            if (childrenResult?.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var child in childrenResult.Value.EnumerateArray().Select(SaveFromResult))
+                {
+                    if (child == null) continue;
+                    var childXml = BuildXPathNode(child, doc, nodes, ref counter, depth + 1);
+                    if (childXml != null) el.AppendChild(childXml);
+                }
+            }
+        }
+        catch { }
+
+        return el;
+    }
+
+    private static string XPathSanitize(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var sb = new StringBuilder(s.Length);
+        foreach (var ch in s)
+        {
+            if (ch == '\t' || ch == '\n' || ch == '\r' ||
+                (ch >= 0x20 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFD))
+            {
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
     }
 
     // ── Property access ────────────────────────────────────────────────────────

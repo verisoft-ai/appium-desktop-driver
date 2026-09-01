@@ -185,7 +185,11 @@ export async function xpathToElIdOrIds(selector: string, mult: boolean, context:
             if (rhsLastStep) {
                 rhsLastStep[rhsLastStep.length - 1][OptimizeLastStep] = true;
             }
-        } else {
+        } else if (parsedXPath.type === ABSOLUTE_LOCATION_PATH || parsedXPath.type === RELATIVE_LOCATION_PATH) {
+            // Only a plain location path can be reduced to a single server-side
+            // findElement. A filter expression `(set)[predicate]` must materialise
+            // the whole set first — collapsing its inner path here would make
+            // `(…)[last()]` resolve against a one-element set.
             const lastStep = findLastStep(parsedXPath);
             if (lastStep && lastStep[lastStep.length - 1].predicates.every(predicateProcessableBeforeNode)) {
                 lastStep[lastStep.length - 1][OptimizeLastStep] = true;
@@ -247,19 +251,19 @@ export async function processExprNode<T>(exprNode: ExprNode, context: XPathEleme
             return result.flat();
         }
         case FILTER: {
-            const result: T[] = [];
-            const exprResult = await processExprNode<T>(exprNode.primary, context, sendCommand);
-            for (const item of exprResult) {
-                if (isXPathElement(item)) {
-                    const filteredItem = await executeStep({
-                        axis: SELF,
-                        test: { type: NODE_TYPE_TEST, name: NODE },
-                        predicates: exprNode.predicates,
-                    }, item as XPathElement, sendCommand) as T;
-                    result.push(filteredItem);
-                }
+            // `(node-set)[ predicate ]` — the predicate is evaluated against the whole
+            // materialised set: `position()` is the node's 1-based index in the set and
+            // `last()` is the set size. (A step predicate differs: the server resolves
+            // position within the axis.) Positional predicates are computed here in JS;
+            // any other predicate is delegated to executeStep as self::node()[predicate],
+            // which keeps the per-node server round-trip behaviour.
+            let nodes = (await processExprNode<XPathElement>(exprNode.primary, context, sendCommand))
+                .filter(isXPathElement);
+            nodes = removeDuplicateElements(nodes);
+            for (const predicate of exprNode.predicates) {
+                nodes = await applyFilterPredicate(nodes, predicate, sendCommand);
             }
-            return result;
+            return nodes as unknown as T[];
         }
         case OR:
         case AND: {
@@ -311,6 +315,98 @@ export async function processExprNode<T>(exprNode: ExprNode, context: XPathEleme
             }
         }
     }
+}
+
+// ── Filter-expression predicates: `(node-set)[ predicate ]` ──────────────────
+
+const POSITIONAL_BINARY_OPS: ReadonlySet<string> = new Set([
+    ADDITIVE, SUBTRACTIVE, MULTIPLICATIVE, DIVISIONAL, MODULUS,
+    EQUALITY, INEQUALITY, GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL,
+    OR, AND,
+]);
+
+/** Does the expression tree reference position() or last() anywhere? */
+function referencesPosition(node: ExprNode): boolean {
+    if (node.type === FUNCTION_CALL) {
+        return node.name === POSITION || node.name === LAST || (node.args ?? []).some(referencesPosition);
+    }
+    const n = node as { lhs?: ExprNode; rhs?: ExprNode };
+    return [n.lhs, n.rhs].some((child) => child !== undefined && referencesPosition(child));
+}
+
+/**
+ * True when the expression is built only from numbers, position()/last(), arithmetic
+ * and comparison — i.e. it can be evaluated purely from a node's (index, size) without
+ * touching the tree. Guards {@link evalPositional}.
+ */
+function canEvalPositionally(node: ExprNode): boolean {
+    if (node.type === NUMBER) {return true;}
+    if (node.type === FUNCTION_CALL) {return node.name === POSITION || node.name === LAST;}
+    if (node.type === NEGATION) {return canEvalPositionally((node as unknown as { lhs: ExprNode }).lhs);}
+    if (POSITIONAL_BINARY_OPS.has(node.type)) {
+        const n = node as unknown as { lhs: ExprNode; rhs: ExprNode };
+        return canEvalPositionally(n.lhs) && canEvalPositionally(n.rhs);
+    }
+    return false;
+}
+
+/** Evaluate a positional expression for a node at 1-based `position` in a set of `size`. */
+function evalPositional(node: ExprNode, position: number, size: number): number | boolean {
+    switch (node.type) {
+        case NUMBER: return node.number;
+        case FUNCTION_CALL: return node.name === LAST ? size : position;
+        case NEGATION: return -(evalPositional((node as unknown as { lhs: ExprNode }).lhs, position, size) as number);
+    }
+    const { lhs, rhs } = node as unknown as { lhs: ExprNode; rhs: ExprNode };
+    const l = evalPositional(lhs, position, size);
+    const r = evalPositional(rhs, position, size);
+    switch (node.type) {
+        case ADDITIVE: return (l as number) + (r as number);
+        case SUBTRACTIVE: return (l as number) - (r as number);
+        case MULTIPLICATIVE: return (l as number) * (r as number);
+        case DIVISIONAL: return (l as number) / (r as number);
+        case MODULUS: return (l as number) % (r as number);
+        case EQUALITY: return l === r;
+        case INEQUALITY: return l !== r;
+        case GREATER_THAN: return (l as number) > (r as number);
+        case GREATER_THAN_OR_EQUAL: return (l as number) >= (r as number);
+        case LESS_THAN: return (l as number) < (r as number);
+        case LESS_THAN_OR_EQUAL: return (l as number) <= (r as number);
+        case OR: return Boolean(l) || Boolean(r);
+        case AND: return Boolean(l) && Boolean(r);
+    }
+    return false;
+}
+
+async function applyFilterPredicate(nodes: XPathElement[], predicate: ExprNode, sendCommand: SendCommandFn): Promise<XPathElement[]> {
+    // Bare `[N]` is shorthand for `[position() = N]`.
+    if (predicate.type === NUMBER) {
+        const idx = predicate.number - 1;
+        return idx >= 0 && idx < nodes.length ? [nodes[idx]] : [];
+    }
+
+    if (referencesPosition(predicate) && canEvalPositionally(predicate)) {
+        const size = nodes.length;
+        return nodes.filter((_node, i) => {
+            const value = evalPositional(predicate, i + 1, size);
+            return typeof value === 'number' ? value === i + 1 : Boolean(value);
+        });
+    }
+
+    // Non-positional predicate (attribute test, contains(), not(), …): reuse the step
+    // machinery against each node individually — self::node()[predicate].
+    const kept: XPathElement[] = [];
+    for (const node of nodes) {
+        const matched = await executeStep({
+            axis: SELF,
+            test: { type: NODE_TYPE_TEST, name: NODE },
+            predicates: [predicate],
+        }, node, sendCommand);
+        if (matched.length > 0) {
+            kept.push(node);
+        }
+    }
+    return kept;
 }
 
 async function handleLocationNode(location: LocationNode, context: XPathElement, sendCommand: SendCommandFn): Promise<XPathElement[] | string[]> {
@@ -369,6 +465,15 @@ export async function processExprNodeAsPredicate(exprNode: ExprNode, context: XP
         if (matchCond) {
             relativeExprNodes.push(exprNode);
             return [matchCond, relativeExprNodes];
+        }
+        // Bare `[last()]` — the final node of the axis. Resolve it through the
+        // position machinery (sentinel) rather than evaluating last(), which counts
+        // children ignoring this step's node test and mis-fires when the axis and
+        // the node test disagree (e.g. `Group/Button[last()]` when the group's last
+        // child is not a Button).
+        if (exprNode.name === LAST) {
+            positions.add(0x7FFFFFFF);
+            return [new TrueCondition()];
         }
     }
 

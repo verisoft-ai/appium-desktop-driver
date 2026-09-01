@@ -110,8 +110,8 @@ export async function handleFunctionCall<T>(name: FunctionName, context: XPathEl
             if (args.length !== 1) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'exactly 1 argument'));
             }
-            const resultArray = await processArgs(args[0]);
-            return [resultArray.length as T];
+            const [nodeSet] = await processArgs(args[0]);
+            return [nodeSet.length as T];
         }
         case TRUE:
         case FALSE:

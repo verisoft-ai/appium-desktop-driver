@@ -69,9 +69,10 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
         // Named TextBlocks under the panel — the Button's own template may also
         // contribute an (unnamed) TextBlock to the visual tree, so filter by @Name.
         const els = await findAll('//StackPanel[@Name="InfoPanel"]//TextBlock[@Name!=""]');
-        const texts = await Promise.all(
-            els.map((e) => driver.$(e as unknown as Selector).then((el) => el.getText())),
-        );
+        const texts: string[] = [];
+        for (const e of els) {
+            texts.push(await driver.$(e as unknown as Selector).getText());
+        }
         expect(texts).toEqual(['Account', 'Active']);
     });
 

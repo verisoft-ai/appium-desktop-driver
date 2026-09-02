@@ -380,7 +380,10 @@ internal sealed class JavaAgentService : IDisposable
         try
         {
             var info = node.Info;
-            var tagName = NormalizeTagName(GetString(info, "ClassName") ?? "Element");
+            // Same tag vocabulary the XPath materialiser uses (JavaXPathTagName),
+            // so a tag copied out of page source is a valid XPath node test —
+            // e.g. a JButton shows as <Button> and `//Button` finds it.
+            var tagName = JavaXPathTagName(GetString(info, "ClassName") ?? "Element");
 
             var el = doc.CreateElement(tagName);
             el.SetAttribute("Name", GetString(info, "Name") ?? "");

@@ -982,6 +982,9 @@ real UIA, node tests are **PascalCase and case-sensitive** — `//pushbutton`
 and `//glass-pane` (spellings the old evaluator tolerated) now match
 nothing. Use `//*[@attr=…]` when unsure of the tag.
 
+`getPageSource` prints the same tag names, so a tag copied from page
+source is a valid XPath node test as-is.
+
 ```js
 // By accessible name (set via setAccessibleName() in app code)
 await driver.$('~usernameField')

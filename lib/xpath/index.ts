@@ -11,8 +11,7 @@
  *
  * The previous ~1050-line hand-written evaluator (`core.ts` + `functions.ts`,
  * driven by `xpath-analyzer`) that walked the remote tree one async round trip
- * per axis step / predicate read has been removed — see
- * docs/plans/xpath-engine-in-runtime.md.
+ * per axis step / predicate read has been removed.
  */
 import type { Element } from '@appium/types';
 import { W3C_ELEMENT_KEY, errors } from 'appium/driver';

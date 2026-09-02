@@ -1,3 +1,9 @@
+## [2.8.1](https://github.com/verisoft-ai/appium-wincore-driver/compare/v2.8.0...v2.8.1) (2026-09-02)
+
+### Miscellaneous Chores
+
+* rename package and repo to appium-wincore-driver ([88ae464](https://github.com/verisoft-ai/appium-wincore-driver/commit/88ae464659163e2063e52a1b11a92da83caf6dab))
+
 ## [2.8.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.7.0...v2.8.0) (2026-09-02)
 
 ### Features

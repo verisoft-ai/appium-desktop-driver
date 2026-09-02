@@ -118,6 +118,12 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
 
     it('a no-match multi-step selector: findElements -> [], findElement -> NoSuchElement', async () => {
         expect(await findAll('//Border[@Name="InfoCard"]//TextBlock[@Name="Nope"]')).toEqual([]);
-        await expect(findOne('//Border[@Name="Nope"]//TextBlock')).rejects.toThrow();
+
+        // The driver responds to the singular no-match with a W3C `no such element` error
+        // (HTTP 404) — same contract as standard findElement. WebdriverIO's executeScript
+        // transport does not re-throw that particular error, it resolves with the error
+        // body, so assert on the payload rather than expecting a rejection here.
+        const res = await findOne('//Border[@Name="Nope"]//TextBlock') as { error?: string };
+        expect(res?.error).toBe('no such element');
     });
 });

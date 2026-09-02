@@ -632,10 +632,15 @@ opt-in.
   prior `*ViaDotnetBridge` call) to search within, instead of the
   whole window.
 
-Returns the matching element. Throws `NoSuchElementError` when nothing
-matches — the same contract as standard `findElement`. (The plural
-`windows: findElementsViaDotnetBridge` returns `[]` instead, also
-matching standard `findElements`.)
+Returns the matching element. Responds with a W3C `no such element`
+error (HTTP 404) when nothing matches — the same contract as standard
+`findElement`. (The plural `windows: findElementsViaDotnetBridge`
+returns `[]` instead, also matching standard `findElements`.)
+
+Note: WebdriverIO's `executeScript` transport does not re-throw a
+`no such element` response — it resolves with the error body
+(`{ error: 'no such element', message, stacktrace }`). Check for that
+shape, or catch the error, when calling this via `executeScript`.
 
 ```js
 const el = await driver.executeScript('windows: findElementViaDotnetBridge', [{

@@ -227,7 +227,7 @@ export class AppiumDesktopDriver extends BaseDriver<DesktopDriverConstraints, St
             // Stamp the driver version in the log so we can tell which build is
             // running — useful when testing across rebuilds. The C# server
             // prints its own version banner shortly after via stderr → log.
-            this.log.info(`appium-desktop-driver v${DRIVER_VERSION} (session ${sessionId})`);
+            this.log.info(`appium-wincore-driver v${DRIVER_VERSION} (session ${sessionId})`);
             if (caps.smoothPointerMove) {
                 assertSupportedEasingFunction(caps.smoothPointerMove);
             }

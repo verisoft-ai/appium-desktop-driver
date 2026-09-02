@@ -1,9 +1,10 @@
 {
-  "name": "appium-desktop-driver",
+  "name": "appium-wincore-driver",
   "version": "2.8.0",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
+    "wincore",
     "desktop",
     "uiautomation",
     "automated testing",
@@ -52,10 +53,10 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/verisoft-ai/appium-desktop-driver.git"
+    "url": "https://github.com/verisoft-ai/appium-wincore-driver.git"
   },
   "bugs": {
-    "url": "https://github.com/verisoft-ai/appium-desktop-driver/issues"
+    "url": "https://github.com/verisoft-ai/appium-wincore-driver/issues"
   },
   "peerDependencies": {
     "appium": "^3.0.0-rc.2"

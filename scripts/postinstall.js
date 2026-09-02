@@ -1,5 +1,5 @@
 /**
- * Postinstall hook for appium-desktop-driver.
+ * Postinstall hook for appium-wincore-driver.
  *
  * When end users install the published npm package, the prebuilt
  * `native/win-x64/DesktopDriverServer.exe` is already bundled —

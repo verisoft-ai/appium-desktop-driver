@@ -7,7 +7,7 @@ vi.mock('../../lib/util', () => ({
     cdpRequest: vi.fn(),
     downloadFile: vi.fn().mockResolvedValue(undefined),
     sleep: vi.fn().mockResolvedValue(undefined),
-    MODULE_NAME: 'appium-desktop-driver',
+    MODULE_NAME: 'appium-wincore-driver',
 }));
 
 vi.mock('appium-chromedriver', () => ({

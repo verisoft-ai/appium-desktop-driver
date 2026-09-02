@@ -1,6 +1,6 @@
-﻿# Appium Desktop Driver
+﻿# Appium WinCore Driver
 
-Appium Desktop Driver is a Windows UI automation driver for
+Appium WinCore Driver is a Windows UI automation driver for
 [Appium 3](https://appium.io). It automates UWP, WinForms, WPF, Win32,
 Java Swing, and Internet Explorer applications.
 
@@ -18,7 +18,7 @@ Key advantages over WinAppDriver:
 ## Installation
 
 ```bash
-appium driver install --source=npm appium-desktop-driver
+appium driver install --source=npm appium-wincore-driver
 ```
 
 Requires Appium 3 and Windows 10 or later.

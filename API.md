@@ -1,6 +1,6 @@
 ﻿# API Reference
 
-Full reference for Appium Desktop Driver. See [README.md](README.md)
+Full reference for Appium WinCore Driver. See [README.md](README.md)
 for installation, capabilities, and usage examples.
 
 ## Table of Contents

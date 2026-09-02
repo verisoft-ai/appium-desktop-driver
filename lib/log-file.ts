@@ -12,7 +12,7 @@ export type LogFileMirror = {
     detach: () => void;
 };
 
-const DEFAULT_SUBDIR = 'appium-desktop-driver';
+const DEFAULT_SUBDIR = 'appium-wincore-driver';
 const MIRRORED_LEVELS = ['silly', 'verbose', 'debug', 'info', 'http', 'warn', 'error'] as const;
 
 function resolveLogPath(value: unknown): string {

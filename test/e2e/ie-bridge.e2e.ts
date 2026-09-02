@@ -9,7 +9,7 @@
  * Target site: https://the-internet.herokuapp.com
  *
  * Requirements:
- *   - Appium running on localhost:4723 with appium-desktop-driver installed
+ *   - Appium running on localhost:4723 with appium-wincore-driver installed
  *   - Internet Explorer 11 at C:\Program Files\Internet Explorer\iexplore.exe
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

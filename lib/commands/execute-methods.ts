@@ -296,14 +296,15 @@ export async function emAttachDotnetBridge(this: AppiumDesktopDriver): Promise<v
  * @param using - Locator strategy (xpath, accessibility id, name, class name, tag name, id, -windows uiautomation).
  * @param value - The locator value for the chosen strategy.
  * @param contextElementId - Optional .NET bridge element id to search within.
- * @returns The matching element, or `null` if none was found.
+ * @returns The matching element.
+ * @throws {NoSuchElementError} If no element matches — same contract as standard `findElement`.
  */
 export async function emFindElementViaDotnetBridge(
     this: AppiumDesktopDriver,
     using: LocateStrategy,
     value: string,
     contextElementId?: string,
-): Promise<Element | null> {
+): Promise<Element> {
     return await findElementViaDotnetBridge.call(this, { using, value, contextElementId });
 }
 

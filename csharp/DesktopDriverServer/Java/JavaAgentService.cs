@@ -133,6 +133,161 @@ internal sealed class JavaAgentService : IDisposable
             .ToArray();
     }
 
+    /// <summary>
+    /// "evaluateXPath" for a Java (JAB / AccessibleContext) subtree. The tree is
+    /// materialised into an <see cref="XmlDocument"/> (same traversal
+    /// <see cref="BuildXml"/> uses for page source) and the whole expression is run
+    /// through System.Xml.XPath here on the host — a complete XPath 1.0 engine, so
+    /// axes / positional & filter predicates / count() / string functions all work,
+    /// which the per-step round-trip evaluator only partially did.
+    ///
+    /// Tag names come from the JAB role via <see cref="JavaXPathTagName"/>, which
+    /// maps the role_en_US name to the UIA control-type term a node test uses
+    /// (<c>push button</c> -> <c>Button</c>), so <c>//Button</c> matches on a
+    /// Hebrew, English or any localised JVM. Roles with no UIA equivalent keep
+    /// their PascalCase role name. Attribute values are the app's own strings.
+    /// </summary>
+    public object? EvaluateXPath(JavaAgentElement root, string expression, bool multiple)
+    {
+        var doc = new XmlDocument();
+        var nodes = new Dictionary<string, string>(); // __javaNodeId -> element id
+        var counter = 0;
+        var rootXml = BuildXPathNode(root, doc, nodes, ref counter, 0) ?? doc.CreateElement("DummyRoot");
+        doc.AppendChild(rootXml);
+
+        var ids = DesktopDriverServer.Commands.XPathEvaluator.Evaluate(
+            doc, null, "__javaNodeId", expression, multiple,
+            nodeId => nodes.TryGetValue(nodeId, out var elId) ? elId : null);
+
+        return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
+    }
+
+    private XmlElement? BuildXPathNode(
+        JavaAgentElement node, XmlDocument doc, Dictionary<string, string> nodes, ref int counter, int depth)
+    {
+        if (depth > 100) return null;
+        XmlElement el;
+        try
+        {
+            var info = node.Info;
+            el = doc.CreateElement(JavaXPathTagName(GetString(info, "ClassName") ?? "Element"));
+
+            var nodeId = "n" + counter++;
+            el.SetAttribute("__javaNodeId", nodeId);
+            nodes[nodeId] = node.Id;
+
+            void A(string name, string? value)
+            {
+                try { el.SetAttribute(name, XPathSanitize(value ?? "")); } catch { }
+            }
+
+            A("Name", GetString(info, "Name"));
+            A("AutomationId", GetString(info, "AutomationId"));
+            A("ClassName", GetString(info, "ClassName"));
+            A("JavaClass", GetString(info, "JavaClass"));
+            A("JavaSimpleClass", GetString(info, "JavaSimpleClass"));
+            A("LocalizedControlType", GetString(info, "LocalizedControlType"));
+            A("HelpText", GetString(info, "Description"));
+            A("States", GetString(info, "States"));
+            A("x", GetString(info, "x") ?? "0");
+            A("y", GetString(info, "y") ?? "0");
+            A("width", GetString(info, "width") ?? "0");
+            A("height", GetString(info, "height") ?? "0");
+            A("IsEnabled", (GetString(info, "IsEnabled") ?? "false").ToLowerInvariant());
+            A("IsOffscreen", (GetString(info, "IsOffscreen") ?? "false").ToLowerInvariant());
+            A("IndexInParent", GetString(info, "IndexInParent") ?? "0");
+            A("RuntimeId", node.Id);
+            A("TableRow", GetString(info, "TableRow"));
+            A("TableColumn", GetString(info, "TableColumn"));
+            A("RowCount", GetString(info, "RowCount"));
+            A("ColumnCount", GetString(info, "ColumnCount"));
+
+            var text = XPathSanitize(GetString(info, "Name") ?? "");
+            if (text.Length > 0) el.AppendChild(doc.CreateTextNode(text));
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var childrenResult = Call("getChildren", new { id = node.Id });
+            if (childrenResult?.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var childJson in childrenResult.Value.EnumerateArray())
+                {
+                    var child = SaveFromResult(childJson);
+                    if (child == null) continue;
+                    var childXml = BuildXPathNode(child, doc, nodes, ref counter, depth + 1);
+                    if (childXml != null) el.AppendChild(childXml);
+                }
+            }
+        }
+        catch { }
+
+        return el;
+    }
+
+    // JAB AccessibleRole (role_en_US, e.g. "push button") -> the UIA ControlType
+    // name an XPath node test uses ("Button"). Inverse of the Java agent's
+    // uiaControlTypeToJavaRole: the old engine translated `//Button` -> ControlType
+    // condition -> role on the agent, so node tests have always been written in UIA
+    // terms. Roles with no UIA equivalent (root pane, glass pane, filler, …) keep
+    // their PascalCase role name, matching the old ClassName-condition fallback.
+    private static readonly Dictionary<string, string> JavaRoleToUiaTag = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["text"] = "Edit",
+        ["push button"] = "Button",
+        ["check box"] = "CheckBox",
+        ["combo box"] = "ComboBox",
+        ["list"] = "List",
+        ["list item"] = "ListItem",
+        ["label"] = "Text",
+        ["tree"] = "Tree",
+        ["tree node"] = "TreeItem",
+        ["panel"] = "Pane",
+        ["frame"] = "Window",
+        ["internal frame"] = "Window",
+        ["menu"] = "Menu",
+        ["menu bar"] = "MenuBar",
+        ["popup menu"] = "Menu",
+        ["menu item"] = "MenuItem",
+        ["radio button"] = "RadioButton",
+        ["slider"] = "Slider",
+        ["spinbox"] = "Spinner",
+        ["progress bar"] = "ProgressBar",
+        ["table"] = "Table",
+        ["tool bar"] = "ToolBar",
+        ["page tab list"] = "Tab",
+        ["page tab"] = "TabItem",
+        ["scroll bar"] = "ScrollBar",
+        ["separator"] = "Separator",
+        ["icon"] = "Image",
+        ["hyperlink"] = "Hyperlink",
+    };
+
+    private static string JavaXPathTagName(string role)
+    {
+        if (JavaRoleToUiaTag.TryGetValue(role.Trim(), out var uia)) return uia;
+        return NormalizeTagName(role);
+    }
+
+    private static string XPathSanitize(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s)
+        {
+            if (ch == '\t' || ch == '\n' || ch == '\r' ||
+                (ch >= 0x20 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFD))
+            {
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
+    }
+
     // ── Property access ────────────────────────────────────────────────────────
 
     public object? GetProperty(JavaAgentElement el, string property)
@@ -225,7 +380,10 @@ internal sealed class JavaAgentService : IDisposable
         try
         {
             var info = node.Info;
-            var tagName = NormalizeTagName(GetString(info, "ClassName") ?? "Element");
+            // Same tag vocabulary the XPath materialiser uses (JavaXPathTagName),
+            // so a tag copied out of page source is a valid XPath node test —
+            // e.g. a JButton shows as <Button> and `//Button` finds it.
+            var tagName = JavaXPathTagName(GetString(info, "ClassName") ?? "Element");
 
             var el = doc.CreateElement(tagName);
             el.SetAttribute("Name", GetString(info, "Name") ?? "");
@@ -368,6 +526,9 @@ internal sealed class JavaAgentService : IDisposable
                 sb.Append(char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant());
         var result = sb.ToString();
         if (result.Length == 0 || !char.IsLetter(result[0])) result = "E" + result;
+        // Guard against any remaining XML-illegal chars so CreateElement can't throw
+        // and drop the node + its whole subtree.
+        try { System.Xml.XmlConvert.VerifyName(result); } catch { return "Element"; }
         return result;
     }
 

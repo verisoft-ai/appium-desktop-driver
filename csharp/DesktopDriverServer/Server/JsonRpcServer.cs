@@ -152,6 +152,7 @@ public class JsonRpcServer
             sw.Stop();
             var errorCode = ex switch
             {
+                InvalidSelectorException => ErrorCodes.InvalidSelector,
                 KeyNotFoundException => ErrorCodes.ElementNotFound,
                 ArgumentException => ErrorCodes.InvalidArgument,
                 InvalidOperationException when ex.Message.Contains("Pattern") => ErrorCodes.PatternNotSupported,

@@ -1215,22 +1215,17 @@ export async function executeAttachDotnetBridge(this: AppiumDesktopDriver): Prom
  * @param args.value - The locator value for the chosen strategy.
  * @param args.contextElementId - Optional .NET bridge element id (from a prior
  * `*ViaDotnetBridge` call) to search within instead of the whole window.
- * @returns The matching element, or `null` if none was found.
+ * @returns The matching element.
+ * @throws {NoSuchElementError} If no element matches — same contract as standard
+ * `findElement` (the plural sibling returns `[]` instead, also matching standard).
  */
 export async function findElementViaDotnetBridge(
     this: AppiumDesktopDriver,
     args: { using: LocateStrategy, value: string, contextElementId?: string }
-): Promise<Element | null> {
-    try {
-        return await locateElements(
-            args.using, args.value, false, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
-        );
-    } catch (e) {
-        if (e instanceof errors.NoSuchElementError) {
-            return null;
-        }
-        throw e;
-    }
+): Promise<Element> {
+    return await locateElements(
+        args.using, args.value, false, args.contextElementId, wrapForDotnetBridge(this.sendCommand.bind(this))
+    );
 }
 
 /**

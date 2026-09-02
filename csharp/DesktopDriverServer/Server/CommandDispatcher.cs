@@ -33,6 +33,8 @@ public class CommandDispatcher
             ["lookupElement"] = FindCommands.LookupElement,
             ["findElementDotnetBridge"] = FindCommands.FindElementDotnetBridge,
             ["findElementsDotnetBridge"] = FindCommands.FindElementsDotnetBridge,
+            ["evaluateXPath"] = XPathCommands.EvaluateXPath,
+            ["evaluateXPathDotnetBridge"] = XPathCommands.EvaluateXPathDotnetBridge,
 
             // Element
             ["getProperty"] = ElementCommands.GetProperty,

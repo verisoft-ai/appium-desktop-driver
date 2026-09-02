@@ -112,6 +112,7 @@ export function wrapForDotnetBridge(base: SendCommandFn): SendCommandFn {
     return (method, params) => {
         if (method === 'findElement') { return base('findElementDotnetBridge', params); }
         if (method === 'findElements') { return base('findElementsDotnetBridge', params); }
+        if (method === 'evaluateXPath') { return base('evaluateXPathDotnetBridge', params); }
         return base(method, params);
     };
 }

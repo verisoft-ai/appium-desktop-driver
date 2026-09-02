@@ -51,7 +51,7 @@ describe('.NET Bridge — appTopLevelWindow + dotnetBridge attach', () => {
     // through the explicit .NET bridge find, not standard find.
     async function findViaBridge(xpath: string) {
         const found = await driver.executeScript('windows: findElementViaDotnetBridge', [{ using: 'xpath', value: xpath }]);
-        return found ? driver.$(found as unknown as Selector) : null;
+        return driver.$(found as unknown as Selector);
     }
 
     it('standard getPageSource stays pure UIA — never the generic UIA placeholder, never a real grid value', async () => {

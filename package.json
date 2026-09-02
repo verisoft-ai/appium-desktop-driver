@@ -66,8 +66,7 @@
     "appium-chromedriver": "^8.3.1",
     "asyncbox": "^6.3.5",
     "bezier-easing": "^2.1.0",
-    "koffi": "^2.14.1",
-    "xpath-analyzer": "^3.0.1"
+    "koffi": "^2.14.1"
   },
   "appium": {
     "driverName": "desktopdriver",

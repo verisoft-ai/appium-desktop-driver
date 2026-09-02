@@ -152,26 +152,15 @@ internal sealed class UiaXmlModel
     }
 
     /// <summary>
-    /// The node built from <paramref name="contextElementId"/>, or null (evaluate
-    /// from the document root) when no context was given / it is not in the tree.
+    /// The node to evaluate relative to, or null (evaluate from the document node)
+    /// when no context was given. <see cref="Build"/> always roots the document at
+    /// the context element, so that element is simply <see cref="XmlDocument.DocumentElement"/> —
+    /// no need to re-match it by runtime id (which also breaks when SessionState
+    /// minted a GUID id for an element with an empty UIA RuntimeId, and costs one
+    /// extra COM call per element).
     /// </summary>
     public XmlElement? ContextNode(string? contextElementId)
-    {
-        if (contextElementId == null) return null;
-        var match = Elements.FirstOrDefault(kv => IdOf(kv.Value) == contextElementId).Key;
-        if (match == null) return null;
-        return Document.SelectSingleNode($"//*[@{IdAttr}='{match}']") as XmlElement;
-    }
-
-    private static string IdOf(IUIAutomationElement element)
-    {
-        try
-        {
-            var rid = element.GetRuntimeId();
-            return rid == null || rid.Length == 0 ? "" : string.Join(".", rid);
-        }
-        catch { return ""; }
-    }
+        => contextElementId == null ? null : Document.DocumentElement;
 
     public static UiaXmlModel Build(SessionState state, IUIAutomationElement root)
     {

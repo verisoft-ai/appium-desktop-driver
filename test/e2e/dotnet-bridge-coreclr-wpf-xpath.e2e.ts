@@ -39,7 +39,10 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
         const launched = await launchNet8WpfMinimalExternally();
         appProc = launched.proc;
         driver = await createDotnetBridgeAttachSession(launched.hwnd);
-    }, 30_000);
+        // WPF fixture launch + session + CoreCLR profiler attach (up to a 20s
+        // wait budget in CoreClrAttacher) must all fit here; 30s is too tight on
+        // a loaded CI machine.
+    }, 60_000);
 
     afterAll(async () => {
         await quitSession(driver);

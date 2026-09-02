@@ -444,6 +444,10 @@ internal sealed class BridgeAgentService : IDisposable
                 sb.Append(char.ToUpperInvariant(p[0]) + p[1..]);
         var result = sb.ToString();
         if (result.Length == 0 || !char.IsLetter(result[0])) result = "E" + result;
+        // Reflected type names can still carry XML-illegal chars (generic `` `1 ``,
+        // nested `+`, `<>` from anonymous types). An invalid name makes
+        // CreateElement throw and drops the node + its whole subtree.
+        try { System.Xml.XmlConvert.VerifyName(result); } catch { return "Element"; }
         return result;
     }
 

@@ -141,9 +141,11 @@ internal sealed class JavaAgentService : IDisposable
     /// axes / positional & filter predicates / count() / string functions all work,
     /// which the per-step round-trip evaluator only partially did.
     ///
-    /// Tag names come from the JAB role via <see cref="NormalizeTagName"/> — the
-    /// role_en_US programmatic name, so <c>//PushButton</c> matches on a Hebrew,
-    /// English or any localised JVM. Attribute values are the app's own strings.
+    /// Tag names come from the JAB role via <see cref="JavaXPathTagName"/>, which
+    /// maps the role_en_US name to the UIA control-type term a node test uses
+    /// (<c>push button</c> -> <c>Button</c>), so <c>//Button</c> matches on a
+    /// Hebrew, English or any localised JVM. Roles with no UIA equivalent keep
+    /// their PascalCase role name. Attribute values are the app's own strings.
     /// </summary>
     public object? EvaluateXPath(JavaAgentElement root, string expression, bool multiple)
     {
@@ -521,6 +523,9 @@ internal sealed class JavaAgentService : IDisposable
                 sb.Append(char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant());
         var result = sb.ToString();
         if (result.Length == 0 || !char.IsLetter(result[0])) result = "E" + result;
+        // Guard against any remaining XML-illegal chars so CreateElement can't throw
+        // and drop the node + its whole subtree.
+        try { System.Xml.XmlConvert.VerifyName(result); } catch { return "Element"; }
         return result;
     }
 

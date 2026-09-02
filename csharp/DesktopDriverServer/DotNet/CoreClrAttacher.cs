@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace DesktopDriverServer.DotNet;
@@ -49,7 +50,7 @@ internal static class CoreClrAttacher
         // Fire-and-forget: the profiler's ReJIT bootstrap runs asynchronously inside the target on
         // its next call into the anchor method, and the managed agent writes its own port file once
         // listening. Poll for it rather than assuming success the instant AttachProfiler returns.
-        WaitForPortFile(pid, TimeSpan.FromSeconds(15));
+        WaitForPortFile(pid, TimeSpan.FromSeconds(20));
     }
 
     // Caches appium-dotnet-bridge-core.dll in a driver-owned per-user %TEMP% directory rather than
@@ -128,10 +129,52 @@ internal static class CoreClrAttacher
                     $"CoreCLR bridge agent failed to start in PID {pid}. Target-process exception:\n{File.ReadAllText(errorFile)}");
             if (File.Exists(portFile))
                 return;
+
+            // The profiler's IL rewrite of the anchor method (Control.WndProc / HwndWrapper.WndProc)
+            // only takes effect on the *next* call into that method. A busy WinForms message pump
+            // calls it within milliseconds, but an idle/unfocused WPF window may not process another
+            // message for many seconds, delaying the bootstrap past this timeout for no real reason.
+            // Post a harmless WM_NULL to every top-level window the target owns each iteration so the
+            // rewritten WndProc runs promptly.
+            PumpTargetWindows(pid);
             Thread.Sleep(200);
         }
 
         throw new TimeoutException(
             $"CoreCLR bridge agent in PID {pid} did not start listening within {timeout.TotalSeconds:0}s after profiler attach.");
+    }
+
+    private const uint WM_NULL = 0x0000;
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    // Best-effort: nudges the target's message pump so a freshly-ReJIT'd WndProc fires without
+    // waiting for organic user input. Any failure here is non-fatal — the poll loop still relies on
+    // the port file as the real signal.
+    private static void PumpTargetWindows(int pid)
+    {
+        try
+        {
+            EnumWindows((hWnd, _) =>
+            {
+                GetWindowThreadProcessId(hWnd, out uint windowPid);
+                if (windowPid == (uint)pid)
+                    PostMessage(hWnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch
+        {
+            // ignored — see method comment
+        }
     }
 }

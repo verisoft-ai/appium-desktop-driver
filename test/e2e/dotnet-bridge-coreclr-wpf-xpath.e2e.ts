@@ -66,14 +66,16 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
     });
 
     it('descendant axis returns every match in document order', async () => {
-        // Named TextBlocks under the panel — the Button's own template may also
-        // contribute an (unnamed) TextBlock to the visual tree, so filter by @Name.
+        // Every TextBlock under the panel, in document order. InfoAction's Button template
+        // renders its "Refresh" content as a nested TextBlock, and the bridge names any
+        // unnamed FrameworkElement after its text/content (Reflector: Name <- Text fallback),
+        // so that node has Name="Refresh" and is a genuine third match of the descendant axis.
         const els = await findAll('//StackPanel[@Name="InfoPanel"]//TextBlock[@Name!=""]');
         const texts: string[] = [];
         for (const e of els) {
             texts.push(await driver.$(e as unknown as Selector).getText());
         }
-        expect(texts).toEqual(['Account', 'Active']);
+        expect(texts).toEqual(['Account', 'Active', 'Refresh']);
     });
 
     it('reaches a Button through a descendant step', async () => {
@@ -84,14 +86,20 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
     });
 
     it('positional predicate over a materialised descendant set', async () => {
+        // Set is [InfoTitle "Account", InfoBody "Active", InfoAction's template TextBlock
+        // "Refresh"] in document order — see the descendant-axis test above for why "Refresh"
+        // is in the set.
         const set = '(//StackPanel[@Name="InfoPanel"]//TextBlock[@Name!=""])';
         const first = await findOne(`${set}[1]`);
         const el = await driver.$(first as unknown as Selector);
         expect(await el.getText()).toBe('Account');
 
+        const second = await findOne(`${set}[2]`);
+        expect(await driver.$(second as unknown as Selector).getText()).toBe('Active');
+
         const last = await findOne(`${set}[last()]`);
         const elLast = await driver.$(last as unknown as Selector);
-        expect(await elLast.getText()).toBe('Active');
+        expect(await elLast.getText()).toBe('Refresh');
     });
 
     it('contains() predicate on an attribute', async () => {
@@ -108,8 +116,10 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
         expect(await el.getText()).toBe('Active');
     });
 
-    it('a no-match multi-step selector: findElements -> [], findElement -> NoSuchElement', async () => {
+    it('a no-match multi-step selector: findElements -> [], findElement -> null', async () => {
+        // windows: findElementViaDotnetBridge resolves to null (not a NoSuchElement throw) on
+        // no match, by design — see its handler doc in lib/commands/extension.ts.
         expect(await findAll('//Border[@Name="InfoCard"]//TextBlock[@Name="Nope"]')).toEqual([]);
-        await expect(findOne('//Border[@Name="Nope"]//TextBlock')).rejects.toThrow();
+        expect(await findOne('//Border[@Name="Nope"]//TextBlock')).toBeNull();
     });
 });

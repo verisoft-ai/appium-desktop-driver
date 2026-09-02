@@ -28,6 +28,8 @@ jobs:
       with:
         node-version: 24.x
         registry-url: 'https://registry.npmjs.org'
+    - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
+      run: npm install -g npm@latest
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -53,5 +55,4 @@ jobs:
     - run: npx semantic-release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       name: Release

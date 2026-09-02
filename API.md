@@ -48,6 +48,20 @@ await driver.$('//Button[1]')                                // nth button
 await driver.$('//*[@JavaSimpleClass="HrIDTextField"]')      // Java class name (javaSwing)
 ```
 
+### XPath node tests (tag names)
+
+A node test like `//Button` matches on the element's **programmatic**
+control-type name — `Button`, `Edit`, `CheckBox`, `DataGrid`, … — not the
+localized name the `tag name` strategy uses. These names are:
+
+- **PascalCase and case-sensitive.** `//Button` matches; `//button` and
+  `//BUTTON` match nothing. XPath 1.0 has no case-insensitive node test.
+- **Language-neutral.** `//Button` matches identically on an English,
+  Hebrew, or any other localized Windows.
+
+An element whose control type has no standard name is tagged `Custom`. When
+unsure of the tag, match on an attribute instead: `//*[@Name="OK"]`.
+
 ### XPath substring matching
 
 Use XPath `contains()` or `starts-with()` to match elements by partial name:
@@ -943,8 +957,9 @@ automatically before failing.
 
 ### Locator strategies
 
-All standard locator strategies work for Java elements. XPath tag names
-map to Java accessibility roles:
+All standard locator strategies work for Java elements. In an XPath node
+test, write the **UIA control-type term**, not the Java role — the tree is
+materialized with the role already mapped to its UIA equivalent:
 
 | XPath tag | Java role | Example component |
 | --- | --- | --- |
@@ -956,6 +971,16 @@ map to Java accessibility roles:
 | `List` | list | `JList` |
 | `Tree` | tree | `JTree` |
 | `Table` | table | `JTable` |
+| `RadioButton` | radio button | `JRadioButton` |
+| `MenuItem` | menu item | `JMenuItem` |
+| `Slider` | slider | `JSlider` |
+| `TabItem` | page tab | tab in `JTabbedPane` |
+
+A role with no UIA equivalent (`root pane`, `glass pane`, `filler`, …)
+keeps its role name in PascalCase: `//RootPane`, `//GlassPane`. As with
+real UIA, node tests are **PascalCase and case-sensitive** — `//pushbutton`
+and `//glass-pane` (spellings the old evaluator tolerated) now match
+nothing. Use `//*[@attr=…]` when unsure of the tag.
 
 ```js
 // By accessible name (set via setAccessibleName() in app code)

@@ -7,7 +7,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: appium-windows2-test-apps/wpf-minimal/ — plain WPF window (TextBox, Button, owner-drawn list), no
+// Fixture: appium-wincore-test-apps/wpf-minimal/ — plain WPF window (TextBox, Button, owner-drawn list), no
 // DevExpress dependency. Validates dotnet-bridge-agent/BridgeAgent.cpp's WPF Dispatcher-marshaling
 // fix (Reflector::FindWpfDispatcher / BridgeServer::RunOnUiThread): before that fix, every mutating
 // command against a WPF target ran inline on the bridge's background TCP thread instead of the

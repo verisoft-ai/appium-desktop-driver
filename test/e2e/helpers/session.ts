@@ -12,10 +12,10 @@ export const APPIUM_SERVER = {
 };
 
 /**
- * Fixture apps live in the sibling appium-windows2-test-apps repo, not in this repo — override
+ * Fixture apps live in the sibling appium-wincore-test-apps repo, not in this repo — override
  * via env var for CI or a different checkout layout.
  */
-export const TEST_APPS_DIR = process.env.TEST_APPS_DIR ?? resolve(process.cwd(), '..', 'appium-windows2-test-apps');
+export const TEST_APPS_DIR = process.env.TEST_APPS_DIR ?? resolve(process.cwd(), '..', 'appium-wincore-test-apps');
 
 export const CALCULATOR_APP_ID = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App';
 export const NOTEPAD_APP_PATH = 'C:\\Windows\\notepad.exe';
@@ -492,7 +492,7 @@ export const OWNERDRAW_GALLERY_APP_PATH = resolve(
 /**
  * Launches the ownerdraw-gallery fixture externally (simulating a customer's app the driver has
  * no launch control over). No third-party dependency, no trial dialog to dismiss. See
- * appium-windows2-test-apps/ownerdraw-gallery/Program.cs for the 5 element kinds it hosts.
+ * appium-wincore-test-apps/ownerdraw-gallery/Program.cs for the 5 element kinds it hosts.
  */
 export async function launchOwnerDrawGalleryExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
     const proc = spawn(OWNERDRAW_GALLERY_APP_PATH, [], { detached: true, stdio: 'ignore' });
@@ -531,7 +531,7 @@ export const WPF_MINIMAL_APP_PATH = resolve(TEST_APPS_DIR, 'wpf-minimal', 'bin',
 
 /**
  * Launches the wpf-minimal fixture externally (no DevExpress dependency, no trial dialog).
- * See appium-windows2-test-apps/wpf-minimal/Program.cs — a TextBox, Button, and an owner-drawn list following the
+ * See appium-wincore-test-apps/wpf-minimal/Program.cs — a TextBox, Button, and an owner-drawn list following the
  * bridge's generic list convention, used to validate the WPF Dispatcher-marshaling fix.
  */
 export async function launchWpfMinimalExternally(): Promise<{ proc: ChildProcess; hwnd: string }> {
@@ -706,7 +706,7 @@ export const WPF_DATAGRID_TEMPLATE_APP_PATH = resolve(
 
 /**
  * Launches the wpf-datagrid-template fixture externally (no DevExpress dependency). See
- * appium-windows2-test-apps/wpf-datagrid-template/Program.cs — a plain WPF DataGrid with two bound text columns
+ * appium-wincore-test-apps/wpf-datagrid-template/Program.cs — a plain WPF DataGrid with two bound text columns
  * and one DataGridTemplateColumn whose cell content is owner-drawn (OnRender + null
  * AutomationPeer), genuinely invisible to plain UIA.
  */
@@ -753,7 +753,7 @@ export const DEVEXPRESS_ELEMENTS_GALLERY_WINDOW_TITLE = 'DevExpress Elements Gal
  * driver has no launch control over). Same trial-nag tolerance as launchDevExpressGridExternally
  * — an "About DevExpress" dialog pops inconsistently depending on build-cache state, so this polls
  * for the real window's title rather than assuming a dialog will or won't appear. See
- * appium-windows2-test-apps/devexpress-elements-gallery/Program.cs for the 4 element kinds it hosts (TreeList,
+ * appium-wincore-test-apps/devexpress-elements-gallery/Program.cs for the 4 element kinds it hosts (TreeList,
  * ComboBoxEdit, TokenEdit, grouped GridControl) — each confirmed genuinely UIA-blind via a
  * throwaway probe before this fixture was written.
  */

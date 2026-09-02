@@ -19,7 +19,7 @@ import {
  * evaluateXPathDotnetBridge, which materialises the bridge's reflected subtree and
  * runs the whole expression through System.Xml.XPath.
  *
- * Fixture: appium-windows2-test-apps/net8-wpf-minimal/ —
+ * Fixture: appium-wincore-test-apps/net8-wpf-minimal/ —
  *   Grid
  *     TextBox   TxtInput
  *     Button    BtnClick

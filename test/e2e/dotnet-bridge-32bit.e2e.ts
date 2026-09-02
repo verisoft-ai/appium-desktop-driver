@@ -9,7 +9,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: appium-windows2-test-apps/minimal-ownerdraw-x86/ — the 32-bit twin of minimal-ownerdraw-winforms.
+// Fixture: appium-wincore-test-apps/minimal-ownerdraw-x86/ — the 32-bit twin of minimal-ownerdraw-winforms.
 // Proves the bridge's x86 injection path end to end: a 64-bit host can't CreateRemoteThread into
 // a 32-bit process directly (Windows disallows crossing bitness), so this only passes if bitness
 // detection (BridgeInjector.DetectIs32Bit) and the x86 stub dispatch (InjectFromPidAutoBitness →

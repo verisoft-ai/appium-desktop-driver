@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "windows2-mcp": {
+    "wincore-mcp": {
       "command": "npx",
-      "args": ["-y", "windows2-mcp"],
+      "args": ["-y", "wincore-mcp"],
       "env": {}
     }
   }

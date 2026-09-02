@@ -7,7 +7,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: appium-windows2-test-apps/net8-winforms-minimal/ — CoreCLR (.NET 8, coreclr.dll) twin of
+// Fixture: appium-wincore-test-apps/net8-winforms-minimal/ — CoreCLR (.NET 8, coreclr.dll) twin of
 // winform-combo/wpf-minimal, validating BridgeInjector's CoreCLR attach path (profiler attach via
 // CoreClrAttacher/CoreClrDiagnosticsIpcClient + dotnet-bridge-profiler's ReJIT IL rewrite of
 // Control.WndProc) instead of the Win32-injection path Framework targets use. See

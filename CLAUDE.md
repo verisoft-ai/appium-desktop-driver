@@ -20,7 +20,7 @@ npx vitest run test/path/to/file.test.ts
 
 ## Architecture
 
-This is an **Appium driver** for Windows desktop UI automation, exposed via the standard Appium WebDriver API (Selenium-style). An MCP server for AI-agent use previously lived here (`lib/mcp/`) but has moved to its own repo, [windows2-mcp](https://github.com/verisoft-ai/windows2-mcp) — it talks to this driver purely over the WebDriver protocol against a running Appium server, so it has no dependency on this codebase's internals.
+This is an **Appium driver** for Windows desktop UI automation, exposed via the standard Appium WebDriver API (Selenium-style). An MCP server for AI-agent use previously lived here (`lib/mcp/`) but has moved to its own repo, [wincore-mcp](https://github.com/verisoft-ai/wincore-mcp) — it talks to this driver purely over the WebDriver protocol against a running Appium server, so it has no dependency on this codebase's internals.
 
 ### Core driver flow
 

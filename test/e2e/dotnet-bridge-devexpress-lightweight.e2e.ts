@@ -7,7 +7,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: appium-windows2-test-apps' wpf-devexpress-lightweight/ — DevExpress.Xpf.Grid
+// Fixture: appium-wincore-test-apps' wpf-devexpress-lightweight/ — DevExpress.Xpf.Grid
 // GridControl (CoreCLR, .NET 8 WPF) with 5000 rows and explicit (non-templated, non-auto-generated)
 // columns, large enough that TableView renders unfocused/off-screen cells via
 // DevExpress.Xpf.Grid.LightweightCellEditor instead of a full editor — its own perf optimization
@@ -52,7 +52,7 @@ describe('.NET Bridge — DevExpress Xpf.Grid LightweightCellEditor real values 
         }
 
         // Specific known values from the fixture's first row (see
-        // appium-windows2-test-apps' wpf-devexpress-lightweight/Program.cs)
+        // appium-wincore-test-apps' wpf-devexpress-lightweight/Program.cs)
         expect(cells).toContain('1');
         expect(cells).toContain('Row 1');
         expect(cells.some((v) => ['Healthy', 'Degraded', 'Offline'].includes(v))).toBe(true);

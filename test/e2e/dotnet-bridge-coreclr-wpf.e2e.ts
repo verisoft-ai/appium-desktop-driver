@@ -7,7 +7,7 @@ import {
     quitSession,
 } from './helpers/session.js';
 
-// Fixture: appium-windows2-test-apps/net8-wpf-minimal/ — CoreCLR (.NET 8, coreclr.dll) WPF twin of
+// Fixture: appium-wincore-test-apps/net8-wpf-minimal/ — CoreCLR (.NET 8, coreclr.dll) WPF twin of
 // net8-winforms-minimal. Written to reproduce and then verify the fix for the profiler's
 // anchor-discovery gap: ProfilerCallback.cpp's kAnchorCandidates originally only listed
 // System.Windows.Forms.Control.WndProc, so a pure-WPF process (no System.Windows.Forms module

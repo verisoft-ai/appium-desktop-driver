@@ -942,7 +942,7 @@ public:
             // Xpf.Grid's LightweightCellEditor (unfocused/off-screen cells rendered via a cheap
             // non-editing surrogate, DevExpress's own perf feature for virtualized rows/columns)
             // has none of the three candidates above — confirmed live against a real
-            // DevExpress.Xpf.Grid 26.1 GridControl (appium-windows2-test-apps' wpf-devexpress-
+            // DevExpress.Xpf.Grid 26.1 GridControl (appium-wincore-test-apps' wpf-devexpress-
             // lightweight fixture), it exposes no Text/EditValue/DisplayText at all. But its
             // RowData.Row is the actual bound data item and Column.FieldName names the bound
             // property on that item — reading the value that way needs no DevExpress-internal

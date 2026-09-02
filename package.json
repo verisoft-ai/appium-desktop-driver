@@ -1,6 +1,6 @@
 {
   "name": "appium-desktop-driver",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",

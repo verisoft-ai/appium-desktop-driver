@@ -1,3 +1,22 @@
+## [2.8.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.7.0...v2.8.0) (2026-09-02)
+
+### Features
+
+* **xpath:** evaluate XPath in the runtime that owns the tree (UIA) ([e0c9b86](https://github.com/verisoft-ai/appium-desktop-driver/commit/e0c9b863923f02df6941f9053a59561b8e906e3f))
+* **xpath:** route bridge + Java Swing XPath through evaluateXPath ([e902ad4](https://github.com/verisoft-ai/appium-desktop-driver/commit/e902ad48dbc649ffdc3b7e05911a53e42ee7b0ab))
+
+### Bug Fixes
+
+* **dotnet-bridge:** findElementViaDotnetBridge surfaces no-such-element on no match ([baebd00](https://github.com/verisoft-ai/appium-desktop-driver/commit/baebd0072cc64609dcd7927198192550de70e829))
+* **dotnet-bridge:** pump target message loop while waiting for CoreCLR agent ([e502768](https://github.com/verisoft-ai/appium-desktop-driver/commit/e502768db44f212fb929d90c7b31603dfd98f310))
+* **xpath:** address CodeRabbit review on PR [#78](https://github.com/verisoft-ai/appium-desktop-driver/issues/78) ([591e11d](https://github.com/verisoft-ai/appium-desktop-driver/commit/591e11df194b12ef22cc4ddb56f56d9c60a651fe))
+* **xpath:** Java page source uses the XPath tag vocabulary ([4ae00c2](https://github.com/verisoft-ai/appium-desktop-driver/commit/4ae00c2de6367b97ed45ca1c9a6afe863125496c))
+* **xpath:** map JAB roles to UIA control-type names in the Java model ([c4a6fe8](https://github.com/verisoft-ai/appium-desktop-driver/commit/c4a6fe81c307687bcb275b219ea647dd6c69b4ed))
+
+### Miscellaneous Chores
+
+* **xpath:** drop usings unused after evaluator extraction ([43c29fe](https://github.com/verisoft-ai/appium-desktop-driver/commit/43c29fedc14b20c9a0f7fb7ad69d8e9cd4ebb7c4))
+
 ## [2.7.0](https://github.com/verisoft-ai/appium-desktop-driver/compare/v2.6.2...v2.7.0) (2026-08-31)
 
 ### Features

@@ -168,7 +168,7 @@ internal sealed class JavaAgentService : IDisposable
         try
         {
             var info = node.Info;
-            el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
+            el = doc.CreateElement(JavaXPathTagName(GetString(info, "ClassName") ?? "Element"));
 
             var nodeId = "n" + counter++;
             el.SetAttribute("__javaNodeId", nodeId);
@@ -225,6 +225,50 @@ internal sealed class JavaAgentService : IDisposable
         catch { }
 
         return el;
+    }
+
+    // JAB AccessibleRole (role_en_US, e.g. "push button") -> the UIA ControlType
+    // name an XPath node test uses ("Button"). Inverse of the Java agent's
+    // uiaControlTypeToJavaRole: the old engine translated `//Button` -> ControlType
+    // condition -> role on the agent, so node tests have always been written in UIA
+    // terms. Roles with no UIA equivalent (root pane, glass pane, filler, …) keep
+    // their PascalCase role name, matching the old ClassName-condition fallback.
+    private static readonly Dictionary<string, string> JavaRoleToUiaTag = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["text"] = "Edit",
+        ["push button"] = "Button",
+        ["check box"] = "CheckBox",
+        ["combo box"] = "ComboBox",
+        ["list"] = "List",
+        ["list item"] = "ListItem",
+        ["label"] = "Text",
+        ["tree"] = "Tree",
+        ["tree node"] = "TreeItem",
+        ["panel"] = "Pane",
+        ["frame"] = "Window",
+        ["internal frame"] = "Window",
+        ["menu"] = "Menu",
+        ["menu bar"] = "MenuBar",
+        ["popup menu"] = "Menu",
+        ["menu item"] = "MenuItem",
+        ["radio button"] = "RadioButton",
+        ["slider"] = "Slider",
+        ["spinbox"] = "Spinner",
+        ["progress bar"] = "ProgressBar",
+        ["table"] = "Table",
+        ["tool bar"] = "ToolBar",
+        ["page tab list"] = "Tab",
+        ["page tab"] = "TabItem",
+        ["scroll bar"] = "ScrollBar",
+        ["separator"] = "Separator",
+        ["icon"] = "Image",
+        ["hyperlink"] = "Hyperlink",
+    };
+
+    private static string JavaXPathTagName(string role)
+    {
+        if (JavaRoleToUiaTag.TryGetValue(role.Trim(), out var uia)) return uia;
+        return NormalizeTagName(role);
     }
 
     private static string XPathSanitize(string s)

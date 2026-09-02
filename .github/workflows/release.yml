@@ -28,8 +28,6 @@ jobs:
       with:
         node-version: 24.x
         registry-url: 'https://registry.npmjs.org'
-    - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
-      run: npm install -g npm@latest
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:

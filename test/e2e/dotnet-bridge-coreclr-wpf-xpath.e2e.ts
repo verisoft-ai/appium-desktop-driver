@@ -116,10 +116,8 @@ describe('.NET Bridge — CoreCLR WPF multi-step XPath (net8-wpf-minimal fixture
         expect(await el.getText()).toBe('Active');
     });
 
-    it('a no-match multi-step selector: findElements -> [], findElement -> null', async () => {
-        // windows: findElementViaDotnetBridge resolves to null (not a NoSuchElement throw) on
-        // no match, by design — see its handler doc in lib/commands/extension.ts.
+    it('a no-match multi-step selector: findElements -> [], findElement -> NoSuchElement', async () => {
         expect(await findAll('//Border[@Name="InfoCard"]//TextBlock[@Name="Nope"]')).toEqual([]);
-        expect(await findOne('//Border[@Name="Nope"]//TextBlock')).toBeNull();
+        await expect(findOne('//Border[@Name="Nope"]//TextBlock')).rejects.toThrow();
     });
 });

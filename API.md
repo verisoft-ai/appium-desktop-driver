@@ -632,8 +632,10 @@ opt-in.
   prior `*ViaDotnetBridge` call) to search within, instead of the
   whole window.
 
-Returns the matching element, or `null` if none was found — unlike
-standard `findElement`, this does not throw `NoSuchElementError`.
+Returns the matching element. Throws `NoSuchElementError` when nothing
+matches — the same contract as standard `findElement`. (The plural
+`windows: findElementsViaDotnetBridge` returns `[]` instead, also
+matching standard `findElements`.)
 
 ```js
 const el = await driver.executeScript('windows: findElementViaDotnetBridge', [{

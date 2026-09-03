@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
@@ -77,7 +78,7 @@ public static class XPathCommands
             ? state.GetElement(contextElementId)
             : (state.GetLiveRoot() ?? state.Automation.GetRootElement());
 
-        var model = UiaXmlModel.Build(state, root);
+        var model = UiaXmlModel.Build(state, root, state.PerfMetricsEnabled ? state.Perf : null);
 
         // Evaluate relative to the context node when one was given, so relative
         // expressions (`.//x`, `..`, `self::`) and the upward axes work.
@@ -113,34 +114,56 @@ internal sealed class UiaXmlModel
 {
     internal const string IdAttr = "__uiaNodeId";
 
-    // Attribute name -> reader. PascalCase keys match what getProperty returns and
-    // what the page source exposes, so existing selectors keep working. XPath is
+    // Attribute name -> UIA property id. PascalCase keys match what getProperty returns
+    // and what the page source exposes, so existing selectors keep working. XPath is
     // case-sensitive on attribute names; these are the canonical spellings.
-    private static readonly (string Name, Func<IUIAutomationElement, string> Read)[] Attributes =
+    private static readonly (string Name, int Pid, bool Bool)[] Attributes =
     {
-        ("AcceleratorKey", e => e.get_CurrentAcceleratorKey() ?? ""),
-        ("AccessKey", e => e.get_CurrentAccessKey() ?? ""),
-        ("AutomationId", e => e.get_CurrentAutomationId() ?? ""),
-        ("ClassName", e => e.get_CurrentClassName() ?? ""),
-        ("FrameworkId", e => e.get_CurrentFrameworkId() ?? ""),
-        ("HasKeyboardFocus", e => Bool(e.CurrentHasKeyboardFocus)),
-        ("HelpText", e => e.get_CurrentHelpText() ?? ""),
-        ("IsContentElement", e => Bool(e.CurrentIsContentElement)),
-        ("IsControlElement", e => Bool(e.CurrentIsControlElement)),
-        ("IsEnabled", e => Bool(e.CurrentIsEnabled)),
-        ("IsKeyboardFocusable", e => Bool(e.CurrentIsKeyboardFocusable)),
-        ("IsOffscreen", e => Bool(e.CurrentIsOffscreen)),
-        ("IsPassword", e => Bool(e.CurrentIsPassword)),
-        ("IsRequiredForForm", e => Bool(e.CurrentIsRequiredForForm)),
-        ("ItemStatus", e => e.get_CurrentItemStatus() ?? ""),
-        ("ItemType", e => e.get_CurrentItemType() ?? ""),
-        ("LocalizedControlType", e => e.get_CurrentLocalizedControlType() ?? ""),
-        ("Name", e => e.get_CurrentName() ?? ""),
-        ("Orientation", e => e.CurrentOrientation.ToString()),
-        ("ProcessId", e => e.CurrentProcessId.ToString()),
+        ("AcceleratorKey", UIA.AcceleratorKeyPropertyId, false),
+        ("AccessKey", UIA.AccessKeyPropertyId, false),
+        ("AutomationId", UIA.AutomationIdPropertyId, false),
+        ("ClassName", UIA.ClassNamePropertyId, false),
+        ("FrameworkId", UIA.FrameworkIdPropertyId, false),
+        ("HasKeyboardFocus", UIA.HasKeyboardFocusPropertyId, true),
+        ("HelpText", UIA.HelpTextPropertyId, false),
+        ("IsContentElement", UIA.IsContentElementPropertyId, true),
+        ("IsControlElement", UIA.IsControlElementPropertyId, true),
+        ("IsEnabled", UIA.IsEnabledPropertyId, true),
+        ("IsKeyboardFocusable", UIA.IsKeyboardFocusablePropertyId, true),
+        ("IsOffscreen", UIA.IsOffscreenPropertyId, true),
+        ("IsPassword", UIA.IsPasswordPropertyId, true),
+        ("IsRequiredForForm", UIA.IsRequiredForFormPropertyId, true),
+        ("ItemStatus", UIA.ItemStatusPropertyId, false),
+        ("ItemType", UIA.ItemTypePropertyId, false),
+        ("LocalizedControlType", UIA.LocalizedControlTypePropertyId, false),
+        ("Name", UIA.NamePropertyId, false),
+        ("Orientation", UIA.OrientationPropertyId, false),
+        ("ProcessId", UIA.ProcessIdPropertyId, false),
     };
 
-    private static string Bool(int v) => v != 0 ? "true" : "false";
+    private static IUIAutomationCacheRequest BuildCacheRequest(IUIAutomation automation)
+    {
+        var req = automation.CreateCacheRequest();
+        foreach (var (_, pid, _) in Attributes)
+        {
+            req.AddProperty(pid);
+        }
+        req.AddProperty(UIA.ControlTypePropertyId);
+        req.AddProperty(UIA.RuntimeIdPropertyId);
+        req.AddProperty(UIA.BoundingRectanglePropertyId);
+        req.TreeScope = TreeScope.Element;
+        req.TreeFilter = automation.CreateTrueCondition();
+        req.AutomationElementMode = UIA.AutomationElementModeFull;
+        return req;
+    }
+
+    private static string ReadCached(IUIAutomationElement el, int pid, bool isBool)
+    {
+        object? v;
+        try { v = el.GetCachedPropertyValue(pid); } catch { v = null; }
+        if (isBool) return v is int i && i != 0 ? "true" : "false";
+        return v as string ?? (v is int n ? n.ToString() : "");
+    }
 
     public XmlDocument Document { get; }
     public Dictionary<string, IUIAutomationElement> Elements { get; }
@@ -162,27 +185,129 @@ internal sealed class UiaXmlModel
     public XmlElement? ContextNode(string? contextElementId)
         => contextElementId == null ? null : Document.DocumentElement;
 
-    public static UiaXmlModel Build(SessionState state, IUIAutomationElement root)
+    public static UiaXmlModel Build(SessionState state, IUIAutomationElement root, Diagnostics.PerfCounters? perf = null)
     {
         var doc = new XmlDocument();
         var elements = new Dictionary<string, IUIAutomationElement>();
-        var trueCond = state.Automation.CreateTrueCondition();
         int counter = 0;
 
-        var rootXml = BuildElement(doc, root, trueCond, elements, ref counter)
-            ?? doc.CreateElement("DummyRoot");
-        doc.AppendChild(rootXml);
+        // Fast path: one BuildUpdatedCache pulls the whole subtree + every property,
+        // then the walk is in-process. Falls back to the per-node live walk on failure.
+        try
+        {
+            if (Environment.GetEnvironmentVariable("UIA_NO_CACHE") == "1") throw new InvalidOperationException("UIA_NO_CACHE"); // perf A/B
+            var req = BuildCacheRequest(state.Automation);
+            var trueCond = state.Automation.CreateTrueCondition();
+            // Cache one level at a time via FindAllBuildCache(Children) — see
+            // PageSourceCommands for why a full-subtree cache request is avoided.
+            var cachedRoot = root.FindFirstBuildCache(TreeScope.Element, trueCond, req);
+            var rootXml = BuildElementCached(doc, cachedRoot, elements, ref counter, perf, req, trueCond)
+                ?? doc.CreateElement("DummyRoot");
+            doc.AppendChild(rootXml);
+            return new UiaXmlModel(doc, elements);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[XPath] cached materialise failed, falling back to live walk: {ex.Message}");
+        }
 
+        doc = new XmlDocument();
+        elements = new Dictionary<string, IUIAutomationElement>();
+        counter = 0;
+        var liveTrueCond = state.Automation.CreateTrueCondition();
+        var liveRootXml = BuildElementLive(doc, root, liveTrueCond, elements, ref counter, perf)
+            ?? doc.CreateElement("DummyRoot");
+        doc.AppendChild(liveRootXml);
         return new UiaXmlModel(doc, elements);
     }
 
-    private static XmlElement? BuildElement(
+    private static XmlElement? BuildElementCached(
+        XmlDocument doc,
+        IUIAutomationElement element,
+        Dictionary<string, IUIAutomationElement> elements,
+        ref int counter,
+        Diagnostics.PerfCounters? perf,
+        IUIAutomationCacheRequest req,
+        IUIAutomationCondition trueCond)
+    {
+        var perfSw = perf != null ? Stopwatch.StartNew() : null;
+        XmlElement xml;
+        try
+        {
+            xml = doc.CreateElement(TagNameOfCached(element));
+
+            var nodeId = "n" + counter++;
+            xml.SetAttribute(IdAttr, nodeId);
+            elements[nodeId] = element;
+
+            foreach (var (name, pid, isBool) in Attributes)
+            {
+                try { xml.SetAttribute(name, Sanitize(ReadCached(element, pid, isBool))); }
+                catch { /* skip a single unreadable attribute */ }
+            }
+
+            try
+            {
+                if (element.GetCachedPropertyValue(UIA.RuntimeIdPropertyId) is int[] rid && rid.Length > 0)
+                    xml.SetAttribute("RuntimeId", string.Join(".", rid));
+            }
+            catch { }
+
+            try
+            {
+                // Cached BoundingRectangle is a double[4] = [left, top, width, height].
+                if (element.GetCachedPropertyValue(UIA.BoundingRectanglePropertyId) is double[] r && r.Length == 4)
+                {
+                    xml.SetAttribute("x", ((int)r[0]).ToString());
+                    xml.SetAttribute("y", ((int)r[1]).ToString());
+                    xml.SetAttribute("width", ((int)r[2]).ToString());
+                    xml.SetAttribute("height", ((int)r[3]).ToString());
+                }
+            }
+            catch { }
+
+            var text = Sanitize(ReadCached(element, UIA.NamePropertyId, false));
+            if (text.Length > 0) xml.AppendChild(doc.CreateTextNode(text));
+        }
+        catch
+        {
+            return null;
+        }
+
+        try
+        {
+            var children = element.FindAllBuildCache(TreeScope.Children, trueCond, req);
+            var len = children?.Length ?? 0;
+
+            if (perfSw != null)
+            {
+                perfSw.Stop();
+                perf!.Record("uia.xpathModel.node", perfSw.Elapsed.TotalMilliseconds);
+            }
+
+            for (var i = 0; i < len; i++)
+            {
+                IUIAutomationElement child;
+                try { child = children!.GetElement(i); }
+                catch { continue; }
+                var childXml = BuildElementCached(doc, child, elements, ref counter, perf, req, trueCond);
+                if (childXml != null) xml.AppendChild(childXml);
+            }
+        }
+        catch { }
+
+        return xml;
+    }
+
+    private static XmlElement? BuildElementLive(
         XmlDocument doc,
         IUIAutomationElement element,
         IUIAutomationCondition trueCond,
         Dictionary<string, IUIAutomationElement> elements,
-        ref int counter)
+        ref int counter,
+        Diagnostics.PerfCounters? perf)
     {
+        var perfSw = perf != null ? Stopwatch.StartNew() : null;
         XmlElement xml;
         try
         {
@@ -192,9 +317,9 @@ internal sealed class UiaXmlModel
             xml.SetAttribute(IdAttr, nodeId);
             elements[nodeId] = element;
 
-            foreach (var (name, read) in Attributes)
+            foreach (var (name, pid, isBool) in Attributes)
             {
-                try { xml.SetAttribute(name, Sanitize(read(element))); }
+                try { xml.SetAttribute(name, Sanitize(ReadLive(element, pid, isBool))); }
                 catch { /* skip a single unreadable attribute */ }
             }
 
@@ -215,8 +340,6 @@ internal sealed class UiaXmlModel
             }
             catch { }
 
-            // text() ~ the element's Name, matching the old engine which mapped
-            // text() to the element's Name/Value.
             var text = Sanitize(SafeName(element));
             if (text.Length > 0) xml.AppendChild(doc.CreateTextNode(text));
         }
@@ -229,12 +352,19 @@ internal sealed class UiaXmlModel
         {
             var children = element.FindAll(TreeScope.Children, trueCond);
             var len = children?.Length ?? 0;
+
+            if (perfSw != null)
+            {
+                perfSw.Stop();
+                perf!.Record("uia.xpathModel.node", perfSw.Elapsed.TotalMilliseconds);
+            }
+
             for (var i = 0; i < len; i++)
             {
                 IUIAutomationElement child;
                 try { child = children!.GetElement(i); }
                 catch { continue; }
-                var childXml = BuildElement(doc, child, trueCond, elements, ref counter);
+                var childXml = BuildElementLive(doc, child, trueCond, elements, ref counter, perf);
                 if (childXml != null) xml.AppendChild(childXml);
             }
         }
@@ -243,9 +373,30 @@ internal sealed class UiaXmlModel
         return xml;
     }
 
+    private static string ReadLive(IUIAutomationElement el, int pid, bool isBool)
+    {
+        var v = el.GetCurrentPropertyValue(pid);
+        if (isBool) return v is int i && i != 0 ? "true" : "false";
+        return v as string ?? (v is int n ? n.ToString() : "");
+    }
+
     private static string SafeName(IUIAutomationElement e)
     {
         try { return e.get_CurrentName() ?? ""; } catch { return ""; }
+    }
+
+    private static string TagNameOfCached(IUIAutomationElement element)
+    {
+        object? ctv;
+        try { ctv = element.GetCachedPropertyValue(UIA.ControlTypePropertyId); } catch { ctv = null; }
+        var ctId = ctv is int c ? c : 0;
+        if (ConditionBuilder.ControlTypeNameById.TryGetValue(ctId, out var name)) return name;
+
+        var localized = ReadCached(element, UIA.LocalizedControlTypePropertyId, false);
+        var candidate = string.Concat(localized.Split(' ')
+            .Where(w => w.Length > 0)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant()));
+        return IsValidXmlName(candidate) ? candidate : "Custom";
     }
 
     private static string TagNameOf(IUIAutomationElement element)

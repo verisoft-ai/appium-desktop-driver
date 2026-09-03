@@ -97,5 +97,7 @@ export const executeMethodMap: ExecuteMethodMap<AppiumDesktopDriver> = {
         params: { optional: ['title', 'exact'] },
     },
     'windows: getWindows': { command: 'windowsGetWindows' },
+    'windows: getPerfMetrics': { command: 'windowsGetPerfMetrics' },
+    'windows: resetPerfMetrics': { command: 'windowsResetPerfMetrics' },
     'windows: getNativeChildren': { command: 'emGetNativeChildren', params: { required: ['elementId'] } },
 };

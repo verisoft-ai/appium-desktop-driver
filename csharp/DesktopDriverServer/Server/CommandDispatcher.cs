@@ -103,6 +103,8 @@ public class CommandDispatcher
             ["injectDotnetBridge"] = DotNetBridgeCommands.InjectDotnetBridge,
 
             // Diagnostics
+            ["getPerfMetrics"] = PerfCommands.GetPerfMetrics,
+            ["resetPerfMetrics"] = PerfCommands.ResetPerfMetrics,
             ["getMonitors"] = DiagnosticCommands.GetMonitors,
             ["debug:ping"] = DiagnosticCommands.Ping,
             ["debug:inspectElementTable"] = DiagnosticCommands.InspectElementTable,

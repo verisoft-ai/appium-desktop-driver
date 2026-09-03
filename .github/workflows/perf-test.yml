@@ -1,0 +1,112 @@
+name: Performance Benchmarks
+
+# Not a PR gate. Runs on demand and weekly, records results as an artifact, and
+# fails only on a gross (>3x baseline) regression detected inside the specs.
+on:
+  workflow_dispatch:
+    inputs:
+      nodeCount:
+        description: 'java-swing-large accessible node count'
+        required: false
+        default: '1500'
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+jobs:
+  perf:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout driver
+        uses: actions/checkout@v6
+
+      - name: Checkout test apps
+        uses: actions/checkout@v6
+        with:
+          repository: verisoft-ai/appium-windows2-test-apps
+          path: appium-wincore-test-apps
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      # Full build: TS + native server + Java agent jar + .NET bridge artifacts.
+      # The java and dotnet-bridge perf suites need the agent jar / bridge DLLs.
+      - name: Build driver (all native artifacts)
+        run: npm run build:all
+
+      - name: Build perf fixtures
+        working-directory: appium-wincore-test-apps
+        run: |
+          npm run build:java-swing-large-test-app
+          npm run build:winforms-large-test-app
+
+      - name: Install Appium
+        run: npm install -g appium@3.5.0
+
+      - name: Install driver into Appium
+        shell: pwsh
+        run: appium driver install --source=local $PWD
+
+      - name: Start Appium and run perf benchmarks
+        shell: pwsh
+        env:
+          TEST_APPS_DIR: ${{ github.workspace }}\appium-wincore-test-apps
+          # Unset unless the dispatch supplies one — each suite has its own sensible
+          # default (java 12000, uia 1500, dotnet-bridge 6000) matched to its baseline.
+          PERF_NODE_COUNT: ${{ github.event.inputs.nodeCount }}
+        run: |
+          $appiumPath = (Get-Command appium.cmd).Source
+          $proc = Start-Process -FilePath $appiumPath `
+            -ArgumentList "--log-level","info" `
+            -RedirectStandardOutput "appium.log" `
+            -RedirectStandardError "appium-err.log" `
+            -PassThru -WindowStyle Hidden
+
+          $timeout = 60
+          $elapsed = 0
+          do {
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+            if ($proc.HasExited) {
+              Write-Error "Appium exited early (code $($proc.ExitCode))"
+              Get-Content "appium.log", "appium-err.log" -ErrorAction SilentlyContinue
+              exit 1
+            }
+            try {
+              $response = Invoke-WebRequest -Uri "http://127.0.0.1:4723/status" -UseBasicParsing -ErrorAction Stop
+              if ($response.StatusCode -eq 200) { Write-Host "Appium ready after ${elapsed}s"; break }
+            } catch {}
+          } while ($elapsed -lt $timeout)
+
+          if ($elapsed -ge $timeout) {
+            Write-Error "Appium did not start within ${timeout}s"
+            Get-Content "appium.log", "appium-err.log" -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+          npm run test:perf
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: test/perf/results/*.json
+
+      - name: Upload Appium logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-logs
+          path: |
+            appium.log
+            appium-err.log

@@ -106,6 +106,12 @@ internal static class BridgeServer
                 results.Add(ElementToResultDict(child));
             return results;
         }
+        if (command == "dumpTree")
+        {
+            object target = RequireElement(cmdParams);
+            int maxDepth = cmdParams != null && cmdParams.TryGetValue("maxDepth", out var md) && md is double d ? (int)d : 100;
+            return DumpNode(target, 0, maxDepth);
+        }
         if (command == "getInfo")
         {
             object target = RequireElement(cmdParams);
@@ -237,6 +243,28 @@ internal static class BridgeServer
         var info = Reflector.BuildInfo(target);
         var result = new Dictionary<string, object?>(info) { ["id"] = id };
         return result;
+    }
+
+    /// <summary>
+    /// Walks the whole subtree under <paramref name="target"/> in one call: each node is
+    /// the {id, ...info} dict <see cref="ElementToResultDict"/> returns plus a
+    /// <c>"children"</c> array of the same shape. Lets the host materialise page source /
+    /// XPath from one response instead of one getChildren RPC per node.
+    /// </summary>
+    private static Dictionary<string, object?> DumpNode(object target, int depth, int maxDepth)
+    {
+        var dict = ElementToResultDict(target);
+        var children = new List<object?>();
+        if (depth < maxDepth)
+        {
+            foreach (var child in Reflector.GetChildren(target))
+            {
+                try { children.Add(DumpNode(child, depth + 1, maxDepth)); }
+                catch { /* skip a broken subtree, mirror getChildren tolerance */ }
+            }
+        }
+        dict["children"] = children;
+        return dict;
     }
 
     // depth-capped recursive walk — same 100-level guard as the Framework agent and

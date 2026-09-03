@@ -1717,6 +1717,14 @@ private:
                 results->Add(ElementToResultDict(child));
             return results;
         }
+        if (command == "dumpTree")
+        {
+            Object^ target = RequireElement(params);
+            int maxDepth = 100;
+            if (params != nullptr && params->ContainsKey("maxDepth"))
+                maxDepth = safe_cast<int>(safe_cast<double>(params["maxDepth"]));
+            return DumpNode(target, 0, maxDepth);
+        }
         if (command == "getInfo")
         {
             Object^ target = RequireElement(params);
@@ -1842,6 +1850,26 @@ private:
         auto result = gcnew Dictionary<String^, Object^>(info);
         result["id"] = id;
         return result;
+    }
+
+    // Walks the whole subtree under target in one call: each node is the {id, ...info}
+    // dict ElementToResultDict returns plus a "children" array of the same shape. Lets
+    // the C# host materialise page source / XPath from one response instead of one
+    // getChildren RPC per node (BridgeAgentService.BuildXmlFromDump).
+    static Dictionary<String^, Object^>^ DumpNode(Object^ target, int depth, int maxDepth)
+    {
+        auto dict = ElementToResultDict(target);
+        auto children = gcnew List<Object^>();
+        if (depth < maxDepth)
+        {
+            for each (Object ^ child in Reflector::GetChildren(target))
+            {
+                try { children->Add(DumpNode(child, depth + 1, maxDepth)); }
+                catch (Exception^) { /* skip broken subtree, mirror getChildren tolerance */ }
+            }
+        }
+        dict["children"] = children;
+        return dict;
     }
 
     // depth-capped recursive walk — same 100-level guard as JavaAgentService.BuildXmlRecursive

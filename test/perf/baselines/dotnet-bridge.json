@@ -1,0 +1,9 @@
+{
+  "_comment": "Reference-machine p50 milliseconds keyed by <op>@<nodeCount>. checkRegressions() fails a run only when p50 exceeds 3x the value here; entries absent from this map are recorded but not gated.",
+  "referenceMachine": "local dev — Intel Core 5 120U, 12 cores, 17GB, Windows 11 (2026-09-03, sha 05df564 + FindKey removal + dumpTree). dotnet-bridge suite default nodeCount=6000 (~5.7k nodes).",
+  "baseline": {
+    "getPageSource@6000": 502,
+    "findAll-star@6000": 457,
+    "find-anchorLast@6000": 388
+  }
+}

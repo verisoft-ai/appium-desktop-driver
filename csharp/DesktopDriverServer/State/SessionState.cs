@@ -1,3 +1,4 @@
+using DesktopDriverServer.Diagnostics;
 using DesktopDriverServer.DotNet;
 using DesktopDriverServer.Java;
 using DesktopDriverServer.Uia3;
@@ -15,6 +16,11 @@ public class SessionState
     public IUIAutomationElement? RootElement { get; private set; }
     public IUIAutomationCacheRequest? CacheRequest { get; set; }
     public IUIAutomationTreeWalker? TreeWalker { get; set; }
+
+    // Performance counters — opt-in via the perfMetrics capability (passed on init).
+    // Always allocated (cheap); only written to when PerfMetricsEnabled is true.
+    public bool PerfMetricsEnabled { get; set; }
+    public PerfCounters Perf { get; } = new();
 
     // Java agent
     internal JavaAgentService? Java { get; private set; }
@@ -124,6 +130,7 @@ public class SessionState
                 "No process PID available. Use appTopLevelWindow with javaSwing:true, or launch the app via Appium.");
 
         Java ??= new JavaAgentService();
+        Java.Perf = PerfMetricsEnabled ? Perf : null;
         Java.Connect(targetPid);
         JavaSwingEnabled = true;
     }
@@ -140,6 +147,7 @@ public class SessionState
                 "No process PID available. Use appTopLevelWindow with dotnetBridge:true.");
 
         DotNetBridge ??= new BridgeAgentService();
+        DotNetBridge.Perf = PerfMetricsEnabled ? Perf : null;
         DotNetBridge.Connect(targetPid);
         DotNetBridgeEnabled = true;
         DotNetBridgeTargetPid = targetPid;

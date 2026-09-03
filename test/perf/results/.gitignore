@@ -1,0 +1,3 @@
+# Benchmark run outputs are local artifacts, not committed.
+*.json
+!.gitignore

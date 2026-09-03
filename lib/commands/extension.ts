@@ -493,6 +493,25 @@ export async function windowsGetWindows(): Promise<Array<{ handle: string; title
 }
 
 /**
+ * `windows: getPerfMetrics` execute-method handler: returns the session's performance
+ * counters. Counters are only populated when the session was created with the
+ * `appium:perfMetrics` capability; otherwise `enabled` is false and `metrics` is empty.
+ * @returns `{ enabled, metrics: { totalCalls, totalMs, byLabel: { <label>: { count, totalMs } } } }`.
+ */
+export async function windowsGetPerfMetrics(this: AppiumDesktopDriver): Promise<unknown> {
+    return this.sendCommand('getPerfMetrics', {});
+}
+
+/**
+ * `windows: resetPerfMetrics` execute-method handler: zeroes the session's performance
+ * counters. A benchmark brackets each operation it measures with a reset so the counts
+ * that follow belong to that operation alone.
+ */
+export async function windowsResetPerfMetrics(this: AppiumDesktopDriver): Promise<void> {
+    await this.sendCommand('resetPerfMetrics', {});
+}
+
+/**
  * `windows: launchApp` execute-method handler; delegates to {@link launchApp}.
  * @returns Resolves once the app's window has become the session root.
  */

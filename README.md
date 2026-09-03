@@ -62,6 +62,7 @@ All capabilities use the `appium:` prefix in W3C format
 | `appium:ms:forcequit` | boolean | Force-kill process on session close |
 | `appium:ms:experimental-webdriver` | boolean | Experimental WebDriver features |
 | `appium:logFile` | string | Path to write session logs |
+| `appium:perfMetrics` | boolean | Enable per-session performance counters, read via `windows: getPerfMetrics` / reset via `windows: resetPerfMetrics`. Default: `false`. See `docs/performance.md`. |
 | `appium:ieDriverServerPath` | string | **Deprecated.** No longer used; IE is automated via the built-in DOM Bridge. |
 
 ## Examples

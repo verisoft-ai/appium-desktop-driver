@@ -45,7 +45,7 @@ export async function startServerSession(this: AppiumDesktopDriver): Promise<voi
         await this.serverClient.start(undefined, serverEnv);
 
         try {
-            await this.sendCommand('init', {});
+            await this.sendCommand('init', { perfMetrics: !!this.caps.perfMetrics });
             break; // success
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

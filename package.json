@@ -46,6 +46,7 @@
     "lint": "eslint .",
     "test": "npx vitest run",
     "test:e2e": "npx vitest run --config vitest.e2e.config.ts",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
     "postinstall": "node scripts/postinstall.js",
     "pack:dist": "node scripts/pack-dist.js"
   },

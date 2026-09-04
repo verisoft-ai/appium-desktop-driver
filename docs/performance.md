@@ -6,17 +6,21 @@ and improvements are documented with numbers. Three suites, one method:
 | suite | fixture | what it measures |
 | --- | --- | --- |
 | `java` | `java-swing-large` | in-JVM agent walk (newline-JSON RPC, one `getChildren` per node) |
-| `uia` | `winforms-large` | plain UIA walk (COM property reads + `FindAll` per node, in-process) |
+| `uia` | `wpf-large` | plain UIA walk (COM property reads + `FindAll` per node, in-process) |
 | `dotnet-bridge` | `winforms-large` | .NET bridge reflected-tree walk (same RPC channel shape as Java) |
 
-`uia` and `dotnet-bridge` run against the **same** `winforms-large` tree, so the
-in-process UIA cost and the out-of-process bridge cost are directly comparable.
+Each fixture feeds exactly one suite. `uia` runs against `wpf-large` because WPF
+has a **native** UIA provider (`AutomationPeer`) — that measures the COM tree-walk
+cost itself, not the MSAA→UIA bridge tax that `winforms-large` (no native provider)
+would fold in. `winforms-large` is kept solely for `dotnet-bridge`, where the bridge
+injects into the process and the UI framework is not the variable under test.
 
 ## Running
 
 ```bash
 # Needs: the sibling fixture repo checked out next to this one and built
 #   ../appium-wincore-test-apps  ->  npm run build:java-swing-large-test-app
+#                                    npm run build:wpf-large-test-app
 #                                    npm run build:winforms-large-test-app
 # plus a running Appium server with this driver installed.
 npm run test:perf                     # all three suites
@@ -100,13 +104,24 @@ find.
 
 ### uia — plain UIA
 
-~1744 nodes @ nodeCount=1500 (winforms-large; layout rewritten to manual positioning
-so it scales — see the dotnet-bridge section).
+Fixture switched from `winforms-large` (MSAA→UIA bridge — measured the bridge, not the
+protocol) to `wpf-large` (WPF's native UIA provider). nodeCount=1500 → ~3036 UIA nodes.
 
-| Stage | getPageSource p50 | findAll `//*` | deep find | nodes | notes |
+Current, `wpf-large` @ sha `9645bd8` (per-level cache request in place):
+
+| op | getPageSource p50 | findAll `//*` | deep find | getAttribute x50 | nodes |
 | --- | --- | --- | --- | --- | --- |
-| live (`UIA_NO_CACHE=1`) | 9987ms | 11160ms | 11623ms | 1744 | ~25 cross-process COM property reads + one FindAll per node |
-| **+ per-level cache request** | **4982ms** | 5858ms | 5061ms | 1744 | **−50%** |
+| **wpf-large** | **4723ms** | 5979ms | 4472ms | 704ms | 3036 |
+
+~1.5ms/node in the cached walk (3036 `uia.pageSource.node` COM calls ≈ 4.6s of the
+4.7s). `getAttribute` x50 is element-scoped (live `GetCurrentPropertyValue`), no tree walk.
+
+Historical, `winforms-large` (1744 nodes) — showed the per-level cache request win:
+
+| Stage | getPageSource p50 | findAll `//*` | deep find | notes |
+| --- | --- | --- | --- | --- |
+| live (`UIA_NO_CACHE=1`) | 9987ms | 11160ms | 11623ms | ~25 cross-process COM property reads + one FindAll per node |
+| + per-level cache request | 4982ms | 5858ms | 5061ms | **−50%** |
 
 `FindAllBuildCache(TreeScope.Children, TrueCondition, req)` per node returns each child
 with all ~25 properties already cached, so the property reads become in-process

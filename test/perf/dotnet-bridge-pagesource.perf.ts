@@ -9,17 +9,17 @@ import {
 import { finalizeRun, measure, type OpResult } from './helpers/bench.js';
 
 const RUN = process.env.RUN_PERF === '1' || process.env.RUN_PERF === 'true';
-// Larger default than the uia suite (which shares the fixture but has no N+1 to show):
-// the bridge walk is one RPC per node, so a big tree is what makes dumpTree's effect visible.
+// Larger default than the uia suite: the bridge walk is one RPC per node, so a big
+// tree is what makes dumpTree's effect visible.
 const NODE_COUNT = Number(process.env.PERF_NODE_COUNT || 6000);
 const SUITE = 'dotnet-bridge';
 
 /**
- * .NET bridge reflected-tree walk benchmark. Same winforms-large fixture as the plain
- * UIA suite, attached with dotnetBridge:true and walked via the bridge's own reflected
- * tree (`windows: getPageSourceViaDotnetBridge` / bridge XPath). The bridge uses the
- * same one-RPC-per-node newline-JSON channel as the Java agent, so its counters read
- * `dotnetBridge.getChildren` etc.
+ * .NET bridge reflected-tree walk benchmark. Runs against winforms-large (this suite's
+ * only fixture), attached with dotnetBridge:true and walked via the bridge's own
+ * reflected tree (`windows: getPageSourceViaDotnetBridge` / bridge XPath). The bridge
+ * uses the same one-RPC-per-node newline-JSON channel as the Java agent, so its counters
+ * read `dotnetBridge.getChildren` etc.
  *
  * Opt-in: RUN_PERF=1, a running Appium server with this driver, winforms-large built
  * in ../appium-wincore-test-apps. Records to test/perf/results/, fails only on a >3x

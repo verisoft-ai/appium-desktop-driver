@@ -1,10 +1,10 @@
 {
   "_comment": "Reference-machine p50 milliseconds keyed by <op>@<nodeCount>. checkRegressions() fails a run only when p50 exceeds 3x the value here; entries absent from this map are recorded but not gated.",
-  "referenceMachine": "local dev — Intel Core 5 120U, 12 cores, 17GB, Windows 11 (2026-09-03, sha 05df564 + FindKey removal + dumpTree). java suite default nodeCount=12000 (~11.5k nodes, JTable-cell dominated).",
+  "referenceMachine": "local dev — Intel Core 5 120U, 12 cores, 17GB, Windows 11 (2026-09-03, sha 9645bd8, FindKey removal + dumpTree). java suite default nodeCount=12000 (~11.5k nodes, JTable-cell dominated).",
   "baseline": {
-    "getPageSource@12000": 834,
-    "findAll-star@12000": 7890,
-    "find-anchorLast@12000": 414,
-    "getAttribute-x50@12000": 676
+    "getPageSource@12000": 853,
+    "findAll-star@12000": 6844,
+    "find-anchorLast@12000": 381,
+    "getAttribute-x50@12000": 708
   }
 }

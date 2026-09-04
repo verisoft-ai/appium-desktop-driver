@@ -352,11 +352,17 @@ export const WINFORMS_LARGE_APP_PATH = resolve(
     TEST_APPS_DIR, 'winforms-large', 'bin', 'x64', 'Debug', 'net472', 'WinformsLarge.exe',
 );
 
+export const WPF_LARGE_APP_PATH = resolve(
+    TEST_APPS_DIR, 'wpf-large', 'bin', 'x64', 'Debug', 'net472', 'WpfLarge.exe',
+);
+
 /**
- * Launches the winforms-large performance fixture via Appium (plain UIA, no bridge).
- * Not a correctness fixture — used only by the perf benchmark in test/perf/.
+ * Launches the wpf-large performance fixture via Appium (native-UIA — WPF has its own
+ * AutomationPeer provider, so this measures the plain-UIA walk without the MSAA->UIA
+ * bridge tax WinForms carries). Not a correctness fixture — used only by the `uia` perf
+ * benchmark in test/perf/. winforms-large is now the .NET-bridge suite's fixture only.
  */
-export async function createWinformsLargeSession(
+export async function createWpfLargeSession(
     nodeCount = 1500,
     extraCaps?: Record<string, unknown>,
 ): Promise<Browser> {
@@ -365,7 +371,7 @@ export async function createWinformsLargeSession(
         capabilities: {
             platformName: 'Windows',
             'appium:automationName': 'DesktopDriver',
-            'appium:app': WINFORMS_LARGE_APP_PATH,
+            'appium:app': WPF_LARGE_APP_PATH,
             'appium:appArguments': `--nodes ${nodeCount}`,
             ...extraCaps,
         } as Caps,

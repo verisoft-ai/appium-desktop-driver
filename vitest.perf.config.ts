@@ -11,6 +11,9 @@ export default defineConfig({
         include: ['test/perf/**/*.perf.ts'],
         // Selecting this config is itself the opt-in; the RUN_PERF gate in the specs
         // then also guards against the perf files being picked up by another config.
+//
+// Fixtures (sibling appium-wincore-test-apps checkout): java-swing-large -> `java`,
+// wpf-large -> `uia`, winforms-large -> `dotnet-bridge`. One fixture per suite.
         env: { RUN_PERF: '1' },
         testTimeout: 600_000,
         hookTimeout: 120_000,

@@ -47,6 +47,7 @@ jobs:
         working-directory: appium-wincore-test-apps
         run: |
           npm run build:java-swing-large-test-app
+          npm run build:wpf-large-test-app
           npm run build:winforms-large-test-app
 
       - name: Install Appium

@@ -1,7 +1,10 @@
 name: Performance Benchmarks
 
-# Not a PR gate. Runs on demand and weekly, records results as an artifact, and
-# fails only on a gross (>3x baseline) regression detected inside the specs.
+# Not a PR gate. Records results as an artifact and fails only on a gross (>3x
+# baseline) regression detected inside the specs.
+#
+# Automatic runs are disabled for now — only manual `workflow_dispatch`. Re-enable
+# the weekly schedule by uncommenting the `schedule:` block below.
 on:
   workflow_dispatch:
     inputs:
@@ -9,8 +12,8 @@ on:
         description: 'java-swing-large accessible node count'
         required: false
         default: '1500'
-  schedule:
-    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  # schedule:
+  #   - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
 jobs:
   perf:

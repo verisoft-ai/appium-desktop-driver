@@ -85,6 +85,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     ieDriverServerPath: {
         isString: true,
     },
+    perfMetrics: {
+        isBoolean: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;

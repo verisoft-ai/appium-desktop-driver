@@ -242,9 +242,12 @@ export async function createExplorerSession(extraCaps?: Record<string, unknown>)
     return createSimpleAppSession(EXPLORER_APP_PATH, extraCaps);
 }
 
+// The Java fixtures run on whatever JDK JAVA_HOME points at (actions/setup-java sets it
+// in CI). Fall back to `javaw` on PATH rather than a hard-coded install dir — a stale
+// absolute path fails with a confusing ENOENT if that JVM was ever removed.
 export const JAVAW_EXE_PATH = process.env.JAVA_HOME
     ? `${process.env.JAVA_HOME}\\bin\\javaw.exe`
-    : 'C:\\Program Files\\Java\\jre1.8.0_491\\bin\\javaw.exe';
+    : 'javaw';
 export const JAVA_SWING_FORM_CLASSPATH = resolve(TEST_APPS_DIR, 'java-swing-form');
 
 /**
@@ -317,6 +320,102 @@ export async function createJavaSwingFormSession(extraCaps?: Record<string, unkn
     });
     await driver.setTimeout({ implicit: 3000 });
     return driver;
+}
+
+export const JAVA_SWING_LARGE_CLASSPATH = resolve(TEST_APPS_DIR, 'java-swing-large');
+
+/**
+ * Launches the java-swing-large performance fixture (LargeTreeForm) with a target
+ * accessible-node count. Not a correctness fixture — used only by the perf benchmark
+ * in test/perf/. Pass `perfMetrics: true` in extraCaps to enable the RPC counters.
+ */
+export async function createJavaSwingLargeSession(
+    nodeCount = 1500,
+    extraCaps?: Record<string, unknown>,
+): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': JAVAW_EXE_PATH,
+            'appium:appArguments': `-DnodeCount=${nodeCount} -cp ${JAVA_SWING_LARGE_CLASSPATH} LargeTreeForm`,
+            'appium:javaSwing': true,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
+
+export const WINFORMS_LARGE_APP_PATH = resolve(
+    TEST_APPS_DIR, 'winforms-large', 'bin', 'x64', 'Debug', 'net472', 'WinformsLarge.exe',
+);
+
+export const WPF_LARGE_APP_PATH = resolve(
+    TEST_APPS_DIR, 'wpf-large', 'bin', 'x64', 'Debug', 'net472', 'WpfLarge.exe',
+);
+
+/**
+ * Launches the wpf-large performance fixture via Appium (native-UIA — WPF has its own
+ * AutomationPeer provider, so this measures the plain-UIA walk without the MSAA->UIA
+ * bridge tax WinForms carries). Not a correctness fixture — used only by the `uia` perf
+ * benchmark in test/perf/. winforms-large is now the .NET-bridge suite's fixture only.
+ */
+export async function createWpfLargeSession(
+    nodeCount = 1500,
+    extraCaps?: Record<string, unknown>,
+): Promise<Browser> {
+    const driver = await remote({
+        ...APPIUM_SERVER,
+        capabilities: {
+            platformName: 'Windows',
+            'appium:automationName': 'DesktopDriver',
+            'appium:app': WPF_LARGE_APP_PATH,
+            'appium:appArguments': `--nodes ${nodeCount}`,
+            ...extraCaps,
+        } as Caps,
+    });
+    await driver.setTimeout({ implicit: 3000 });
+    return driver;
+}
+
+/**
+ * Launches winforms-large as an external process (for the .NET bridge perf suite, which
+ * must attach via appTopLevelWindow). Caller kills the process in afterAll.
+ */
+export async function launchWinformsLargeExternally(nodeCount = 1500): Promise<{ proc: ChildProcess; hwnd: string }> {
+    const proc = spawn(WINFORMS_LARGE_APP_PATH, ['--nodes', String(nodeCount)], { detached: true, stdio: 'ignore' });
+
+    if (!proc.pid) {
+        throw new Error(`Failed to spawn winforms-large app: ${WINFORMS_LARGE_APP_PATH}`);
+    }
+
+    const pid = proc.pid;
+    // Generous: the fixture builds thousands of controls before the window shows.
+    const deadline = Date.now() + 45_000;
+    let hwnd = '0';
+    while (Date.now() < deadline) {
+        try {
+            hwnd = execSync(
+                `powershell -Command "(Get-Process -Id ${pid} -ErrorAction Stop).MainWindowHandle"`,
+                { stdio: ['ignore', 'pipe', 'ignore'] }
+            ).toString().trim();
+        } catch {
+            hwnd = '0';
+        }
+        if (hwnd !== '0') {
+            break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (hwnd === '0') {
+        proc.kill();
+        throw new Error(`winforms-large app window did not appear within 45s (pid=${pid})`);
+    }
+
+    return { proc, hwnd };
 }
 
 export const DEVEXPRESS_GRID_APP_PATH = resolve(

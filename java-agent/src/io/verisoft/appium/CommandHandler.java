@@ -35,6 +35,7 @@ public class CommandHandler {
         switch (command) {
             case "getWindowRoot":  return getWindowRoot(params, registry);
             case "getChildren":    return getChildren(params, registry);
+            case "dumpTree":       return dumpTree(params, registry);
             case "getInfo":        return getInfo(params, registry);
             case "findFirst":      return findFirst(params, registry);
             case "findAll":        return findAll(params, registry);
@@ -180,6 +181,63 @@ public class CommandHandler {
             }
         }
         return result;
+    }
+
+    // ── Dump whole subtree in one call ─────────────────────────────────────────
+
+    /**
+     * Walks the entire subtree under {@code id} in a single request and returns it as a
+     * nested structure: each node is the same map {@link #getInfo} returns, plus a
+     * {@code "children"} array of the same shape. The C# side then materialises page
+     * source / XPath from this one response instead of issuing one getChildren RPC per
+     * node — the tree walk is cheap inside the JVM; the per-RPC JSON parse on the host
+     * was the cost.
+     */
+    private static Object dumpTree(Map<String, Object> params, ComponentRegistry registry) {
+        String id = (String) params.get("id");
+        int maxDepth = params.get("maxDepth") instanceof Number
+                ? ((Number) params.get("maxDepth")).intValue()
+                : 100;
+        Object node = registry.isComponent(id) ? registry.get(id) : registry.getAccessible(id);
+        return dumpNode(node, id, registry, 0, maxDepth);
+    }
+
+    private static Map<String, Object> dumpNode(Object node, String id, ComponentRegistry registry,
+            int depth, int maxDepth) {
+        Map<String, Object> info = (node instanceof Component)
+                ? buildInfo((Component) node, id)
+                : buildInfoFromAccessible((Accessible) node, id);
+
+        List<Map<String, Object>> children = new ArrayList<>();
+        AccessibleContext ac = (node instanceof Component)
+                ? ((Component) node).getAccessibleContext()
+                : ((Accessible) node).getAccessibleContext();
+
+        if (depth < maxDepth && ac != null) {
+            int count;
+            try {
+                count = ac.getAccessibleChildrenCount();
+            } catch (Throwable t) {
+                logNodeFailure("dumpNode.childrenCount(id=" + id + ")", depth, t);
+                count = 0;
+            }
+            for (int i = 0; i < count; i++) {
+                try {
+                    Accessible child = ac.getAccessibleChild(i);
+                    if (child == null) continue;
+                    if (child instanceof Component) {
+                        Component cc = (Component) child;
+                        children.add(dumpNode(cc, registry.save(cc), registry, depth + 1, maxDepth));
+                    } else {
+                        children.add(dumpNode(child, registry.saveAccessible(child), registry, depth + 1, maxDepth));
+                    }
+                } catch (Throwable t) {
+                    logNodeFailure("dumpNode.child[" + i + "](id=" + id + ")", depth, t);
+                }
+            }
+        }
+        info.put("children", children);
+        return info;
     }
 
     // ── Info ───────────────────────────────────────────────────────────────────

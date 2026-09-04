@@ -1,0 +1,10 @@
+{
+  "_comment": "Reference-machine p50 milliseconds keyed by <op>@<nodeCount>. checkRegressions() fails a run only when p50 exceeds 3x the value here; entries absent from this map are recorded but not gated.",
+  "referenceMachine": "local dev — Intel Core 5 120U, 12 cores, 17GB, Windows 11 (2026-09-03, sha 9645bd8, per-level UIA cache request). uia suite = wpf-large fixture (native UIA / AutomationPeer, no MSAA bridge), default nodeCount=1500 (~3036 UIA nodes).",
+  "baseline": {
+    "getPageSource@1500": 4723,
+    "findAll-star@1500": 5979,
+    "find-anchorLast@1500": 4472,
+    "getAttribute-x50@1500": 704
+  }
+}

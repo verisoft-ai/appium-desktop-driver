@@ -10,6 +10,11 @@ public static class SessionCommands
 {
     public static object? Init(SessionState state, JsonElement? parameters)
     {
+        if (parameters?.TryGetProperty("perfMetrics", out var pm) == true
+            && (pm.ValueKind == JsonValueKind.True || pm.ValueKind == JsonValueKind.False))
+        {
+            state.PerfMetricsEnabled = pm.GetBoolean();
+        }
         state.Initialize();
         return null;
     }

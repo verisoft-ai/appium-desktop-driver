@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
+using DesktopDriverServer.Diagnostics;
 
 namespace DesktopDriverServer.DotNet;
 
@@ -19,6 +21,14 @@ internal sealed class BridgeAgentService : IDisposable
     private int _requestId;
     private readonly object _lock = new();
     private readonly Dictionary<string, BridgeAgentElement> _elements = new();
+
+    /// <summary>
+    /// When non-null, every RPC round trip is timed and recorded under
+    /// <c>dotnetBridge.&lt;command&gt;</c>. Set by
+    /// <see cref="State.SessionState.EnableDotnetBridge"/> only when the
+    /// <c>perfMetrics</c> capability is on.
+    /// </summary>
+    internal PerfCounters? Perf { get; set; }
 
     // ── Connection ─────────────────────────────────────────────────────────────
 
@@ -150,14 +160,79 @@ internal sealed class BridgeAgentService : IDisposable
         var doc = new XmlDocument();
         var nodes = new Dictionary<string, string>(); // __bridgeNodeId -> element id
         var counter = 0;
-        var rootXml = BuildXPathNode(root, doc, nodes, ref counter, 0) ?? doc.CreateElement("DummyRoot");
-        doc.AppendChild(rootXml);
+
+        // Same dumpTree fast path as page source (see BuildXml).
+        var dump = TryDumpTree(root);
+        XmlElement? rootXml = dump != null
+            ? BuildXPathNodeFromDump(dump.Value, doc, nodes, ref counter, 0)
+            : BuildXPathNode(root, doc, nodes, ref counter, 0);
+        doc.AppendChild(rootXml ?? doc.CreateElement("DummyRoot"));
 
         var ids = DesktopDriverServer.Commands.XPathEvaluator.Evaluate(
             doc, null, "__bridgeNodeId", expression, multiple,
             nodeId => nodes.TryGetValue(nodeId, out var elId) ? elId : null);
 
         return multiple ? ids.ToArray() : (ids.Count > 0 ? (object)ids[0] : null);
+    }
+
+    private XmlElement CreateXPathElement(
+        XmlDocument doc, Dictionary<string, object?> info, string id,
+        Dictionary<string, string> nodes, ref int counter)
+    {
+        var el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
+
+        var nodeId = "n" + counter++;
+        el.SetAttribute("__bridgeNodeId", nodeId);
+        nodes[nodeId] = id;
+
+        void A(string name, string? value)
+        {
+            try { el.SetAttribute(name, XPathSanitize(value ?? "")); } catch { }
+        }
+
+        A("Name", GetString(info, "Name"));
+        A("AutomationId", GetString(info, "AutomationId"));
+        A("ClassName", GetString(info, "ClassName"));
+        A("LocalizedControlType", GetString(info, "LocalizedControlType"));
+        A("HelpText", GetString(info, "Description"));
+        A("Value", GetString(info, "Value"));
+        A("x", GetString(info, "x") ?? "0");
+        A("y", GetString(info, "y") ?? "0");
+        A("width", GetString(info, "width") ?? "0");
+        A("height", GetString(info, "height") ?? "0");
+        A("IsEnabled", (GetString(info, "IsEnabled") ?? "false").ToLowerInvariant());
+        A("IsOffscreen", (GetString(info, "IsOffscreen") ?? "false").ToLowerInvariant());
+        A("RuntimeId", id);
+
+        var text = XPathSanitize(GetString(info, "Name") ?? "");
+        if (text.Length > 0) el.AppendChild(doc.CreateTextNode(text));
+        return el;
+    }
+
+    private XmlElement? BuildXPathNodeFromDump(
+        JsonElement node, XmlDocument doc, Dictionary<string, string> nodes, ref int counter, int depth)
+    {
+        if (depth > 100 || node.ValueKind != JsonValueKind.Object) return null;
+        XmlElement el;
+        try
+        {
+            var (id, info) = SaveDumpNode(node);
+            el = CreateXPathElement(doc, info, id, nodes, ref counter);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (node.TryGetProperty("children", out var kids) && kids.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in kids.EnumerateArray())
+            {
+                var childXml = BuildXPathNodeFromDump(child, doc, nodes, ref counter, depth + 1);
+                if (childXml != null) el.AppendChild(childXml);
+            }
+        }
+        return el;
     }
 
     private XmlElement? BuildXPathNode(
@@ -167,34 +242,7 @@ internal sealed class BridgeAgentService : IDisposable
         XmlElement el;
         try
         {
-            var info = node.Info;
-            el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
-
-            var nodeId = "n" + counter++;
-            el.SetAttribute("__bridgeNodeId", nodeId);
-            nodes[nodeId] = node.Id;
-
-            void A(string name, string? value)
-            {
-                try { el.SetAttribute(name, XPathSanitize(value ?? "")); } catch { }
-            }
-
-            A("Name", GetString(info, "Name"));
-            A("AutomationId", GetString(info, "AutomationId"));
-            A("ClassName", GetString(info, "ClassName"));
-            A("LocalizedControlType", GetString(info, "LocalizedControlType"));
-            A("HelpText", GetString(info, "Description"));
-            A("Value", GetString(info, "Value"));
-            A("x", GetString(info, "x") ?? "0");
-            A("y", GetString(info, "y") ?? "0");
-            A("width", GetString(info, "width") ?? "0");
-            A("height", GetString(info, "height") ?? "0");
-            A("IsEnabled", (GetString(info, "IsEnabled") ?? "false").ToLowerInvariant());
-            A("IsOffscreen", (GetString(info, "IsOffscreen") ?? "false").ToLowerInvariant());
-            A("RuntimeId", node.Id);
-
-            var text = XPathSanitize(GetString(info, "Name") ?? "");
-            if (text.Length > 0) el.AppendChild(doc.CreateTextNode(text));
+            el = CreateXPathElement(doc, node.Info, node.Id, nodes, ref counter);
         }
         catch
         {
@@ -238,10 +286,7 @@ internal sealed class BridgeAgentService : IDisposable
 
     public object? GetProperty(BridgeAgentElement el, string property)
     {
-        var info = el.Info;
-        var key = FindKey(info, property);
-        if (key == null) return "";
-        return info[key] ?? "";
+        return el.Info.TryGetValue(property, out var val) && val != null ? val : "";
     }
 
     public string GetText(BridgeAgentElement el)
@@ -309,7 +354,75 @@ internal sealed class BridgeAgentService : IDisposable
 
     public void BuildXml(BridgeAgentElement node, XmlDocument doc, XmlElement? parent)
     {
+        // One "dumpTree" RPC walks the whole subtree agent-side and returns it nested,
+        // instead of one getChildren RPC (and one JsonDocument.Parse) per node. Falls
+        // back to the per-node path if the injected bridge is older.
+        var dump = TryDumpTree(node);
+        if (dump != null)
+        {
+            BuildXmlFromDump(dump.Value, doc, parent, 0);
+            return;
+        }
         BuildXmlRecursive(node, doc, parent, 0);
+    }
+
+    /// <summary>One RPC: the whole subtree under <paramref name="root"/> as a nested node.</summary>
+    private JsonElement? TryDumpTree(BridgeAgentElement root)
+    {
+        if (Environment.GetEnvironmentVariable("BRIDGE_NO_DUMPTREE") == "1") return null; // perf A/B only
+        try
+        {
+            var result = Call("dumpTree", new { id = root.Id });
+            if (result?.ValueKind == JsonValueKind.Object) return result;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[DotnetBridge] dumpTree unavailable, falling back to per-node walk: {ex.Message}");
+        }
+        return null;
+    }
+
+    private XmlElement CreatePageSourceElement(XmlDocument doc, Dictionary<string, object?> info, string id)
+    {
+        var el = doc.CreateElement(NormalizeTagName(GetString(info, "ClassName") ?? "Element"));
+        el.SetAttribute("Name", GetString(info, "Name") ?? "");
+        el.SetAttribute("AutomationId", GetString(info, "AutomationId") ?? "");
+        el.SetAttribute("ClassName", GetString(info, "ClassName") ?? "");
+        el.SetAttribute("LocalizedControlType", GetString(info, "LocalizedControlType") ?? "");
+        el.SetAttribute("HelpText", GetString(info, "Description") ?? "");
+        el.SetAttribute("Value", GetString(info, "Value") ?? "");
+        el.SetAttribute("x", GetString(info, "x") ?? "0");
+        el.SetAttribute("y", GetString(info, "y") ?? "0");
+        el.SetAttribute("width", GetString(info, "width") ?? "0");
+        el.SetAttribute("height", GetString(info, "height") ?? "0");
+        el.SetAttribute("IsEnabled", GetString(info, "IsEnabled") ?? "False");
+        el.SetAttribute("IsOffscreen", GetString(info, "IsOffscreen") ?? "False");
+        el.SetAttribute("RuntimeId", id);
+        return el;
+    }
+
+    private void BuildXmlFromDump(JsonElement node, XmlDocument doc, XmlElement? parent, int depth)
+    {
+        if (depth > 100 || node.ValueKind != JsonValueKind.Object) return;
+        try
+        {
+            var (id, info) = SaveDumpNode(node);
+            var el = CreatePageSourceElement(doc, info, id);
+            if (parent == null) doc.AppendChild(el);
+            else parent.AppendChild(el);
+
+            if (node.TryGetProperty("children", out var kids) && kids.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var child in kids.EnumerateArray())
+                {
+                    BuildXmlFromDump(child, doc, el, depth + 1);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[DotnetBridge] BuildXmlFromDump error at depth {depth}: {ex.Message}");
+        }
     }
 
     private void BuildXmlRecursive(BridgeAgentElement node, XmlDocument doc, XmlElement? parent, int depth)
@@ -317,24 +430,7 @@ internal sealed class BridgeAgentService : IDisposable
         if (depth > 100) return;
         try
         {
-            var info = node.Info;
-            var tagName = NormalizeTagName(GetString(info, "ClassName") ?? "Element");
-
-            var el = doc.CreateElement(tagName);
-            el.SetAttribute("Name", GetString(info, "Name") ?? "");
-            el.SetAttribute("AutomationId", GetString(info, "AutomationId") ?? "");
-            el.SetAttribute("ClassName", GetString(info, "ClassName") ?? "");
-            el.SetAttribute("LocalizedControlType", GetString(info, "LocalizedControlType") ?? "");
-            el.SetAttribute("HelpText", GetString(info, "Description") ?? "");
-            el.SetAttribute("Value", GetString(info, "Value") ?? "");
-            el.SetAttribute("x", GetString(info, "x") ?? "0");
-            el.SetAttribute("y", GetString(info, "y") ?? "0");
-            el.SetAttribute("width", GetString(info, "width") ?? "0");
-            el.SetAttribute("height", GetString(info, "height") ?? "0");
-            el.SetAttribute("IsEnabled", GetString(info, "IsEnabled") ?? "False");
-            el.SetAttribute("IsOffscreen", GetString(info, "IsOffscreen") ?? "False");
-            el.SetAttribute("RuntimeId", node.Id);
-
+            var el = CreatePageSourceElement(doc, node.Info, node.Id);
             if (parent == null) doc.AppendChild(el);
             else parent.AppendChild(el);
 
@@ -365,10 +461,20 @@ internal sealed class BridgeAgentService : IDisposable
             int id = ++_requestId;
             var request = new { id, command, @params };
             var json = JsonSerializer.Serialize(request);
+
+            var perf = Perf;
+            var sw = perf != null ? Stopwatch.StartNew() : null;
+
             _writer.WriteLine(json);
 
             var response = _reader.ReadLine()
                 ?? throw new IOException(".NET bridge closed connection.");
+
+            if (sw != null)
+            {
+                sw.Stop();
+                perf!.Record($"dotnetBridge.{command}", sw.Elapsed.TotalMilliseconds);
+            }
 
             var doc = JsonDocument.Parse(response);
             if (doc.RootElement.TryGetProperty("error", out var errorEl))
@@ -396,11 +502,28 @@ internal sealed class BridgeAgentService : IDisposable
         return el;
     }
 
-    private static Dictionary<string, object?> ParseInfo(JsonElement json)
+    /// <summary>
+    /// Registers one node from a <c>dumpTree</c> response (which carries a nested
+    /// <c>children</c> array we skip here) and returns its id + info.
+    /// </summary>
+    private (string id, Dictionary<string, object?> info) SaveDumpNode(JsonElement json)
+    {
+        var id = json.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+        if (string.IsNullOrEmpty(id))
+            throw new InvalidOperationException("dumpTree node has no id");
+
+        var info = ParseInfo(json, skipKey: "children");
+        var el = new BridgeAgentElement(id, info);
+        lock (_lock) { _elements[id] = el; }
+        return (id, info);
+    }
+
+    private static Dictionary<string, object?> ParseInfo(JsonElement json, string? skipKey = null)
     {
         var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         foreach (var prop in json.EnumerateObject())
         {
+            if (skipKey != null && prop.NameEquals(skipKey)) continue;
             dict[prop.Name] = prop.Value.ValueKind switch
             {
                 JsonValueKind.String => prop.Value.GetString(),
@@ -414,18 +537,11 @@ internal sealed class BridgeAgentService : IDisposable
         return dict;
     }
 
-    private static string? FindKey(Dictionary<string, object?> info, string property)
-    {
-        var lower = property.ToLowerInvariant();
-        foreach (var key in info.Keys)
-            if (key.ToLowerInvariant() == lower) return key;
-        return null;
-    }
-
+    // info dictionaries are built with StringComparer.OrdinalIgnoreCase, so a direct
+    // TryGetValue is already the case-insensitive lookup — no need to scan keys.
     private static string? GetString(Dictionary<string, object?> info, string key)
     {
-        var k = FindKey(info, key);
-        return k != null && info[k] != null ? info[k]!.ToString() : null;
+        return info.TryGetValue(key, out var v) && v != null ? v.ToString() : null;
     }
 
     private static double GetDouble(Dictionary<string, object?> info, string key)

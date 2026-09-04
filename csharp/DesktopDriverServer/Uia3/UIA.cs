@@ -139,6 +139,10 @@ public static class UIA
     public const int IsDialogPropertyId = 30174;
     public const int ExpandCollapseStatePropertyId = 30070;
 
+    // IUIAutomationCacheRequest.AutomationElementMode
+    public const int AutomationElementModeNone = 0;
+    public const int AutomationElementModeFull = 1;
+
     // Pattern IDs
     public const int InvokePatternId = 10000;
     public const int SelectionPatternId = 10001;
